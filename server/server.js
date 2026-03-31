@@ -65,8 +65,8 @@ function parseCookie(cookieStr) {
 }
 
 // === MUSIC DOWNLOAD CONFIG ===
-// Set this to your GitHub "owner/repo" so first-run can grab the music pack.
-const MUSIC_REPO = process.env.MUSIC_REPO || ""; // e.g. "your-username/StoryTeller"
+import readline from "readline";
+const MUSIC_ZIP_URL = "https://github.com/Kenji776/StoryTeller/releases/download/resource/music.zip";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -254,23 +254,28 @@ async function ensureMusic() {
 		: [];
 	if (mp3s.length > 0) return; // music already present
 
-	if (!MUSIC_REPO) {
-		log("⚠️  No music files found and MUSIC_REPO is not set.");
-		log("   Set MUSIC_REPO in your .env (e.g. MUSIC_REPO=your-username/StoryTeller)");
-		log("   or download music.zip manually from the GitHub Releases page.");
+	if (!fs.existsSync(MUSIC_DIR)) fs.mkdirSync(MUSIC_DIR, { recursive: true });
+
+	// Ask the user whether they want to download the standard music library
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+	const answer = await new Promise(resolve => {
+		rl.question("🎵 No music files found. Download the standard music library? (y/n): ", resolve);
+	});
+	rl.close();
+
+	if (answer.trim().toLowerCase() !== "y") {
+		log("⏭️  Skipping music download. The game will run without background music.");
+		log(`   You can manually place MP3 files in: ${MUSIC_DIR}`);
 		return;
 	}
 
-	const url = `https://github.com/${MUSIC_REPO}/releases/latest/download/music.zip`;
 	const zipPath = path.join(MUSIC_DIR, "music.zip");
 
-	if (!fs.existsSync(MUSIC_DIR)) fs.mkdirSync(MUSIC_DIR, { recursive: true });
-
-	log("🎵 No music files found — downloading music pack from GitHub Release...");
-	log(`   ${url}`);
+	log("🎵 Downloading music pack...");
+	log(`   ${MUSIC_ZIP_URL}`);
 
 	try {
-		const res = await fetch(url);
+		const res = await fetch(MUSIC_ZIP_URL);
 		if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
 
 		await pipeline(res.body, fs.createWriteStream(zipPath));
@@ -283,7 +288,8 @@ async function ensureMusic() {
 		log(`🎵 Music ready — ${count} tracks extracted.`);
 	} catch (err) {
 		log(`❌ Music download failed: ${err.message}`);
-		log("   You can manually download music.zip from your repo's Releases page");
+		log(`   You can manually download music.zip from:`);
+		log(`   ${MUSIC_ZIP_URL}`);
 		log(`   and extract the MP3 files into: ${MUSIC_DIR}`);
 		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 	}
