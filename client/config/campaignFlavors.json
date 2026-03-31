@@ -1,0 +1,118 @@
+{
+  "tones": [
+    {
+      "id": "heroic",
+      "label": "Heroic",
+      "emoji": "⚔️",
+      "description": "Classic high fantasy. Bold heroes, clear stakes, epic battles. Good and evil are distinct.",
+      "prompt": "The tone is heroic high fantasy. Stories should feel epic and triumphant. Heroes are courageous, villains are menacing, and acts of bravery are rewarded. Lean into dramatic moments, rousing speeches, and clear moral stakes."
+    },
+    {
+      "id": "dark",
+      "label": "Dark & Gritty",
+      "emoji": "🩸",
+      "description": "Morally grey world. Harsh consequences, brutal violence, difficult choices.",
+      "prompt": "The tone is dark and gritty. The world is harsh and unforgiving. Morality is grey — even heroes have flaws and villains have reasons. Violence has real weight and consequences. Do not shy away from suffering, loss, or moral ambiguity."
+    },
+    {
+      "id": "horror",
+      "label": "Horror",
+      "emoji": "💀",
+      "description": "Dread and tension. Monsters are terrifying, the unknown is dangerous, survival is uncertain.",
+      "prompt": "The tone is horror. Build dread and suspense. Describe environments as unsettling and threatening. Monsters should feel genuinely terrifying, not just combat challenges. Use the unknown to unsettle players. Survival is never guaranteed."
+    },
+    {
+      "id": "comedy",
+      "label": "Comedy",
+      "emoji": "🎭",
+      "description": "Absurdist and irreverent. NPCs are quirky, situations escalate hilariously, failure is funny.",
+      "prompt": "The tone is comedic and irreverent. NPCs are eccentric and memorable. Situations should escalate in absurd ways. Failure should be funny rather than punishing. Lean into running gags, unexpected twists, and playful silliness while still telling a coherent story."
+    },
+    {
+      "id": "mystery",
+      "label": "Mystery",
+      "emoji": "🔍",
+      "description": "Investigation-focused. Clues, secrets, unreliable NPCs, and twists around every corner.",
+      "prompt": "The tone is mystery and intrigue. Prioritize investigation, hidden motives, and layered secrets. NPCs have agendas they don't reveal. Clues should be seeded naturally into the environment and dialogue. Build toward reveals that recontextualize earlier events."
+    },
+    {
+      "id": "political",
+      "label": "Political Intrigue",
+      "emoji": "👑",
+      "description": "Courts, factions, and scheming nobles. Power is the real currency.",
+      "prompt": "The tone is political intrigue. Factions compete for power, alliances shift, and information is currency. NPCs are scheming and self-interested. Combat should feel like a last resort — the real battles are fought with words, leverage, and manipulation."
+    },
+    {
+      "id": "survival",
+      "label": "Survival",
+      "emoji": "🌿",
+      "description": "Resources are scarce, the environment is hostile, and every decision matters.",
+      "prompt": "The tone is survival. Resources are limited and the environment is actively hostile. Emphasize fatigue, hunger, exposure, and the weight of each decision. Small victories matter. The world does not care whether the players succeed."
+    },
+    {
+      "id": "swashbuckling",
+      "label": "Swashbuckling",
+      "emoji": "🏴‍☠️",
+      "description": "High adventure and daring escapades. Think pirates, daring heists, and impossible odds.",
+      "prompt": "The tone is swashbuckling adventure. Prioritize momentum, daring, and style. Heroes do the impossible with flair. Describe action in vivid, cinematic terms. NPCs are colorful. Schemes are audacious. The spirit of adventure should never stall."
+    }
+  ],
+  "themes": [
+    {
+      "id": "redemption",
+      "label": "Redemption",
+      "emoji": "🕊️",
+      "description": "Characters seek to atone for past mistakes or rise above their origins.",
+      "prompt": "Weave redemption arcs through the story. NPCs and even villains should have histories that explain — not excuse — their choices. Offer characters moments to confront their past and choose differently."
+    },
+    {
+      "id": "corruption",
+      "label": "Corruption of Power",
+      "emoji": "🐍",
+      "description": "Authority figures are compromised. Institutions have rotted from within.",
+      "prompt": "Power corrupts throughout this story. Authority figures — guards, nobles, priests — are often compromised or self-serving. Institutions that should protect people have been hollowed out. Trust must be earned, not assumed."
+    },
+    {
+      "id": "ancient_evil",
+      "label": "Ancient Evil Returns",
+      "emoji": "🌑",
+      "description": "A long-dormant darkness stirs. History holds the key to stopping it.",
+      "prompt": "An ancient evil is awakening or has recently returned. Ruins, old texts, and elderly NPCs hold fragments of what came before. The party must piece together history to understand what they're truly facing."
+    },
+    {
+      "id": "heist",
+      "label": "Heist / Caper",
+      "emoji": "💎",
+      "description": "Plan, infiltrate, steal, escape. The fun is in the preparation and the chaos when it unravels.",
+      "prompt": "The story revolves around a heist or caper. Reward clever planning. When things go wrong — and they will — improvise chaos that is fun rather than punishing. NPCs have security, competing interests, and their own agendas."
+    },
+    {
+      "id": "war",
+      "label": "War & Conflict",
+      "emoji": "⚔️",
+      "description": "The party operates during or in the wake of a major war. Sides aren't always clear.",
+      "prompt": "The backdrop is war or its aftermath. Armies clash, supply lines matter, and civilians suffer. The party may be soldiers, mercenaries, or caught in the middle. Both sides should have understandable motivations."
+    },
+    {
+      "id": "exploration",
+      "label": "Exploration & Discovery",
+      "emoji": "🗺️",
+      "description": "Uncharted lands, lost civilizations, and wonders that have never been seen.",
+      "prompt": "The primary driver is exploration and discovery. Reward curiosity. Describe new locations in rich detail. Ancient ruins, strange ecosystems, and lost peoples should feel genuinely wondrous. The journey matters as much as the destination."
+    },
+    {
+      "id": "fate",
+      "label": "Chosen Destiny",
+      "emoji": "✨",
+      "description": "Prophecies, fate, and the weight of a destiny the heroes may not have asked for.",
+      "prompt": "Destiny and prophecy hang over the story. The players may have been chosen — or believe they have been. Let NPCs treat them with reverence, fear, or scepticism. Prophecies should be specific enough to feel meaningful but ambiguous enough to surprise."
+    },
+    {
+      "id": "freeform",
+      "label": "Freeform / Sandbox",
+      "emoji": "🌍",
+      "description": "No grand arc — just a living world that reacts to what the players do.",
+      "prompt": "This is a sandbox story. There is no predetermined arc — the world reacts organically to what the players do. Factions have ongoing agendas whether or not the players engage. Prioritize player agency and let consequences of past actions ripple forward."
+    }
+  ]
+}

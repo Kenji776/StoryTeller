@@ -1,0 +1,701 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>D&D AI DM — Lobbies</title>
+    <link rel="stylesheet" href="/style.css" />
+	<link rel="stylesheet" href="/components.css" />
+	<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative&family=Cormorant+Garamond:wght@400;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div class="container">
+      <header class="row space-between">
+        <h1>StoryTeller</h1>
+        <div id="phaseBadge" class="badge">—</div>
+      </header>
+
+      <!-- LANDING PAGE -->
+      <section id="landing" class="panel">
+        <div class="row space-between" style="align-items:flex-start;flex-wrap:wrap;gap:0.5em;">
+          <h2 style="margin:0;">Play a Janky AI Powered D&amp;D game with friends or by yourself</h2>
+          <button id="helpBtn" class="secondary" style="flex-shrink:0;">📖 How to Play</button>
+        </div>
+		<p>Loosely based on classic D&amp;D, this application will allow you to play an AI powered narrative story loosely based on D&amp;D 5e. Expect a lot of weirdness and things that don't make sense but it should still be fun enough to be worth while for a bit.</p>
+        <div class="grid two">
+          <div class="form">
+            <h3>Create Lobby</h3>
+            <button id="createLobby" class="primary">Create Lobby</button>
+			<label style="display:flex;align-items:center;gap:0.5em;margin-bottom:0.5em;cursor:pointer;">
+              <input type="checkbox" id="lobbyPrivate" />
+              <span>🔒 Password protect</span>
+            </label>
+            <input type="password" id="lobbyPassword" placeholder="Set password…" style="display:none;margin-bottom:0.5em;" />
+          </div>
+          <div class="form">
+            <h3>Join Lobby</h3>
+            <input id="joinCode" placeholder="Enter code (e.g., B9K3FD)" />
+            <button id="joinLobby">Join</button>
+          </div>
+        </div>
+
+        <!-- Active games list -->
+        <div id="activeGamesSection" style="margin-top:2em;">
+          <div class="row space-between" style="margin-bottom:0.5em;">
+            <h3 style="margin:0;">Active Adventures</h3>
+            <button id="refreshLobbies" class="secondary" style="padding:0.3em 0.8em;font-size:0.85em;">↻ Refresh</button>
+          </div>
+          <div id="lobbyTabs" class="lobby-tabs"></div>
+          <div id="activeGamesList"><p class="hint">Loading adventures...</p></div>
+        </div>
+      </section>
+
+      <!-- LOBBY PAGE -->
+      <section id="lobby" class="panel hidden">
+        <div class="row space-between">
+          <h2>Lobby <span id="lobbyCode"></span></h2>
+          <div class="row">
+			<button id="openChat" class="secondary chat-toggle">💬 Chat</button>
+			<button id="importCharBtn" class="secondary" title="Import a saved character file">📥 Import</button>
+			<button id="exportCharBtn" class="secondary" title="Export character to file">📤 Export</button>
+            <button id="randomizeChar" class="secondary">🎲 Randomize</button>
+            <button id="openOptionsBtn" class="secondary hidden">⚙️ Game Options</button>
+            <button id="phaseReady" class="secondary">Ready Check</button>
+            <button id="startGame" class="primary">Start Game</button>
+          </div>
+          <input type="file" id="importCharInput" accept=".stchar" style="display:none;" />
+        </div>
+
+
+        <!-- Two-column grid: left = character sheet, right = player list -->
+        <div class="grid two">
+          <!-- LEFT COLUMN -->
+          <div>
+            <h3>Your Character</h3>
+            <div class="form">
+              <!-- Character portrait — placeholder until generated -->
+              <div id="charImageContainer" style="text-align:center;margin-bottom:12px;">
+                <div id="charImagePlaceholder" style="width:100%;height:200px;background:#1a1a2e;border:2px dashed #444;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;flex-direction:column;gap:8px;">
+                  <span style="font-size:3em;">🧝</span>
+                  <span style="font-size:0.8em;">Portrait will appear here</span>
+                </div>
+                <img id="charImagePreview" src="" alt="Character portrait" class="hidden" style="max-width:100%;border-radius:8px;border:2px solid #555;" />
+              </div>
+
+              <input id="name" placeholder="Character Name" />
+
+              <div class="grid two">
+                <div>
+                  <label>Race</label>
+                  <select id="race">
+                    <option value="Human">Human</option>
+                    <option value="Elf">Elf</option>
+                    <option value="Dwarf">Dwarf</option>
+                    <option value="Halfling">Halfling</option>
+                    <option value="Half-Orc">Half-Orc</option>
+                    <option value="Tiefling">Tiefling</option>
+                    <option value="Dragonborn">Dragonborn</option>
+                    <option value="Gnome">Gnome</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Class</label>
+                  <select id="cls">
+                    <option value="Fighter">Fighter</option>
+                    <option value="Rogue">Rogue</option>
+                    <option value="Wizard">Wizard</option>
+                    <option value="Cleric">Cleric</option>
+                    <option value="Ranger">Ranger</option>
+                    <option value="Paladin">Paladin</option>
+                    <option value="Bard">Bard</option>
+                    <option value="Barbarian">Barbarian</option>
+                    <option value="Sorcerer">Sorcerer</option>
+                    <option value="Warlock">Warlock</option>
+                    <option value="Monk">Monk</option>
+                    <option value="Druid">Druid</option>
+                  </select>
+                </div>
+              </div>
+			  <div class="grid two">
+				<div>
+					<label>Starting Weapon</label>
+					<select id="weaponSelect">
+						<option value="">— Select a weapon —</option>
+					</select>
+				</div>
+				<div>
+					<label>Starting Armor</label>
+					<select id="armorSelect">
+						<option value="">— Select armor —</option>
+					</select>
+				</div>
+			  </div>
+				<div class="grid two">
+				<div>
+					<label>Alignment</label>
+					<select id="alignment">
+					<option value="">— Select —</option>
+					<option>Lawful Good</option>
+					<option>Neutral Good</option>
+					<option>Chaotic Good</option>
+					<option>Lawful Neutral</option>
+					<option>True Neutral</option>
+					<option>Chaotic Neutral</option>
+					<option>Lawful Evil</option>
+					<option>Neutral Evil</option>
+					<option>Chaotic Evil</option>
+					</select>
+				</div>
+				<div>
+					<label>Background</label>
+					<select id="background">
+					<option value="">— Select —</option>
+					<option>Acolyte</option>
+					<option>Charlatan</option>
+					<option>Criminal</option>
+					<option>Entertainer</option>
+					<option>Folk Hero</option>
+					<option>Guild Artisan</option>
+					<option>Hermit</option>
+					<option>Noble</option>
+					<option>Outlander</option>
+					<option>Sage</option>
+					<option>Sailor</option>
+					<option>Soldier</option>
+					<option>Urchin</option>
+					</select>
+				</div>
+				</div>
+
+				<div class="grid three">
+					<div>
+						<label>Deity</label>
+						<input id="deity" type="text" placeholder="Optional" />
+					</div>
+					<div>
+						<label>Gender</label>
+						<input id="gender" type="text" placeholder="Optional" />
+					</div>
+					<div>
+						<label>Age</label>
+						<input id="age" type="number" placeholder="Years" min="1" />
+					</div>
+					</div>
+
+					<div class="grid three">
+					<div>
+						<label>Height</label>
+						<input id="height" type="text" placeholder="e.g. 5'10&quot;" />
+					</div>
+					<div>
+						<label>Weight</label>
+						<input id="weight" type="text" placeholder="e.g. 160 lb" />
+					</div>
+				</div>
+				<div>								
+					<label>Voice</label>
+					<div id="voiceSelectContainer">
+						<select id="voiceSelect" style="width:250px;display:inline-block">
+							<option value="">Loading voices...</option>
+						</select>
+						<button id="voicePlay" class="secondary">▶️ Preview</button>
+					</div>		
+				</div>
+
+              <h4>Attributes (Point Buy – 27 Points)</h4>
+              <div id="pointsRemaining">Points remaining: 27</div>
+
+              <div class="grid three">
+                <div>
+                  <label>Level</label>
+                  <input id="level" type="number" value="1" readonly />
+                </div>
+                <div>
+                  <label>HP</label>
+                  <input id="hp" type="number" placeholder="HP" />
+                </div>
+              </div>
+
+              <div class="grid three">
+                <div><label>STR</label><input type="number" id="str" min="8" max="15" value="8" /></div>
+                <div><label>DEX</label><input type="number" id="dex" min="8" max="15" value="8" /></div>
+                <div><label>CON</label><input type="number" id="con" min="8" max="15" value="8" /></div>
+                <div><label>INT</label><input type="number" id="int" min="8" max="15" value="8" /></div>
+                <div><label>WIS</label><input type="number" id="wis" min="8" max="15" value="8" /></div>
+                <div><label>CHA</label><input type="number" id="cha" min="8" max="15" value="8" /></div>
+              </div>
+
+              <div id="charBuilderAbilitiesContainer"></div>
+              <div id="charBuilderInventoryContainer"></div>
+              <textarea id="desc" placeholder="Short backstory"></textarea>
+
+              <div class="row">
+                <button id="saveSheet">Save Sheet</button>
+                <button id="toggleReady" class="secondary" disabled="disabled">I'm Ready</button>
+              </div>
+              <div class="row" style="margin-top:8px">
+                <button id="generateCharImage" class="secondary">🎨 Generate Character Image</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT COLUMN -->
+          <div>
+			<h3>Game Setup</h3>
+            <div id="lobbyGameOptions"></div>
+            <h3>Players</h3>
+            <div id="playersList" class="list"></div>
+          </div>
+        </div>
+      </section>
+
+ 
+	<!-- GAME PAGE -->
+	<section id="game" class="panel hidden" style="position:relative;">
+
+	<!-- Music widget — upper right corner -->
+	<div id="musicWidget" class="music-widget hidden">
+		<button id="musicMuteBtn" class="music-mute-btn" title="Toggle mute">🎵</button>
+		<div class="music-info">
+			<span id="musicSongTitle" class="music-song-title">—</span>
+		</div>
+		<input id="musicVolumeSlider" class="music-volume-slider" type="range" min="0" max="100" value="35" title="Volume" />
+	</div>
+
+	<div class="row space-between">
+		<div>
+			<h2 id="adventureTitle" style="margin:0;">Adventure</h2>
+			<span id="gameLobbyCode" class="hint" style="font-size:0.85em;letter-spacing:0.05em;"></span>
+		</div>
+		<div id="turnBanner" class="badge">Turn: —</div>
+<!-- MAP DISABLED: 		<button id="openMapBtn" class="secondary">🗺️ Open Map</button> -->
+		<button id="openInitiativeBtn" class="secondary">⚔️ Initiative</button>
+		<button id="openChat" class="secondary chat-toggle" onclick="openChat()">💬 Chat</button>
+		<button id="openPlayerOptionsBtn" class="secondary">⚙️ Options</button>
+		<button id="dmOptionsBtn" class="secondary hidden">🛡️ DM Controls</button>
+		<button id="endCampaignBtn" class="secondary hidden">🏆 End Campaign</button>
+	</div>
+
+	<!-- Turn timer bar (hidden when no timer active) -->
+	<div id="turnTimerBar" class="turn-timer-bar hidden">
+		<div class="turn-timer-info">
+			<span id="turnTimerLabel">⏱ Waiting…</span>
+			<span id="turnTimerCountdown" class="turn-timer-countdown">—</span>
+		</div>
+		<div class="turn-timer-track">
+			<div id="turnTimerFill" class="turn-timer-fill"></div>
+		</div>
+	</div>
+
+	<div class="grid two">
+		<!-- LEFT COLUMN: STORY -->
+		<div class="panel soft">
+
+		<h3>Story</h3>
+		<div id="storyLog" class="log"></div>
+
+		<div class="action-input-area">
+			<textarea id="actionInput" placeholder="Describe your action..." rows="4"></textarea>
+			<div class="row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
+				<button id="micBtn" class="secondary" title="Speak your action 🎤">🎤</button>
+				<button id="sendAction" class="primary">⚔️ Take Action</button>
+				<div class="row wrap" style="gap:4px;">
+					<button class="chip die" data-sides="4">d4</button>
+					<button class="chip die" data-sides="6">d6</button>
+					<button class="chip die" data-sides="8">d8</button>
+					<button class="chip die" data-sides="10">d10</button>
+					<button class="chip die" data-sides="12">d12</button>
+					<button class="chip die" data-sides="20">d20</button>
+				</div>
+				<select id="quickActionSelect" title="Pick a quick action to fill the text box">
+					<option value="" disabled selected>💡 Quick Actions</option>
+					<optgroup label="— Exploration —">
+						<option value="I carefully look around, examining my surroundings for anything useful or dangerous.">Look Around</option>
+						<option value="I search the area thoroughly for hidden items, traps, or secret passages.">Search Area</option>
+						<option value="I try to move silently and stay out of sight.">Sneak</option>
+						<option value="I listen carefully for any sounds nearby.">Listen</option>
+						<option value="I examine the object or area up close for clues.">Investigate</option>
+					</optgroup>
+					<optgroup label="— Social —">
+						<option value="I try to persuade them with a compelling argument.">Persuade</option>
+						<option value="I attempt to deceive them with a convincing lie.">Deceive</option>
+						<option value="I try to intimidate them into compliance.">Intimidate</option>
+						<option value="I ask them what they know about this place.">Gather Info</option>
+					</optgroup>
+					<optgroup label="— Combat —">
+						<option value="__attack:basic">⚔️ Basic Weapon Attack</option>
+						<option value="I ready myself for combat, drawing my weapon.">Ready for Combat</option>
+						<option value="I attempt to dodge and take a defensive stance.">Dodge</option>
+						<option value="I help an ally with their next action.">Help Ally</option>
+						<option value="I try to grapple and pin the enemy.">Grapple</option>
+						<option value="I disengage and attempt to flee the combat.">Disengage</option>
+					</optgroup>
+					<optgroup label="— Other —">
+						<option value="I use one of my abilities or spells.">Use Ability / Spell</option>
+						<option value="I check my inventory and use an item.">Use Item</option>
+						<option value="I attempt to stabilize a downed ally.">Stabilize Ally</option>
+						<option value="I wait and observe before acting.">Wait &amp; Observe</option>
+					</optgroup>
+					<optgroup label="— Rest —">
+						<option value="__rest:short">⛺ Propose Short Rest</option>
+						<option value="__rest:long">🛏️ Propose Long Rest</option>
+					</optgroup>
+					<optgroup id="dmSuggestionsGroup" label="— DM Suggests —" style="display:none;"></optgroup>
+				</select>
+				<!-- <div id="rollFeed" class="rollfeed"></div> -->
+			</div>
+		</div>
+
+		<h3>Action Log</h3>
+		<div id="actionLog" class="log smalltext"></div>
+
+		</div>
+
+		<!-- RIGHT COLUMN: CHARACTER PANEL -->
+		<div class="panel soft">
+		<div id="partyContainer"></div>
+		<h3>Your Character</h3>
+
+		<!-- BASIC INFO -->
+		<div id="charSummary" class="summary">
+			<div class="row space-between">
+			<div>
+				<strong id="charName">—</strong>
+				<span id="charRaceCls">—</span>
+			</div>
+			<div>
+				<span id="charLevel" class="badge small">Lv 1</span>
+			</div>
+			</div>
+
+			<div id="xpProgress">
+			<label>XP Progress</label>
+			<div class="progress">
+				<div id="xpFillGame" class="fill" style="width:0%"></div>
+			</div>
+			<div id="xpLabelGame" class="small">0 / 300 XP</div>
+			</div>
+
+			<div class="row">
+				<div><strong>HP:</strong> <span id="charHP">10</span></div>
+				<div><strong>XP:</strong> <span id="charXP">0</span></div>
+				<div><strong>Gold:</strong> <span id="charGold">0</span></div>
+				<div title="Spell slots remaining / max (= your level)"><strong>Spells:</strong> <span id="charSpellSlots">—</span></div>
+			</div>
+			<p class="smalltext"><strong>Conditions:</strong> <span id="charConditions">None</span></p>
+		</div>
+
+		<hr />
+
+		<!-- ATTRIBUTES -->
+		<h4>Attributes</h4>
+		<div id="charAttributes" class="grid three smalltext">
+			<div><strong>STR:</strong> <span id="attrSTR">10</span></div>
+			<div><strong>DEX:</strong> <span id="attrDEX">10</span></div>
+			<div><strong>CON:</strong> <span id="attrCON">10</span></div>
+			<div><strong>INT:</strong> <span id="attrINT">10</span></div>
+			<div><strong>WIS:</strong> <span id="attrWIS">10</span></div>
+			<div><strong>CHA:</strong> <span id="attrCHA">10</span></div>
+		</div>
+
+		<!-- WEAPON & ARMOR -->
+		<div class="grid two smalltext" style="margin-top:0.75em;gap:0.5em;">
+			<div>
+				<strong>⚔️ Weapon</strong>
+				<div id="charWeaponName" style="color:#ddd;">—</div>
+				<div id="charWeaponStats" style="color:#888;font-size:0.8em;">—</div>
+			</div>
+			<div>
+				<strong>🛡️ Armor</strong>
+				<div id="charArmorName" style="color:#ddd;">—</div>
+				<div id="charArmorStats" style="color:#888;font-size:0.8em;">—</div>
+			</div>
+		</div>
+
+		<hr />
+
+		<div id="gameAbilitiesContainer"></div>
+		<div id="gameInventoryContainer"></div>
+
+		<!-- DICE ROLLER 
+		<h4>Dice Roller</h4>
+		-->
+
+		<hr />
+
+		</div>
+	</div>
+	</section>
+	<!-- === Rest Vote Modal === -->
+	<div id="restVoteModal" class="modal" style="display:none;">
+		<div class="modal-content" style="max-width:400px;text-align:center;">
+			<h2 id="restVoteTitle">⛺ Rest Vote</h2>
+			<p id="restVoteDesc" style="color:#aaa;font-size:0.9em;"></p>
+			<div class="rest-vote-counts">
+				<div class="vote-pill yes">✅ Yes <span id="voteYesCount">0</span></div>
+				<div class="vote-pill no">❌ No <span id="voteNoCount">0</span></div>
+				<div class="vote-pill pending">⏳ Waiting <span id="votePendingCount">0</span></div>
+			</div>
+			<div id="restVoteNames" style="font-size:0.8em;color:#888;margin:0.5em 0;min-height:1.2em;"></div>
+			<div id="restVoteTimerDisplay" style="font-size:0.85em;color:#f0a500;margin-bottom:0.5em;"></div>
+			<div id="restVoteBtns" class="row" style="justify-content:center;gap:1em;margin-top:1em;">
+				<button id="voteYesBtn" class="primary">✅ Yes, rest</button>
+				<button id="voteNoBtn" class="danger">❌ No, keep going</button>
+			</div>
+			<p id="restVoteResult" style="font-size:1.1em;font-weight:bold;display:none;margin-top:0.75em;"></p>
+		</div>
+	</div>
+
+	<!-- === Password Modal === -->
+	<div id="passwordModal" class="modal" style="display:none;">
+		<div class="modal-content" style="max-width:340px;">
+			<h2>🔒 Password Required</h2>
+			<p style="color:#aaa;font-size:0.9em;">This lobby is password protected. Enter the password to join.</p>
+			<input type="password" id="lobbyPasswordInput" placeholder="Enter password…" style="width:100%;margin-bottom:1em;" />
+			<div class="row" style="gap:0.75em;justify-content:center;">
+				<button id="cancelPasswordBtn" class="secondary">Cancel</button>
+				<button id="submitPasswordBtn" class="primary">Join</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- === How to Play Modal === -->
+	<div id="helpModal" class="modal" style="display:none;">
+		<div class="modal-content help-modal-content">
+			<div class="row space-between" style="align-items:flex-start;margin-bottom:0.75em;">
+				<h2 style="margin:0;">📖 How to Play StoryTeller</h2>
+				<button id="helpModalClose" class="secondary">✕ Close</button>
+			</div>
+
+			<nav class="help-toc">
+				<a href="#help-what">What is this?</a>
+				<a href="#help-start">Getting Started</a>
+				<a href="#help-turn">Taking Your Turn</a>
+				<a href="#help-dice">Dice Rolls</a>
+				<a href="#help-health">Health &amp; Conditions</a>
+				<a href="#help-rest">Resting</a>
+				<a href="#help-timer">Turn Timer</a>
+				<a href="#help-export">Export &amp; Rejoin</a>
+				<a href="#help-map">Map &amp; Chat</a>
+				<a href="#help-admin">Hosts &amp; Admin</a>
+				<a href="#help-tips">Tips</a>
+			</nav>
+
+			<div class="help-section" id="help-what">
+				<h3>🎲 What is this?</h3>
+				<p>StoryTeller is a cooperative AI-powered D&amp;D-style game. One player hosts a lobby and an AI Dungeon Master narrates the adventure in real time. Players take turns describing their actions and the DM decides what happens — for better or worse. It's loosely based on D&amp;D 5e rules but don't expect it to follow them perfectly.</p>
+			</div>
+
+			<div class="help-section" id="help-start">
+				<h3>🏰 Getting Started</h3>
+				<ul>
+					<li><strong>Create a Lobby</strong> — Click "Create Lobby" and share the 6-character join code with your friends. You can optionally password-protect the game with the 🔒 checkbox.</li>
+					<li><strong>Join a Lobby</strong> — Enter the 6-character code and click Join. Public games also appear in the <em>Active Adventures</em> list.</li>
+					<li><strong>Build your Character</strong> — Fill in your name, race, class, stats, abilities, and backstory in the lobby before the game starts. Click <strong>Save Sheet</strong> when done.</li>
+					<li><strong>Export your Character</strong> — Hit 📤 Export to save a <code>.stchar</code> file to your computer. <strong>Do this before leaving!</strong> You'll need it to rejoin later.</li>
+					<li><strong>Start the Game</strong> — Once all players are ready, the host clicks <strong>Start Game</strong>.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-turn">
+				<h3>⚔️ Taking Your Turn</h3>
+				<ul>
+					<li>The current player's name is highlighted. Only they can act — everyone else watches.</li>
+					<li>Type what your character does in the action box and click <strong>Take Action</strong>. Be descriptive — the DM responds to what you write.</li>
+					<li>Use the <strong>💡 Quick Actions</strong> dropdown as a shortcut for common actions (look around, persuade, attack, etc.).</li>
+					<li>The DM may suggest contextual actions in the <em>DM Suggests</em> section of that dropdown.</li>
+					<li>Use the 🎤 mic button to speak your action instead of typing.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-dice">
+				<h3>🎲 Dice Rolls</h3>
+				<ul>
+					<li>Dice buttons (d4 through d20) are <strong>disabled by default</strong>. The DM unlocks the appropriate die when a roll is required.</li>
+					<li>When the DM requests a roll, the required die will <strong>glow and pulse</strong>. Click it to roll — your stat modifiers are applied automatically.</li>
+					<li>The result is sent to the DM to factor into the outcome.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-health">
+				<h3>❤️ Health &amp; Conditions</h3>
+				<ul>
+					<li>Your HP bar is shown in the party panel on the right. If it hits 0, you're downed.</li>
+					<li>The DM can inflict <strong>conditions</strong> (Poisoned, Stunned, Blinded, etc.) that affect your abilities. Hover over a condition tag to see its effect, or click the <strong>?</strong> button on the Party table header for the full reference.</li>
+					<li>Conditions are cleared on a long rest.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-rest">
+				<h3>⛺ Resting</h3>
+				<ul>
+					<li>On your turn, open <strong>💡 Quick Actions</strong> and choose <em>⛺ Propose Short Rest</em> or <em>🛏️ Propose Long Rest</em>.</li>
+					<li>A vote modal opens for the whole party. Everyone has <strong>120 seconds</strong> to vote Yes or No. Non-voters are automatically counted as No.</li>
+					<li><strong>Short Rest</strong> — Recovers ~⅓ of max HP. Takes 1–2 in-game hours.</li>
+					<li><strong>Long Rest</strong> — Restores full HP and clears all conditions. Takes a full 8 in-game hours.</li>
+					<li>If the vote passes, the DM narrates the rest before the next turn begins.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-timer">
+				<h3>⏱ Turn Timer</h3>
+				<ul>
+					<li>The host can enable a turn timer in <strong>⚙️ Game Options</strong>. When enabled, each player has a set number of minutes to act.</li>
+					<li>If a player misses too many turns in a row they are skipped automatically — keeps things moving when someone goes AFK.</li>
+					<li>The timer resets whenever the active player takes an action.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-export">
+				<h3>💾 Character Export &amp; Rejoin</h3>
+				<ul>
+					<li>Click 📤 <strong>Export</strong> (in the lobby or in-game) to download your character as a <code>.stchar</code> file. Keep it safe — it contains your full character sheet including XP, gold, and inventory.</li>
+					<li>If you disconnect and come back, find the game in the Active Adventures list and click it. You'll see a list of absent character slots.</li>
+					<li>Click <em>Upload .stchar</em> next to your character's name and select your file. The game cryptographically verifies the file before letting you back in.</li>
+					<li>Click 📥 <strong>Import</strong> in the lobby to load a previously saved character into the character builder.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-map">
+				<h3>🗺️ Map &amp; 💬 Chat</h3>
+				<ul>
+					<li>Click <strong>🗺 Map</strong> to open the live map. The DM updates it as the party explores — your icon moves to reflect where you are in the world.</li>
+					<li>The map is view-only for players. Only the host controls what appears on it.</li>
+					<li>Click 💬 <strong>Chat</strong> to open the side panel and talk to other players out-of-character without interrupting the story.</li>
+				</ul>
+			</div>
+
+			<div class="help-section" id="help-admin">
+				<h3>👢 Hosts &amp; Admin</h3>
+				<ul>
+					<li>The player who creates the lobby is the <strong>host</strong>. They can kick players from the lobby screen before the game starts.</li>
+					<li>Hosts have access to an <strong>Admin Panel</strong> (separate browser tab) where they can adjust HP, apply or remove conditions, trigger dice rolls, and more.</li>
+					<li>The Admin Panel is your escape hatch for when the AI goes completely off the rails.</li>
+				</ul>
+			</div>
+
+			<div class="help-section help-section-tip" id="help-tips">
+				<h3>💡 Tips</h3>
+				<ul>
+					<li>The AI DM is powerful but unpredictable. If it ignores your action, try rephrasing it more specifically.</li>
+					<li>The DM responds much better to vivid, in-character descriptions. <em>"I draw my sword and charge at the goblin, aiming for its throat"</em> beats <em>"attack"</em>.</li>
+					<li>Export your character regularly — especially after levelling up or finding rare items.</li>
+					<li>If something breaks badly, the host can use the Admin Panel to correct game state directly without bothering the AI.</li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<!-- FANTASY LOADING OVERLAY -->
+	<div id="loadingOverlay" class="hidden">
+		<div class="loading-content">
+			<h2>🌙 The Fates are Weaving Your Tale...</h2>
+			<p>Gather your courage — your adventure is about to begin.</p>
+			<div class="spinner"></div>
+		</div>
+	</div>
+
+	<!-- === DM Options Auth Modal === -->
+	<div id="dmAuthModal" class="modal" style="display:none;">
+		<div class="modal-content" style="max-width:440px;text-align:center;">
+			<h2>🛡️ DM Authentication</h2>
+			<p style="color:#aaa;font-size:0.9em;margin-bottom:0.5em;">
+				To access the DM tools, upload your exported character file (<strong>.stchar</strong>) to verify you are the game host.
+			</p>
+			<p style="color:#777;font-size:0.82em;margin-bottom:1.25em;">
+				You can export your character from the <strong>Options</strong> menu in-game. Only the host's character file will be accepted.
+			</p>
+			<div id="dmAuthStatus" style="min-height:1.5em;margin-bottom:1em;font-size:0.9em;"></div>
+			<div class="row" style="gap:0.75em;justify-content:center;">
+				<button id="dmAuthUploadBtn" class="primary">📂 Upload .stchar File</button>
+				<button id="dmAuthCancelBtn" class="secondary">Cancel</button>
+			</div>
+			<input type="file" id="hostCharFileInput" accept=".stchar" style="display:none" />
+		</div>
+	</div>
+
+	<!-- === Player Death Modal === -->
+	<div id="deathModal">
+		<div class="death-overlay"></div>
+		<div class="death-content">
+			<h1>☠️ You Died</h1>
+			<p>Your journey ends here...</p>
+		</div>
+	</div>
+
+	<!-- === NARRATION INDICATOR === -->
+	<div id="narratorIndicator" class="hidden">
+		<span class="icon">🔮</span>
+		<span id="narratorText">Narrating...</span>
+		<button id="stopNarrationBtn" title="Stop narration">⏹ Stop</button>
+	</div>
+	
+	<!-- === STORY READER MODAL === -->
+	<div id="storyModal" class="modal" style="display:none;">
+		<div class="modal-content story-reader">
+			<div class="row space-between" style="margin-bottom:1em;align-items:flex-start;">
+				<div>
+					<h2 id="storyModalTitle" style="margin:0 0 0.25em;">—</h2>
+					<div id="storyModalMeta"></div>
+				</div>
+				<button id="storyModalClose" class="secondary">✕ Close</button>
+			</div>
+			<div id="storyModalLog" class="story-log-reader"></div>
+		</div>
+	</div>
+
+	<!-- === PLAYER OPTIONS MODAL === -->
+	<div id="playerOptionsModal" class="modal" style="display:none;">
+		<div class="modal-content" style="width:min(420px,90%);">
+			<h2>Options</h2>
+			<hr />
+			<h4 style="margin-bottom:0.5em;">Story Font</h4>
+			<p style="font-size:0.82em;color:#999;margin:0 0 1em;">Choose the typeface used in the story log.</p>
+			<div class="font-picker">
+				<button class="font-option" data-font="Cinzel" style="font-family:'Cinzel',serif;">
+					<span class="font-name">Cinzel</span>
+					<span class="font-sample">The Dragon stirs in the deep...</span>
+				</button>
+				<button class="font-option" data-font="Lora" style="font-family:'Lora',serif;">
+					<span class="font-name">Lora</span>
+					<span class="font-sample">The Dragon stirs in the deep...</span>
+				</button>
+				<button class="font-option" data-font="Crimson Pro" style="font-family:'Crimson Pro',serif;">
+					<span class="font-name">Crimson Pro</span>
+					<span class="font-sample">The Dragon stirs in the deep...</span>
+				</button>
+			</div>
+			<hr style="margin-top:1.25em;" />
+			<h4 style="margin-bottom:0.5em;">Narration Audio</h4>
+			<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.25em 0;">
+				<div>
+					<span style="font-size:0.9em;">Enable narration audio</span><br>
+					<small style="color:#777;">Turn off if multiple players are in the same room</small>
+				</div>
+				<label style="display:flex;align-items:center;gap:0.5em;cursor:pointer;font-size:0.88em;">
+					<input type="checkbox" id="narrationEnabledToggle" style="width:1.1em;height:1.1em;accent-color:#7a50c8;cursor:pointer;" checked />
+				</label>
+			</div>
+			<hr style="margin-top:1.25em;" />
+			<h4 style="margin-bottom:0.5em;">Character</h4>
+			<button id="exportCharGameBtn" style="margin:0 0 0.5em;display:block;width:100%;background:linear-gradient(90deg,#3a5a3a,#4a7a4a);border-color:#5a9a5a;color:#cfffcf;">📤 Export Character Sheet</button>
+			<hr />
+			<button id="playerOptionsClose" class="secondary" style="margin:0;display:block;width:100%;">Close</button>
+		</div>
+	</div>
+
+	<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" defer></script>
+	<script src="/sockets.js" defer></script>
+	<script src="/domElements.js" defer></script>
+	<script src="/charBuilder.js" defer></script>
+	<script src="/tts.js" defer></script>
+	<script src="/music.js" defer></script>
+	<script src="/eventHandlers.js" defer></script>
+	<script src="/uiComponents.js" defer></script>
+	<script src="/app.js" defer></script>
+	<script src="/init.js" defer></script>
+
+
+
+  </body>
+</html>

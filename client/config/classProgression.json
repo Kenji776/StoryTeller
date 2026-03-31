@@ -1,0 +1,1145 @@
+{
+  "Fighter": {
+    "2": [
+      {
+        "name": "Fighting Style",
+        "description": "You adopt a specialised fighting technique. Choose Defence (+1 AC in armour), Duelling (+2 damage with a one-handed weapon), or Great Weapon Fighting (reroll 1s and 2s on damage dice).",
+        "details": {
+          "usage": "Passive",
+          "recharge": "Always active",
+          "effect": "+1 AC, or +2 damage, or reroll low damage dice"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Improved Critical",
+        "description": "Your weapon attacks score a critical hit on a roll of 19 or 20, not just 20.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Critical on 19–20"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Extra Attack",
+        "description": "When you take the Attack action, you can attack twice instead of once.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Two attacks per Attack action"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Indomitable",
+        "description": "When you fail a saving throw you may reroll it, keeping the new result.",
+        "details": {
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Tactical Prowess",
+        "description": "As a bonus action, you call out a target and grant one ally within 30 ft an immediate reaction attack or 15 ft of movement against that target.",
+        "details": {
+          "usage": "Bonus action",
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "War Caster Resilience",
+        "description": "You have advantage on CON saving throws to maintain concentration and can perform somatic components even with weapons in hand.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Relentless Endurance",
+        "description": "When you are reduced to 0 HP but not killed outright, you can drop to 1 HP instead.",
+        "details": {
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Sweeping Attack",
+        "description": "When you hit a creature with a melee attack, choose a second creature within 5 ft. It takes weapon damage equal to your STR modifier (no attack roll needed).",
+        "details": {
+          "usage": "Reaction on hit",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Champion's Resolve",
+        "description": "You are immune to the frightened condition. Allies within 30 ft of you have advantage on saving throws against fear and charm effects.",
+        "details": {
+          "usage": "Passive",
+          "range": "30 ft aura"
+        }
+      }
+    ]
+  },
+  "Wizard": {
+    "2": [
+      {
+        "name": "Arcane Recovery",
+        "description": "Once per day when you finish a short rest, you can recover expended spell slots whose combined level is equal to or less than half your Wizard level (rounded up).",
+        "details": {
+          "uses": 1,
+          "recharge": "long rest",
+          "effect": "Recover spell slots totalling half level"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Sculpt Spells",
+        "description": "When you cast an evocation spell that affects other creatures, you can choose up to 1 + spell level creatures. Those creatures automatically succeed on their saving throw and take no damage.",
+        "details": {
+          "usage": "Automatic when casting evocations"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Potent Cantrip",
+        "description": "Your damaging cantrips force a creature to take half damage even on a successful saving throw.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Cantrip saves deal half on success"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Fireball",
+        "description": "A bright streak flashes to a point you choose within 150 ft and blossoms into a roiling ball of flame. Each creature in a 20-ft radius must make a DEX save or take 8d6 fire damage (half on success).",
+        "details": {
+          "damage": "8d6 fire",
+          "range": "150 ft",
+          "area": "20-ft radius",
+          "save": "Dexterity"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Counterspell",
+        "description": "As a reaction, you attempt to interrupt a creature in the process of casting a spell. If the spell is 3rd level or lower it automatically fails. For higher levels make an Arcana check (DC 10 + spell level).",
+        "details": {
+          "usage": "Reaction",
+          "range": "60 ft",
+          "recharge": "At will (uses a spell slot)"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Spell Mastery",
+        "description": "Choose one 1st-level spell and one 2nd-level spell. You can cast them at their lowest level without expending a spell slot.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Two spells cast for free per day"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Empowered Evocation",
+        "description": "Whenever you cast an evocation spell, you can add your INT modifier to one damage roll of that spell.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+INT modifier to evocation damage"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Overchannel",
+        "description": "Maximise the damage of a 1st-through-5th level damaging spell. Spells above 1st level deal 2d12 necrotic to you per level above 1st (no save).",
+        "details": {
+          "usage": "Active on cast",
+          "effect": "Max damage; self-damage for level 2+"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Arcane Perfection",
+        "description": "Your concentration can no longer be broken by taking damage. You also have advantage on all Intelligence-based checks and saving throws.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ]
+  },
+  "Cleric": {
+    "2": [
+      {
+        "name": "Channel Divinity",
+        "description": "Channel raw divine energy to Turn Undead (forcing them to flee) or invoke your deity's domain power. Undead of CR ½ or lower that fail the save are destroyed.",
+        "details": {
+          "uses": 2,
+          "recharge": "short rest",
+          "effect": "Turn or destroy undead; trigger domain power"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Divine Strike",
+        "description": "Once per turn when you hit with a weapon attack, you can cause the weapon to deal an extra 1d8 damage of a type granted by your deity.",
+        "details": {
+          "damage": "1d8 divine bonus",
+          "usage": "Once per turn on hit"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Spiritual Weapon",
+        "description": "As a bonus action, create a floating spectral weapon within 60 ft that lasts 1 minute. On each of your turns you can make a melee attack with it (1d8 + WIS modifier force damage, 20 ft reach).",
+        "details": {
+          "damage": "1d8 + WIS force",
+          "range": "60 ft summon / 20 ft reach",
+          "duration": "1 minute",
+          "usage": "Bonus action to summon and attack"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Potent Spellcasting",
+        "description": "Add your Wisdom modifier to the damage you deal with any cleric cantrip.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+WIS to cantrip damage"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Blessed Healer",
+        "description": "When you cast a healing spell that restores HP to a creature other than yourself, you regain 2 + the spell's level in HP.",
+        "details": {
+          "usage": "Automatic when healing others",
+          "effect": "Regain 2 + spell level HP"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Divine Intervention",
+        "description": "Implore your deity to intervene directly. Roll d100; if you roll equal to or less than your Cleric level, the deity acts. On success you can't use this feature again for 7 days.",
+        "details": {
+          "uses": 1,
+          "recharge": "7 days on success",
+          "effect": "% chance = Cleric level"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Holy Aura",
+        "description": "Allies within 30 ft gain +2 AC and advantage on saving throws against spells and magical effects. Any fiend or undead that hits an ally in the aura takes 2d6 radiant damage.",
+        "details": {
+          "duration": "1 minute",
+          "range": "30 ft aura",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Supreme Healing",
+        "description": "When you would normally roll dice to restore HP with a spell, you instead use the highest number possible for each die.",
+        "details": {
+          "usage": "Passive",
+          "effect": "All healing spells deal maximum HP"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Avatar of Divinity",
+        "description": "For 1 minute, you radiate divine power: you are immune to one damage type of your choice (chosen when you use this), and allies within 10 ft regain 1d6 HP at the start of their turn.",
+        "details": {
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest",
+          "range": "10 ft aura"
+        }
+      }
+    ]
+  },
+  "Rogue": {
+    "2": [
+      {
+        "name": "Uncanny Dodge",
+        "description": "When an attacker you can see hits you with an attack, you can use your reaction to halve the attack's damage against you.",
+        "details": {
+          "usage": "Reaction",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Evasion",
+        "description": "When you are subjected to a DEX save for half damage, you instead take no damage on success and half damage on failure.",
+        "details": {
+          "usage": "Passive",
+          "effect": "No damage on successful DEX save"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Reliable Talent",
+        "description": "Whenever you make an ability check that lets you add your proficiency bonus, treat a d20 result of 9 or lower as a 10.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Minimum 10 on proficient skill checks"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Assassinate",
+        "description": "During the first round of combat you have advantage on attack rolls against any creature that has not yet acted. Any hit against a surprised creature is a critical hit.",
+        "details": {
+          "usage": "Passive – first round only",
+          "effect": "Advantage + auto-crit on surprised targets"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Use Magic Device",
+        "description": "You can use any magic item regardless of class, race, or level requirements.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Shadow Step",
+        "description": "As a bonus action while in dim light or darkness, teleport up to 60 ft to an unoccupied space also in dim light or darkness. You have advantage on the first melee attack you make before the end of the turn.",
+        "details": {
+          "usage": "Bonus action",
+          "range": "60 ft",
+          "recharge": "At will in darkness"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Elusive",
+        "description": "No attack roll ever has advantage against you while you are not incapacitated.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Death Strike",
+        "description": "When you hit a surprised creature with a Sneak Attack, it must make a CON save (DC 8 + DEX mod + proficiency). On a failure, double all the damage of the attack.",
+        "details": {
+          "save": "Constitution",
+          "usage": "On Sneak Attack vs. surprised target",
+          "effect": "Potential double damage"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Stroke of Luck",
+        "description": "Turn one failed ability check into a success, or change a missed attack roll into a hit (your choice).",
+        "details": {
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ]
+  },
+  "Ranger": {
+    "2": [
+      {
+        "name": "Primeval Awareness",
+        "description": "Expend a spell slot to sense whether aberrations, celestials, dragons, elementals, fey, fiends, or undead are present within 1 mile (6 miles in your favoured terrain) for 1 minute per slot level.",
+        "details": {
+          "usage": "Action + spell slot",
+          "duration": "1 min/slot level",
+          "range": "1 mile (6 miles favoured terrain)"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Favored Enemy",
+        "description": "Choose a creature type. You deal +2 damage against them, have advantage on Survival checks to track them, and advantage on INT checks to recall information about them.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+2 damage, tracking advantage vs. chosen type"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Extra Attack",
+        "description": "When you take the Attack action, you can attack twice instead of once.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Volley",
+        "description": "As an action, make a ranged attack against every creature within a 10-ft-radius circle centred on a point within range. Make a separate attack roll for each target.",
+        "details": {
+          "usage": "Action",
+          "area": "10-ft radius",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Vanish",
+        "description": "You can use Hide as a bonus action. You also can't be tracked by nonmagical means unless you choose to leave a trail.",
+        "details": {
+          "usage": "Bonus action to hide",
+          "effect": "Untrackable by nonmagical means"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Steel Will",
+        "description": "You have advantage on saving throws against being frightened.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Explosive Arrow",
+        "description": "Imbue one arrow with volatile energy. On a hit it deals a bonus 4d6 fire damage in a 10-ft radius (DEX save for half).",
+        "details": {
+          "damage": "4d6 fire (bonus)",
+          "area": "10-ft radius on hit",
+          "save": "Dexterity",
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Feral Senses",
+        "description": "You cannot be surprised. You also gain blindsight to 30 ft — you are aware of invisible creatures within that radius.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Can't be surprised; blindsight 30 ft"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Foe Slayer",
+        "description": "Once per turn when you attack your Favored Enemy, you can add your Wisdom modifier to either the attack roll or the damage roll.",
+        "details": {
+          "usage": "Once per turn",
+          "effect": "+WIS to attack or damage vs. favoured enemy"
+        }
+      }
+    ]
+  },
+  "Paladin": {
+    "2": [
+      {
+        "name": "Aura of Protection",
+        "description": "You and friendly creatures within 10 ft add your CHA modifier (minimum +1) to all saving throws while you are conscious.",
+        "details": {
+          "usage": "Passive aura",
+          "range": "10 ft",
+          "effect": "+CHA to all saves for you and allies"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Sacred Weapon",
+        "description": "Channel Divinity: imbue your weapon with holy light for 1 minute. It gains a bonus to attack rolls equal to your CHA modifier and sheds bright light in a 20-ft radius.",
+        "details": {
+          "duration": "1 minute",
+          "usage": "Bonus action (Channel Divinity)",
+          "effect": "+CHA to attacks; 20-ft bright light"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Aura of Courage",
+        "description": "You and friendly creatures within 10 ft cannot be frightened while you are conscious.",
+        "details": {
+          "usage": "Passive aura",
+          "range": "10 ft"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Extra Attack",
+        "description": "When you take the Attack action, you can attack twice instead of once.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Improved Divine Smite",
+        "description": "Whenever you hit a creature with a melee weapon, your weapon deals an extra 1d8 radiant damage.",
+        "details": {
+          "damage": "1d8 radiant (every hit)",
+          "usage": "Passive"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Cleansing Touch",
+        "description": "As an action, end one spell on yourself or on a willing creature you touch.",
+        "details": {
+          "usage": "Action",
+          "uses": "CHA modifier per long rest",
+          "effect": "Dispel a spell affecting a willing target"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Aura of Warding",
+        "description": "You and friendly creatures within 10 ft have resistance to damage from spells.",
+        "details": {
+          "usage": "Passive aura",
+          "range": "10 ft",
+          "effect": "Resistance to spell damage"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Thunderous Smite",
+        "description": "Your next hit deals an extra 2d6 thunder damage. The target must succeed on a STR save or be pushed 10 ft and knocked prone.",
+        "details": {
+          "damage": "2d6 thunder bonus",
+          "save": "Strength or pushed + prone",
+          "usage": "Bonus action before attack"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Divine Shield",
+        "description": "You are immune to the charmed and frightened conditions. Allies within your aura radius gain +2 AC.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to charm/fear; +2 AC aura for allies"
+        }
+      }
+    ]
+  },
+  "Barbarian": {
+    "2": [
+      {
+        "name": "Danger Sense",
+        "description": "You have an uncanny sense of danger. You have advantage on DEX saving throws against effects that you can see, such as traps and spells. You must not be blinded, deafened, or incapacitated.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Advantage on DEX saves vs. visible dangers"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Frenzy",
+        "description": "While raging you can go into a frenzy. You can make a single melee weapon attack as a bonus action each turn. When the rage ends you suffer one level of exhaustion.",
+        "details": {
+          "usage": "Bonus action while raging",
+          "cost": "1 exhaustion level on rage end"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Feral Instinct",
+        "description": "You have advantage on initiative rolls. If you are surprised at the start of combat and are not incapacitated, you can act normally on your first turn, but only if you enter your rage before doing anything else.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Advantage on initiative; act when surprised if you rage first"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Extra Attack",
+        "description": "When you take the Attack action, you can attack twice instead of once.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Brutal Critical",
+        "description": "When you score a critical hit, roll one additional weapon damage die when determining extra damage.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+1 damage die on crits"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Relentless Rage",
+        "description": "While raging, if you drop to 0 HP and don't die, you can make a DC 10 CON save to drop to 1 HP instead. Each subsequent use raises the DC by 5.",
+        "details": {
+          "usage": "Automatic while raging",
+          "effect": "CON save DC 10+ to stay at 1 HP"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Totem Resilience",
+        "description": "While you are raging and not wearing heavy armour, you have resistance to all bludgeoning, piercing, and slashing damage from nonmagical weapons.",
+        "details": {
+          "usage": "Passive while raging",
+          "effect": "Resistance to nonmagical physical damage"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Indomitable Might",
+        "description": "If your total for a STR check is less than your STR score, you can use that score in place of the total.",
+        "details": {
+          "usage": "Passive",
+          "effect": "STR checks cannot be lower than STR score"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Primal Champion",
+        "description": "Your physical power reaches its peak. Your STR and CON scores each increase by 4, and their maximums increase by 4.",
+        "details": {
+          "usage": "Passive (permanent)",
+          "effect": "+4 STR, +4 CON; maximums raised by 4"
+        }
+      }
+    ]
+  },
+  "Bard": {
+    "2": [
+      {
+        "name": "Song of Rest",
+        "description": "During a short rest you play soothing music or tell an uplifting story. Friendly creatures who spend Hit Dice to recover HP regain an extra 1d6 HP.",
+        "details": {
+          "usage": "During short rest",
+          "effect": "+1d6 HP when allies spend Hit Dice"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Jack of All Trades",
+        "description": "Add half your proficiency bonus (rounded down) to any ability check you make that doesn't already include your proficiency bonus.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+half proficiency to all non-proficient checks"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Countercharm",
+        "description": "As an action, begin a performance. Until the end of your next turn, you and any friendly creature within 30 ft have advantage on saving throws against being frightened or charmed.",
+        "details": {
+          "usage": "Action",
+          "range": "30 ft",
+          "duration": "Until end of next turn",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Magical Secrets",
+        "description": "You have plundered magical knowledge from a wide spectrum of disciplines. Choose two spells from any class. They count as bard spells for you.",
+        "details": {
+          "usage": "Permanent",
+          "effect": "Learn 2 spells from any class spell list"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Font of Inspiration",
+        "description": "You regain all of your expended uses of Bardic Inspiration when you finish a short or long rest.",
+        "details": {
+          "usage": "Passive",
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Cutting Words (Improved)",
+        "description": "Use your reaction and expend a Bardic Inspiration die to subtract the rolled number from an enemy's attack roll, ability check, or damage roll.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "Subtract Inspiration die from enemy roll",
+          "recharge": "Uses Bardic Inspiration"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Superior Inspiration",
+        "description": "When you roll initiative and have no Bardic Inspiration uses remaining, you regain one use. Also your Bardic Inspiration die increases to a d10.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Regain 1 use on initiative if empty; die = d10"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Words of Terror",
+        "description": "You can infuse your words with an insidious magic. Spend 1 minute speaking to a humanoid. They must succeed on a WIS save or be frightened of you for 1 hour.",
+        "details": {
+          "duration": "1 hour",
+          "save": "Wisdom",
+          "usage": "1-minute speech",
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Grand Maestro",
+        "description": "Your Bardic Inspiration die becomes a d12. You can grant Bardic Inspiration as a bonus action, and any creature who uses one of your dice and rolls the maximum value immediately regains the die.",
+        "details": {
+          "usage": "Bonus action to inspire",
+          "effect": "Inspiration die = d12; refunds on max roll"
+        }
+      }
+    ]
+  },
+  "Monk": {
+    "2": [
+      {
+        "name": "Ki",
+        "description": "You gain a pool of ki points equal to your Monk level. Spend them on: Flurry of Blows (2 bonus unarmed strikes), Patient Defense (Dodge as bonus action), or Step of the Wind (Dash or Disengage as bonus action).",
+        "details": {
+          "pool": "= Monk level",
+          "recharge": "short rest",
+          "usage": "Bonus action or reaction"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Deflect Missiles",
+        "description": "Use your reaction to deflect or catch a ranged weapon attack. The damage is reduced by 1d10 + DEX + Monk level. If reduced to 0, you catch the missile and can throw it back (1 ki) for 1d6 + DEX damage.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "Reduce ranged damage; redirect projectile for 1 ki"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Slow Fall",
+        "description": "Use your reaction to reduce any falling damage you take by an amount equal to five times your Monk level.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "Reduce fall damage by 5 × Monk level"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Stunning Strike",
+        "description": "When you hit a creature with a melee weapon attack, spend 1 ki. The creature must make a CON save or be stunned until the end of your next turn.",
+        "details": {
+          "cost": "1 ki",
+          "save": "Constitution or stunned",
+          "usage": "On a successful melee hit"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Ki-Empowered Strikes",
+        "description": "Your unarmed strikes are considered magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Evasion",
+        "description": "When subjected to a DEX save for half damage, you instead take no damage on a success and only half on a failure.",
+        "details": {
+          "usage": "Passive",
+          "effect": "No damage on successful DEX saves"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Stillness of Mind",
+        "description": "As an action, end the charmed or frightened condition on yourself.",
+        "details": {
+          "usage": "Action",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Diamond Soul",
+        "description": "You gain proficiency in all saving throws. Additionally, when you fail a saving throw, you can spend 1 ki point to reroll it.",
+        "details": {
+          "usage": "Passive + optional reaction",
+          "effect": "Proficient in all saves; reroll for 1 ki"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Empty Body",
+        "description": "Spend 4 ki to become invisible for 1 minute. During this time you have resistance to all damage except force, and you have advantage on all attack rolls.",
+        "details": {
+          "cost": "4 ki",
+          "duration": "1 minute",
+          "effect": "Invisible; resistance to all but force damage; advantage on attacks"
+        }
+      }
+    ]
+  },
+  "Druid": {
+    "2": [
+      {
+        "name": "Moon Shape",
+        "description": "Your Wild Shape extends to beasts of CR 1 or higher (scaling with level). You can Wild Shape twice per short rest and maintain it for up to 2 hours.",
+        "details": {
+          "uses": 2,
+          "recharge": "short rest",
+          "effect": "CR 1+ beasts; 2-hour duration"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Speak with Animals",
+        "description": "You can cast Speak with Animals at will, without expending a spell slot.",
+        "details": {
+          "usage": "At will (no slot)",
+          "range": "Self"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Land's Stride",
+        "description": "Moving through nonmagical difficult terrain costs you no extra movement. You can also pass through nonmagical plants without being slowed or taking damage. Plants and undergrowth have no effect on your stealth.",
+        "details": {
+          "usage": "Passive"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Call Lightning",
+        "description": "A storm cloud forms 100 ft above you (or within a storm if one exists). As a bonus action each round, call a bolt of lightning from the cloud — creatures within 5 ft of the strike point make a DEX save or take 3d10 lightning damage.",
+        "details": {
+          "damage": "3d10 lightning",
+          "save": "Dexterity",
+          "duration": "10 minutes (concentration)",
+          "usage": "Action to summon; bonus action per bolt"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Timeless Body",
+        "description": "The primal magic you wield causes you to age more slowly. For every 10 years that pass, your body ages only 1 year. You are also immune to disease and the poisoned condition.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Age 10x slower; immune to disease and poison"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Conjure Animals",
+        "description": "Summon fey spirits that take the form of beasts. Choose one of: one beast of CR 2 or lower, two beasts of CR 1 or lower, four beasts of CR ½ or lower, or eight beasts of CR ¼ or lower.",
+        "details": {
+          "duration": "1 hour (concentration)",
+          "usage": "Action",
+          "recharge": "Uses a spell slot"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Natural Recovery",
+        "description": "Once per long rest during a short rest, you can recover expended spell slots with a combined level equal to or less than half your Druid level (rounded up).",
+        "details": {
+          "uses": 1,
+          "recharge": "long rest",
+          "effect": "Recover spell slots up to half level"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Shapechange",
+        "description": "As an action, assume the form of any beast or elemental you have seen whose CR is no higher than your Druid level. You keep your mental stats and class features.",
+        "details": {
+          "usage": "Action",
+          "duration": "1 hour",
+          "uses": 1,
+          "recharge": "long rest",
+          "effect": "Any beast/elemental up to CR = Druid level"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Beast Spells",
+        "description": "You can perform somatic and verbal components of Druid spells even while in Wild Shape form. You still cannot cast spells that require material components you don't possess.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Cast spells while Wild Shaped"
+        }
+      }
+    ]
+  },
+  "Sorcerer": {
+    "2": [
+      {
+        "name": "Font of Magic",
+        "description": "You have a pool of sorcery points equal to your Sorcerer level. You can convert sorcery points into spell slots (2 pts = 1st, 3 = 2nd, 5 = 3rd, etc.) or break down slots into points.",
+        "details": {
+          "pool": "= Sorcerer level",
+          "recharge": "long rest",
+          "usage": "Action to convert"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Metamagic",
+        "description": "Choose two Metamagic options. Careful Spell (protect allies from AOE), Distant Spell (double range), Empowered Spell (reroll damage dice), Quickened Spell (cast as bonus action), or Twinned Spell (target a second creature).",
+        "details": {
+          "options": "2 chosen from 8",
+          "usage": "Apply when casting spells; costs sorcery points"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Draconic Resilience",
+        "description": "Draconic scales manifest beneath your skin. Your AC equals 13 + your DEX modifier when you aren't wearing armour, and your HP maximum increases by 1 for every Sorcerer level you have.",
+        "details": {
+          "usage": "Passive",
+          "effect": "AC = 13 + DEX (no armour); +1 HP per Sorcerer level"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Bend Luck",
+        "description": "Spend 2 sorcery points to add or subtract 1d4 from any attack roll, ability check, or saving throw of a creature you can see.",
+        "details": {
+          "cost": "2 sorcery points",
+          "usage": "Reaction",
+          "effect": "+/- 1d4 to any visible creature's roll"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Elemental Affinity",
+        "description": "When you cast a spell that deals a damage type matching your draconic ancestry (acid, cold, fire, lightning, or poison), add your CHA modifier to one damage roll. Spend 1 sorcery point to gain resistance to that damage type for 1 hour.",
+        "details": {
+          "usage": "Passive on damage roll",
+          "effect": "+CHA to matching element damage; resistance for 1 sp"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Dragon Wings",
+        "description": "Spend 1 sorcery point to sprout spectral draconic wings from your back. Gain a flying speed equal to your current movement speed for 1 hour.",
+        "details": {
+          "cost": "1 sorcery point",
+          "duration": "1 hour",
+          "effect": "Fly speed = movement speed"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Overchannel",
+        "description": "Maximise all damage dice of a damaging spell of 5th level or lower. Using this feature on a spell of 2nd level or higher deals psychic damage to you (2d12 per level above 1st, cumulative per use).",
+        "details": {
+          "usage": "Active on cast",
+          "effect": "Max damage; self psychic damage for level 2+"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Sorcerous Restoration",
+        "description": "Regain 4 expended sorcery points on a short rest.",
+        "details": {
+          "uses": 1,
+          "recharge": "short rest",
+          "effect": "Regain 4 sorcery points"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Arcane Apotheosis",
+        "description": "Your magic reaches its zenith. All spells you cast deal bonus damage equal to your CHA modifier. Once per long rest you may Twin any spell for free (no sorcery point cost).",
+        "details": {
+          "usage": "Passive + once per rest",
+          "effect": "+CHA to all spell damage; free Twin Spell 1/long rest"
+        }
+      }
+    ]
+  },
+  "Warlock": {
+    "2": [
+      {
+        "name": "Eldritch Invocations",
+        "description": "You learn two Eldritch Invocations from your patron. Options: Agonizing Blast (+CHA to Eldritch Blast), Devil's Sight (see in magical darkness 120 ft), Mask of Many Faces (cast Disguise Self at will), or Misty Visions (cast Silent Image at will).",
+        "details": {
+          "learned": 2,
+          "usage": "Passive or at-will depending on choice"
+        }
+      }
+    ],
+    "3": [
+      {
+        "name": "Pact Boon",
+        "description": "Your patron gifts you a boon. Pact of the Blade: summon a melee weapon that uses your spell attack; Pact of the Chain: gain an improved familiar; Pact of the Tome: gain a grimoire with 3 extra cantrips from any list.",
+        "details": {
+          "usage": "Permanent (choose one)",
+          "effect": "Blade, Chain, or Tome pact"
+        }
+      }
+    ],
+    "4": [
+      {
+        "name": "Dark One's Own Luck",
+        "description": "When you make an ability check or saving throw, you can call on your patron for a lucky break. Add 1d10 to the result.",
+        "details": {
+          "uses": 1,
+          "recharge": "short rest",
+          "effect": "+1d10 to one ability check or save"
+        }
+      }
+    ],
+    "5": [
+      {
+        "name": "Thirsting Blade",
+        "description": "When you use the Attack action with your pact weapon, you can attack with it twice instead of once per turn.",
+        "details": {
+          "usage": "Passive with Pact Blade",
+          "effect": "Two attacks with pact weapon"
+        }
+      }
+    ],
+    "6": [
+      {
+        "name": "Devil's Sight (Improved)",
+        "description": "You can see normally in magical and nonmagical darkness to 120 ft. Additionally, you can see through the Invisible condition on creatures within 30 ft.",
+        "details": {
+          "usage": "Passive",
+          "range": "120 ft darkvision; 30 ft see invisible"
+        }
+      }
+    ],
+    "7": [
+      {
+        "name": "Cloak of Flies",
+        "description": "Surround yourself with a cloud of spectral flies for 10 minutes. You gain advantage on CHA (Intimidation) checks. Creatures other than you that start their turn within 5 ft take CHA modifier poison damage.",
+        "details": {
+          "duration": "10 minutes",
+          "cost": "1 sorcery / warlock point",
+          "effect": "+Intimidation advantage; CHA poison to adjacent enemies"
+        }
+      }
+    ],
+    "8": [
+      {
+        "name": "Shroud of Shadow",
+        "description": "Cast the Invisibility spell at will, without expending a spell slot.",
+        "details": {
+          "usage": "At will (no slot)",
+          "effect": "Invisibility on self at will"
+        }
+      }
+    ],
+    "9": [
+      {
+        "name": "Minions of Chaos",
+        "description": "Cast Conjure Elemental once without expending a spell slot. You must finish a long rest before doing so again.",
+        "details": {
+          "uses": 1,
+          "recharge": "long rest",
+          "effect": "Conjure Elemental for free"
+        }
+      }
+    ],
+    "10": [
+      {
+        "name": "Eldritch Master",
+        "description": "Spend 1 minute in earnest prayer or meditation to your patron to regain all your expended spell slots.",
+        "details": {
+          "uses": 1,
+          "recharge": "long rest",
+          "duration": "1-minute ritual",
+          "effect": "Regain all spell slots"
+        }
+      }
+    ]
+  }
+}
