@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>D&D AI DM — Admin Login</title>
+		<link rel="stylesheet" href="/style.css" />
+		<style>
+			.login-wrapper {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				min-height: 80vh;
+			}
+			.login-box {
+				width: 100%;
+				max-width: 380px;
+			}
+			.login-box h2 {
+				text-align: center;
+				margin-bottom: 1.2em;
+			}
+			.login-box .form {
+				display: grid;
+				gap: 12px;
+			}
+			.login-error {
+				color: #f88;
+				font-size: 0.9em;
+				text-align: center;
+				min-height: 1.4em;
+			}
+			.login-box input[type="password"] {
+				font-size: 1.1em;
+				padding: 0.7em 1em;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<header class="row space-between">
+				<h1>StoryTeller</h1>
+			</header>
+
+			<div class="login-wrapper">
+				<div class="login-box panel">
+					<h2>Admin Login</h2>
+					<div class="form">
+						<input
+							type="password"
+							id="passwordInput"
+							placeholder="Enter admin password"
+							autocomplete="current-password"
+						/>
+						<button id="loginBtn" class="primary">Login</button>
+						<div id="errorMsg" class="login-error"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script src="/admin/login.js"></script>
+	</body>
+</html>

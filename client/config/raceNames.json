@@ -1,0 +1,49 @@
+{
+	"Human": {
+		"male_first": ["Aldric", "Gareth", "Tomas", "Brennan", "Corwin", "Darian", "Hadrian", "Oswin", "Rowan", "Cedric", "Alistair", "Edmund", "Roland", "Victor", "Lucan", "Marcus", "Jonas", "Edrin"],
+		"female_first": ["Mira", "Elara", "Sable", "Lyra", "Isla", "Nessa", "Vera", "Calla", "Petra", "Selene", "Arden", "Maris", "Talia", "Brienne", "Liora", "Kara", "Evelyn", "Roslyn"],
+		"last": ["Ashford", "Blackwood", "Crane", "Dunmore", "Everly", "Frost", "Greymantle", "Harrow", "Ironside", "Marsh", "Pendleton", "Redmane", "Stormwell", "Thorne", "Vayne", "Brighton", "Kingsley", "Vale", "Ravencrest", "Lockwood"]
+	},
+
+	"Elf": {
+		"male_first": ["Theron", "Aelar", "Irvyn", "Liadon", "Adran", "Birel", "Erdan", "Immeral", "Riardon", "Varis", "Faelar", "Soveliss", "Arannis", "Mythanar", "Thalion", "Erevan", "Calenor"],
+		"female_first": ["Aerindel", "Caladwen", "Elariel", "Sylvara", "Mirial", "Caelindra", "Sariel", "Thiala", "Luthien", "Shalana", "Keyleth", "Aeris", "Valanthe", "Naivara", "Ilyrana", "Myrielle"],
+		"last": ["Amakiir", "Galanodel", "Holimion", "Ilphelkiir", "Liadon", "Meliamne", "Nailo", "Siannodel", "Xiloscient", "Brightwood", "Dawnwhisper", "Moonbrook", "Starmantle", "Silverfrond", "Eveningfall", "Whisperwind", "Sunshadow"]
+	},
+
+	"Dwarf": {
+		"male_first": ["Thordin", "Bofri", "Darrak", "Bromak", "Durgin", "Adrik", "Baern", "Gardain", "Rurik", "Tordek", "Ulfgar", "Orsik", "Barendd", "Fargrim", "Harbek", "Kildrak"],
+		"female_first": ["Grunda", "Hildra", "Helvia", "Agna", "Marta", "Vistra", "Gunnloda", "Diesa", "Eldeth", "Falkrunn", "Gurdis", "Kathra", "Sannl", "Torbera"],
+		"last": ["Battlehammer", "Boulderfoot", "Cragmantle", "Deepanvil", "Foehammer", "Ironforge", "Stoneback", "Torunn", "Holderhek", "Loderr", "Lutgehr", "Rumnaheim", "Strakeln", "Goldfinder", "Bronzebeard", "Anvilborn", "Rockseeker"]
+	},
+
+	"Halfling": {
+		"male_first": ["Merric", "Cade", "Tobias", "Milo", "Burr", "Alton", "Beau", "Corrin", "Finnan", "Garret", "Osborn", "Wendel", "Perrin", "Eldon", "Lyle", "Rufus"],
+		"female_first": ["Pepper", "Rosie", "Lila", "Callie", "Sapphire", "Daisy", "Poppy", "Marigold", "Tansy", "Willow", "Cora", "Elly", "Bree"],
+		"last": ["Brushgather", "Goodbarrel", "Greenbottle", "Hilltopple", "Leagallow", "Tealeaf", "Thorngage", "Underbough", "Warmwater", "Whitlock", "Nimblefingers", "Cloverhatch", "Appleblossom", "Honeyfoot", "Softstep", "Berryfield"]
+	},
+
+	"Half-Orc": {
+		"male_first": ["Gorgrim", "Krug", "Morath", "Drak", "Thurvok", "Rokar", "Urzul", "Braak", "Krusk", "Ront", "Yenk", "Zokan", "Harg", "Drenk", "Vorak", "Garn"],
+		"female_first": ["Varka", "Shara", "Grenda", "Falryn", "Gothara", "Serka", "Ovak", "Rasha", "Mazoga", "Thokka", "Urga", "Brakka"],
+		"last": ["Bloodtusk", "Bonegrind", "Foulhoof", "Ironmaw", "Ragefang", "Stonebrow", "Warbringer", "Skullbreaker", "Grimfist", "Ashblade", "Direstone", "Manyfangs", "Skullcleaver", "Darkhide", "Stormtusk"]
+	},
+
+	"Tiefling": {
+		"male_first": ["Morthos", "Akmenos", "Skamos", "Melech", "Morden", "Thurin", "Xandros", "Zariel", "Belaros", "Kairon", "Malphas", "Vorren"],
+		"female_first": ["Damaia", "Lerissa", "Rieta", "Valindra", "Nemeia", "Therai", "Kallista", "Anakis", "Bryseis", "Criella", "Nyxara", "Velistra", "Zirelle", "Asha", "Lilura"],
+		"last": ["Ashwood", "Emberveil", "Flamecrown", "Grimoire", "Hellsong", "Ironveil", "Nightfire", "Shadowmere", "Vexmoor", "Scornbrand", "Duskhollow", "Cindermark", "Hellscar", "Blackpyre", "Dreadveil"]
+	},
+
+	"Dragonborn": {
+		"male_first": ["Arjhan", "Balasar", "Ghesh", "Heskan", "Kriv", "Medrash", "Mehen", "Nadarr", "Pandjed", "Patrin", "Rhogar", "Shamash", "Torinn", "Bharash", "Donaar", "Ghaan", "Aramath", "Vyrn", "Korthar"],
+		"female_first": ["Jheri", "Shedinn", "Akra", "Biri", "Daar", "Farideh", "Harann", "Kava", "Korinn", "Mishann", "Nala", "Perra", "Sora", "Surina", "Thava", "Uadjit"],
+		"last": ["Clethtinthiallor", "Daardendrian", "Delmirev", "Fenkenkabradon", "Kepeshkmolik", "Kerrhylon", "Kimbatuul", "Myastan", "Nemmonis", "Norixius", "Shestendeliath", "Turnuroth", "Yrjixtilex", "Thraxion", "Drathkorr"]
+	},
+
+	"Gnome": {
+		"male_first": ["Boddynock", "Dimble", "Frug", "Gimble", "Glim", "Jebeddo", "Kellen", "Namfoodle", "Orryn", "Roondar", "Seebo", "Sindri", "Warryn", "Zook", "Fizzwick", "Tink", "Bramble", "Nix"],
+		"female_first": ["Ellywick", "Nissa", "Bimpnottin", "Loopmottin", "Tinkette", "Zanna", "Lilli", "Pippa", "Noodle", "Wizzle", "Fae", "Marnie"],
+		"last": ["Beren", "Clumps", "Daergel", "Folkor", "Garrick", "Nackle", "Murnig", "Ningel", "Raulnor", "Scheppen", "Timbers", "Turen", "Wickwick", "Fizzlebang", "Cogsworth", "Geargrin", "Sparkspinner", "Wobblecog"]
+	}
+}

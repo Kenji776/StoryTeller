@@ -1,0 +1,235 @@
+/* === Fancy Table Improvements === */
+.fancy-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 0.75em 0;
+	border-radius: 8px;
+	overflow: hidden;
+	background: linear-gradient(180deg, #1b1b24 0%, #111119 100%);
+	color: #f0f0f0;
+	font-family: "Cormorant Garamond", serif;
+	font-size: 0.95em;
+	border: 1px solid #2c2c2c;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+	max-height: 240px;
+	overflow-y: auto;
+	display: block;
+}
+
+/* Fix layout for scrollable table */
+.fancy-table thead,
+.fancy-table tbody {
+	display: table;
+	width: 100%;
+	table-layout: fixed;
+}
+
+.fancy-table th {
+	background: rgba(60, 60, 75, 0.9);
+	text-align: left;
+	padding: 10px 12px;
+	font-family: "Cinzel", serif;
+	font-weight: 600;
+	letter-spacing: 0.5px;
+	text-transform: uppercase;
+	font-size: 0.85em;
+	border-bottom: 1px solid #444;
+	color: #f8d88b;
+	position: sticky;
+	top: 0;
+	z-index: 1;
+}
+
+.fancy-table td {
+	padding: 8px 12px;
+	border-bottom: 1px solid #2b2b2b;
+	line-height: 1.4em;
+	vertical-align: top;
+}
+
+.fancy-table tr:nth-child(odd) td {
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.fancy-table tr:hover td {
+	background: rgba(255, 255, 255, 0.07);
+	transition: background 0.2s ease-in-out;
+}
+
+.fancy-table strong {
+	color: #ffd37a;
+	font-weight: 600;
+}
+
+.fancy-table::-webkit-scrollbar {
+	width: 8px;
+}
+
+.fancy-table::-webkit-scrollbar-thumb {
+	background: #444;
+	border-radius: 4px;
+}
+
+.fancy-table::-webkit-scrollbar-thumb:hover {
+	background: #666;
+}
+
+/* === Component Containers === */
+.component-box {
+	background: linear-gradient(180deg, #14141c, #0d0d14);
+	border: 1px solid #333;
+	border-radius: 10px;
+	padding: 0.75em 1em 1em;
+	margin: 1em 0;
+	color: #eee;
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.component-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	font-family: "Cinzel", serif;
+	font-size: 1.1em;
+	color: #ffd37a;
+	margin-bottom: 0.5em;
+}
+
+.component-header button {
+	background: #333;
+	color: #ffd37a;
+	border: 1px solid #555;
+	border-radius: 4px;
+	cursor: pointer;
+	padding: 4px 8px;
+	font-size: 0.85em;
+}
+
+.component-header button:hover {
+	background: #444;
+}
+
+/* === Conditions info button in table header === */
+.conditions-info-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: 1px solid #aa7733;
+	background: transparent;
+	color: #ffd166;
+	font-size: 10px;
+	font-weight: bold;
+	cursor: pointer;
+	vertical-align: middle;
+	padding: 0;
+	line-height: 1;
+	transition: background 0.15s;
+}
+.conditions-info-btn:hover {
+	background: rgba(255,209,102,0.15);
+}
+
+/* === Condition tags in party table === */
+.condition-tag {
+	display: inline-block;
+	background: rgba(255,100,60,0.15);
+	border: 1px solid rgba(255,100,60,0.35);
+	border-radius: 3px;
+	padding: 1px 5px;
+	font-size: 0.82em;
+	white-space: nowrap;
+	cursor: default;
+}
+
+/* === Add Modal === */
+.add-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(15, 15, 20, 0.85);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+
+.add-modal-content {
+	background: #1a1a26;
+	border: 1px solid #444;
+	padding: 1em 1.5em;
+	border-radius: 8px;
+	width: 300px;
+}
+
+.add-modal-content h3 {
+	color: #ffd37a;
+	font-family: "Cinzel", serif;
+	margin-top: 0;
+}
+
+.add-modal-content label {
+	display: block;
+	font-size: 0.9em;
+	margin-top: 0.5em;
+	color: #ccc;
+}
+
+.add-modal-content input,
+.add-modal-content textarea {
+	width: 100%;
+	margin-top: 0.25em;
+	padding: 4px 6px;
+	background: #111;
+	border: 1px solid #333;
+	color: #eee;
+	border-radius: 4px;
+}
+
+.add-modal-content button {
+	margin-top: 0.75em;
+	background: #333;
+	color: #ffd37a;
+	border: 1px solid #555;
+	border-radius: 4px;
+	cursor: pointer;
+	padding: 4px 8px;
+}
+
+/* === HP Bar Styling === */
+.hp-bar {
+	position: relative;
+	background: #222;
+	border: 1px solid #444;
+	border-radius: 6px;
+	height: 18px;
+	overflow: hidden;
+}
+
+.hp-fill {
+	height: 100%;
+	transition: width 0.3s ease-in-out;
+}
+
+.hp-label {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	text-align: center;
+	font-size: 0.8em;
+	line-height: 18px;
+	color: #fff;
+	font-weight: bold;
+	text-shadow: 0 0 4px #000;
+}
+
+/* Optional: tweak party table spacing */
+.party-table td {
+	vertical-align: middle;
+}

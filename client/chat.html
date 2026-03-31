@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet" />
+		<title>Party Chat</title>
+		<style>
+			body {
+				background: radial-gradient(circle at top, #0d0b15, #05030b 60%, #000 100%);
+				color: #f3ede2;
+				font-family: "Cinzel", "Cormorant Garamond", serif;
+				margin: 0;
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
+				overflow: hidden;
+                font-size: 17px; /* bumped from default */
+			}
+
+			/* === LAYOUT === */
+			#chatContainer {
+				flex: 1;
+				display: flex;
+				flex-direction: row;
+				overflow: hidden;
+				border-top: 1px solid rgba(150, 120, 60, 0.3);
+				border-bottom: 1px solid rgba(150, 120, 60, 0.3);
+				background: rgba(15, 10, 25, 0.85);
+				box-shadow: inset 0 0 12px rgba(200, 160, 100, 0.1);
+			}
+
+			/* === MESSAGE AREA === */
+			#msgs {
+				flex: 3;
+				overflow-y: auto;
+				padding: 1em;
+				border-right: 1px solid rgba(150, 120, 60, 0.3);
+				background: rgba(20, 15, 35, 0.9);
+				font-size: 0.95em;
+				line-height: 1.4;
+			}
+
+			/* Chat message entries */
+			.message {
+				margin-bottom: 0.6em;
+				animation: fadeIn 0.3s ease-out;
+			}
+			.message .name {
+				color: #eacb83;
+				font-weight: bold;
+				text-shadow: 0 0 4px rgba(255, 220, 120, 0.5);
+				margin-right: 0.3em;
+				font-family: "Cinzel", serif;
+			}
+			.message .text {
+				color: #f5ede2;
+			}
+			.message.system {
+				color: #bbb;
+				font-style: italic;
+				font-family: "Cormorant Garamond", serif;
+			}
+			.message.dm {
+				color: #bfaaff;
+				font-style: italic;
+			}
+
+			/* === USER LIST PANEL === */
+			#userList {
+				flex: 1;
+				background: rgba(10, 8, 20, 0.95);
+				border-left: 1px solid rgba(150, 120, 60, 0.3);
+				padding: 0.75em;
+				overflow-y: auto;
+				font-family: "Cinzel", serif;
+			}
+			#userList h3 {
+				margin-top: 0;
+				text-align: center;
+				font-size: 1em;
+				color: #eacb83;
+				text-shadow: 0 0 6px rgba(255, 220, 120, 0.4);
+			}
+			.user-entry {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: 0.4em 0.3em;
+				border-bottom: 1px solid rgba(100, 80, 40, 0.3);
+				font-size: 0.9em;
+				color: #f5ede2;
+				transition: all 0.2s ease;
+			}
+			.user-entry:hover {
+				background: rgba(50, 40, 60, 0.4);
+				box-shadow: 0 0 6px rgba(150, 120, 80, 0.2);
+			}
+			.user-entry span.typing {
+				color: #9defff;
+				font-size: 0.8em;
+				font-style: italic;
+				margin-left: 4px;
+			}
+
+			/* === INPUT BAR === */
+			#inputArea {
+				display: flex;
+				border-top: 1px solid rgba(150, 120, 60, 0.4);
+				background: rgba(20, 15, 35, 0.95);
+				box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.4);
+                font-size: 1rem; /* slightly larger */
+			}
+
+			#inputArea input {
+				flex: 1;
+				padding: 0.7em 1em;
+				background: rgba(15, 10, 25, 0.9);
+				color: #f3ede2;
+				border: 1px solid rgba(150, 120, 60, 0.4);
+				border-radius: 0;
+				outline: none;
+				font-size: 1rem; /* slightly larger */
+				font-family: "Cormorant Garamond", serif;
+				transition: all 0.2s ease;
+			}
+			#inputArea input:focus {
+				background: rgba(25, 15, 40, 0.95);
+				border-color: #e5b56f;
+				box-shadow: 0 0 8px rgba(255, 220, 150, 0.4);
+			}
+
+			#inputArea button {
+				padding: 0.7em 1.2em;
+				background: linear-gradient(90deg, #a67c52, #d4a05a);
+				color: #fff9e6;
+				border: 1px solid #e5b56f;
+				font-family: "Cinzel", serif;
+				font-weight: bold;
+				cursor: pointer;
+				transition: all 0.25s ease;
+			}
+			#inputArea button:hover {
+				background: linear-gradient(90deg, #d4a05a, #a67c52);
+				box-shadow: 0 0 10px rgba(255, 230, 150, 0.4);
+			}
+
+			/* === SCROLLBAR === */
+			::-webkit-scrollbar {
+				width: 8px;
+			}
+			::-webkit-scrollbar-thumb {
+				background: linear-gradient(#a8834f, #775a32);
+				border-radius: 6px;
+			}
+			::-webkit-scrollbar-track {
+				background: rgba(20, 15, 30, 0.5);
+			}
+
+			/* === ANIMATIONS === */
+			@keyframes fadeIn {
+				from {
+					opacity: 0;
+					transform: translateY(3px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div id="chatContainer">
+			<div id="msgs"></div>
+			<div id="userList">
+				<h3>Online</h3>
+				<div id="users"></div>
+			</div>
+		</div>
+
+		<div id="inputArea">
+			<input id="input" placeholder="Type a message..." />
+			<button id="send">Send</button>
+		</div>
+
+		<script src="/socket.io/socket.io.js"></script>
+		<script src="chat.js"></script>
+	</body>
+</html>

@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>StoryTeller — Map</title>
+	<style>
+		*, *::before, *::after { box-sizing: border-box; }
+
+		body {
+			background: #0c0a14;
+			color: #e8dfc8;
+			font-family: 'Georgia', serif;
+			margin: 0;
+			padding: 0.75rem 1rem;
+			display: flex;
+			flex-direction: column;
+			gap: 0.75rem;
+			min-height: 100vh;
+		}
+
+		/* ── Header ── */
+		.header {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+		}
+		.header h3 {
+			margin: 0;
+			font-size: 1em;
+			color: #c8b0e8;
+			letter-spacing: 0.04em;
+		}
+		.badge {
+			background: #1e1830;
+			border: 1px solid #3a2a5a;
+			border-radius: 4px;
+			padding: 0.15em 0.55em;
+			font-size: 0.78em;
+			color: #b0a0d0;
+			text-transform: capitalize;
+		}
+
+		/* ── Layout ── */
+		.map-wrapper {
+			display: flex;
+			gap: 1rem;
+			align-items: flex-start;
+		}
+
+		/* ── Grid ── */
+		.map-outer {
+			background: #08060f;
+			border: 1px solid #2a1e40;
+			border-radius: 6px;
+			padding: 4px;
+			flex-shrink: 0;
+		}
+
+		.map-grid {
+			display: grid;
+			grid-template-columns: repeat(20, 26px);
+			grid-template-rows: repeat(20, 26px);
+			gap: 1px;
+			background: #0a0814;
+		}
+
+		.cell {
+			width: 26px;
+			height: 26px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			font-size: 14px;
+			line-height: 1;
+			border-radius: 2px;
+			cursor: default;
+			transition: transform 0.1s ease, filter 0.1s ease;
+			position: relative;
+			user-select: none;
+		}
+		.cell:hover {
+			transform: scale(1.5);
+			z-index: 10;
+			filter: brightness(1.4);
+		}
+
+		/* ── Terrain backgrounds ── */
+		.t-forest   { background: #111e11; }
+		.t-dungeon  { background: #141414; }
+		.t-plains   { background: #182614; }
+		.t-village  { background: #1e1610; }
+		.t-mountain { background: #1a1a1e; }
+		.t-beach    { background: #2e2a10; }
+		.t-cave     { background: #0c0c0c; }
+		.t-castle   { background: #14141e; }
+		.t-road     { background: #1a1410; }
+		.t-unknown  { background: #0c0a10; }
+
+		/* ── Feature overrides ── */
+		.f-water    { background: #0e1e38 !important; }
+		.f-fire     { background: #2a1000 !important; }
+
+		/* ── Character cell highlights ── */
+		.c-player {
+			outline: 1px solid rgba(120, 200, 255, 0.6);
+			background: rgba(40, 80, 180, 0.22) !important;
+		}
+		.c-npc {
+			outline: 1px solid rgba(255, 210, 80, 0.5);
+			background: rgba(120, 80, 0, 0.18) !important;
+		}
+		.c-creature {
+			outline: 1px solid rgba(255, 80, 80, 0.55);
+			background: rgba(160, 20, 20, 0.2) !important;
+		}
+		.c-object {
+			outline: 1px solid rgba(180, 255, 180, 0.4);
+			background: rgba(20, 80, 20, 0.18) !important;
+		}
+
+		/* ── Legend ── */
+		.legend {
+			background: #0a0812;
+			border: 1px solid #2a1e40;
+			border-radius: 6px;
+			padding: 0.6rem 0.75rem;
+			min-width: 180px;
+			max-width: 210px;
+			max-height: 574px;
+			overflow-y: auto;
+			flex-shrink: 0;
+		}
+		.legend h4 {
+			margin: 0 0 0.5rem 0;
+			font-size: 0.8em;
+			color: #c8b0e8;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+		}
+		.legend-section { margin-bottom: 0.6rem; }
+		.legend-section strong {
+			display: block;
+			font-size: 0.7em;
+			color: #6a5a8a;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			margin-bottom: 0.25rem;
+			padding-bottom: 0.2rem;
+			border-bottom: 1px solid #2a1e40;
+		}
+		.legend-item {
+			display: flex;
+			align-items: flex-start;
+			gap: 0.4rem;
+			padding: 0.2rem 0;
+			font-size: 0.8em;
+		}
+		.legend-item .emo { font-size: 1.1em; flex-shrink: 0; line-height: 1.3; }
+		.legend-item .info .name { color: #e8dfc8; display: block; }
+		.legend-item .info .sub  { color: #6a5a8a; font-size: 0.85em; display: block; }
+
+		/* ── Status bar ── */
+		#statusBar {
+			font-size: 0.75em;
+			color: #5a4a7a;
+			font-style: italic;
+		}
+
+		/* ── Scrollbar ── */
+		::-webkit-scrollbar { width: 5px; }
+		::-webkit-scrollbar-track { background: #0c0a14; }
+		::-webkit-scrollbar-thumb { background: #3a2a5a; border-radius: 3px; }
+	</style>
+</head>
+<body>
+
+<div class="header">
+	<h3>🗺️ Adventure Map</h3>
+	<span id="terrainBadge" class="badge">—</span>
+</div>
+
+<div class="map-wrapper">
+	<div class="map-outer">
+		<div id="mapGrid" class="map-grid"></div>
+	</div>
+	<div class="legend">
+		<h4>Legend</h4>
+		<div id="legendContent"><span style="color:#5a4a7a;font-size:0.85em">Waiting for map data…</span></div>
+	</div>
+</div>
+
+<div id="statusBar">Connecting…</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const lobbyId = new URLSearchParams(location.search).get("lobbyId");
+const COLS = 20, ROWS = 20;
+
+// ── Terrain tile pools ──────────────────────────────────────────────────────
+const TERRAIN_TILES = {
+	forest:   ["🌲","🌲","🌲","🌿","🍃","🌲","🌿","🌱"],
+	dungeon:  ["▪️","▪️","▫️","▪️","▪️","▫️","🪨","▪️"],
+	plains:   ["🌾","🌾","🌿","🌱","🌾","🌾","🌿","🌾"],
+	village:  ["🧱","🧱","🟫","🪵","🧱","🟫","🪵","🧱"],
+	mountain: ["🪨","🪨","⛰️","🪨","❄️","🪨","⛰️","🪨"],
+	beach:    ["🏖️","🌊","🌊","🌊","🏖️","🌊","🌊","🏝️"],
+	cave:     ["⬛","🪨","⬛","⬛","⬛","🪨","⬛","⬛"],
+	castle:   ["⬜","⬜","⬜","🛡️","⬜","⬜","⚔️","⬜"],
+	road:     ["🟫","🟫","🪨","🟫","🟫","🟫","🪨","🟫"],
+	unknown:  ["⬛","⬛","⬛","🌑","⬛","⬛","⬛","🌑"],
+};
+
+const TERRAIN_LABEL = {
+	forest:"🌲 Forest", dungeon:"🏚️ Dungeon", plains:"🌾 Plains",
+	village:"🏘️ Village", mountain:"⛰️ Mountain", beach:"🏖️ Beach",
+	cave:"🕳️ Cave", castle:"🏰 Castle", road:"🛤️ Road", unknown:"❓ Unknown",
+};
+
+// ── Feature emoji + tile class ─────────────────────────────────────────────
+function featureEmoji(feat) {
+	const f = feat.toLowerCase();
+	if (f.includes("campfire") || f.includes("fire"))  return "🔥";
+	if (f.includes("river")    || f.includes("stream")) return "🌊";
+	if (f.includes("bridge"))                           return "🌉";
+	if (f.includes("chest")    || f.includes("treasure")) return "📦";
+	if (f.includes("torch")    || f.includes("lantern"))  return "🕯️";
+	if (f.includes("barrel"))                           return "🛢️";
+	if (f.includes("ruin"))                             return "🏚️";
+	if (f.includes("shrine")   || f.includes("temple")) return "⛩️";
+	if (f.includes("table")    || f.includes("chair"))  return "🪑";
+	if (f.includes("pond")     || f.includes("pool") || f.includes("lake")) return "💧";
+	if (f.includes("rock")     || f.includes("boulder")) return "🪨";
+	if (f.includes("fence")    || f.includes("wall"))   return "🧱";
+	if (f.includes("tree"))                             return "🌲";
+	if (f.includes("bush"))                             return "🌿";
+	if (f.includes("door")     || f.includes("gate"))   return "🚪";
+	if (f.includes("bed")      || f.includes("bedroll")) return "🛏️";
+	if (f.includes("altar"))                            return "⛩️";
+	if (f.includes("statue"))                           return "🗿";
+	if (f.includes("wagon")    || f.includes("cart"))   return "🛒";
+	return "⭐";
+}
+
+function featureTileCls(feat) {
+	const f = feat.toLowerCase();
+	if (f.includes("river") || f.includes("stream") || f.includes("pond") || f.includes("lake")) return "f-water";
+	if (f.includes("campfire") || f.includes("fire") || f.includes("torch")) return "f-fire";
+	return "";
+}
+
+// ── Deterministic per-cell tile variation ──────────────────────────────────
+function getTile(type, x, y) {
+	const tiles = TERRAIN_TILES[type] || TERRAIN_TILES.unknown;
+	// Simple hash so each cell always picks the same tile for the same position+type
+	const idx = ((x * 2654435761 + y * 2246822519) >>> 0) % tiles.length;
+	return tiles[idx];
+}
+
+// ── Seeded RNG (for feature placement) ────────────────────────────────────
+function seededRNG(seed) {
+	let n = 0;
+	for (let i = 0; i < seed.length; i++) n = (n * 31 + seed.charCodeAt(i)) >>> 0;
+	return function () {
+		n = (n * 1664525 + 1013904223) >>> 0;
+		return n / 0x100000000;
+	};
+}
+
+// ── Build 2D grid ──────────────────────────────────────────────────────────
+function buildGrid(terrain, characters) {
+	const type     = terrain?.type     || "unknown";
+	const features = terrain?.features || [];
+
+	// Base terrain
+	const cells = Array.from({ length: ROWS }, (_, y) =>
+		Array.from({ length: COLS }, (_, x) => ({
+			emoji:     getTile(type, x, y),
+			terrainCls: `t-${type}`,
+			featureCls: "",
+			character:  null,
+		}))
+	);
+
+	// Scatter features (seeded so they stay consistent between renders)
+	const rng = seededRNG(type + features.join(""));
+	for (const feat of features) {
+		placeFeature(cells, feat, rng);
+	}
+
+	// Place characters (clamp to grid bounds)
+	for (const c of characters) {
+		const cx = Math.max(0, Math.min(COLS - 1, Math.round(Number(c.x) || 10)));
+		const cy = Math.max(0, Math.min(ROWS - 1, Math.round(Number(c.y) || 10)));
+		cells[cy][cx].character = c;
+		cells[cy][cx].emoji     = c.emoji || "❓";
+	}
+
+	return cells;
+}
+
+function placeFeature(cells, feat, rng) {
+	const f = feat.toLowerCase();
+
+	if (f.includes("river") || f.includes("stream")) {
+		// Meandering vertical river
+		let x = Math.floor(rng() * 12) + 4;
+		for (let y = 0; y < ROWS; y++) {
+			x = Math.max(1, Math.min(COLS - 2, x + Math.round(rng() * 2 - 1)));
+			if (!cells[y][x].character) {
+				cells[y][x].emoji      = "🌊";
+				cells[y][x].featureCls = "f-water";
+			}
+		}
+		return;
+	}
+
+	const emoji = featureEmoji(feat);
+	const cls   = featureTileCls(feat);
+	const count = f.includes("ruin") || f.includes("tree") ? 4 : f.includes("barrel") || f.includes("torch") ? 3 : 2;
+
+	for (let i = 0; i < count; i++) {
+		const fx = Math.floor(rng() * (COLS - 2)) + 1;
+		const fy = Math.floor(rng() * (ROWS - 2)) + 1;
+		if (!cells[fy][fx].character) {
+			cells[fy][fx].emoji      = emoji;
+			cells[fy][fx].featureCls = cls;
+		}
+	}
+}
+
+// ── Character CSS class ────────────────────────────────────────────────────
+function charCls(c) {
+	if (!c) return "";
+	switch ((c.type || "").toLowerCase()) {
+		case "player":   return "c-player";
+		case "creature": return "c-creature";
+		case "object":   return "c-object";
+		default:         return "c-npc";
+	}
+}
+
+// ── Render grid ────────────────────────────────────────────────────────────
+function renderGrid(cells) {
+	const grid = document.getElementById("mapGrid");
+	const frag = document.createDocumentFragment();
+
+	for (let y = 0; y < ROWS; y++) {
+		for (let x = 0; x < COLS; x++) {
+			const cell = cells[y][x];
+			const div  = document.createElement("div");
+
+			const cls = [
+				"cell",
+				cell.terrainCls,
+				cell.featureCls,
+				charCls(cell.character),
+			].filter(Boolean).join(" ");
+
+			div.className   = cls;
+			div.textContent = cell.emoji;
+
+			if (cell.character) {
+				const c = cell.character;
+				let tip = `${c.name} (${c.type || "unknown"})`;
+				if (c.status)  tip += ` — ${c.status}`;
+				if (c.facing)  tip += ` [facing ${c.facing}]`;
+				div.title = tip;
+			}
+
+			frag.appendChild(div);
+		}
+	}
+
+	grid.innerHTML = "";
+	grid.appendChild(frag);
+}
+
+// ── Render legend ──────────────────────────────────────────────────────────
+function renderLegend(characters, terrain) {
+	const content = document.getElementById("legendContent");
+	content.innerHTML = "";
+
+	const SECTIONS = [
+		{ key: "player",   label: "Players"   },
+		{ key: "npc",      label: "NPCs"       },
+		{ key: "creature", label: "Creatures"  },
+		{ key: "object",   label: "Objects"    },
+	];
+
+	let anyChars = false;
+	for (const { key, label } of SECTIONS) {
+		const group = characters.filter(c => (c.type || "npc").toLowerCase() === key);
+		if (!group.length) continue;
+		anyChars = true;
+
+		const sec = document.createElement("div");
+		sec.className = "legend-section";
+		sec.innerHTML = `<strong>${label}</strong>`;
+
+		for (const c of group) {
+			const item = document.createElement("div");
+			item.className = "legend-item";
+			item.innerHTML = `
+				<span class="emo">${c.emoji || "❓"}</span>
+				<span class="info">
+					<span class="name">${c.name}</span>
+					${c.status ? `<span class="sub">${c.status}</span>` : ""}
+				</span>`;
+			sec.appendChild(item);
+		}
+
+		content.appendChild(sec);
+	}
+
+	if (!anyChars) {
+		content.innerHTML = '<span style="color:#5a4a7a;font-size:0.85em">No entities visible</span>';
+	}
+
+	// Features section
+	const feats = terrain?.features || [];
+	if (feats.length) {
+		const sec = document.createElement("div");
+		sec.className = "legend-section";
+		sec.innerHTML = `<strong>Features</strong>`;
+		for (const f of feats) {
+			const item = document.createElement("div");
+			item.className = "legend-item";
+			item.innerHTML = `<span class="emo">${featureEmoji(f)}</span><span class="info"><span class="name">${f}</span></span>`;
+			sec.appendChild(item);
+		}
+		content.appendChild(sec);
+	}
+}
+
+// ── Full update ────────────────────────────────────────────────────────────
+function applyUpdate(characters, terrain) {
+	const cells = buildGrid(terrain, characters);
+	renderGrid(cells);
+	renderLegend(characters, terrain);
+
+	const type = terrain?.type || "unknown";
+	document.getElementById("terrainBadge").textContent = TERRAIN_LABEL[type] || type;
+	document.getElementById("statusBar").textContent =
+		`${characters.length} entities · ${terrain?.features?.length || 0} features`;
+}
+
+// ── Socket ─────────────────────────────────────────────────────────────────
+const socket = io();
+
+socket.on("connect",    () => { document.getElementById("statusBar").textContent = "Connected — waiting for map data…"; });
+socket.on("disconnect", () => { document.getElementById("statusBar").textContent = "Disconnected"; });
+
+socket.on("map:update", ({ characters, terrain }) => {
+	applyUpdate(characters || [], terrain || {});
+});
+
+// ── Load current state on open ─────────────────────────────────────────────
+if (lobbyId) {
+	fetch(`/api/map/${lobbyId}`)
+		.then(r => r.ok ? r.json() : null)
+		.then(data => {
+			if (data) applyUpdate(data.characters || [], data.terrain || {});
+		})
+		.catch(err => {
+			console.error("Map load failed:", err);
+			document.getElementById("statusBar").textContent = "Failed to load map";
+		});
+}
+</script>
+</body>
+</html>

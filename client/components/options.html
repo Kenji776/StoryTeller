@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>StoryTeller — Game Options</title>
+	<style>
+		*, *::before, *::after { box-sizing: border-box; }
+
+		body {
+			background: #0c0a14;
+			color: #e8dfc8;
+			font-family: 'Georgia', serif;
+			margin: 0;
+			padding: 1rem 1.25rem;
+			display: flex;
+			flex-direction: column;
+			gap: 1rem;
+			min-height: 100vh;
+		}
+
+		h3 {
+			margin: 0;
+			font-size: 1em;
+			color: #c8b0e8;
+			letter-spacing: 0.04em;
+		}
+
+		.section {
+			background: #0f0d1a;
+			border: 1px solid #2a1e40;
+			border-radius: 6px;
+			padding: 0.85rem 1rem;
+			display: flex;
+			flex-direction: column;
+			gap: 0.75rem;
+		}
+
+		.section-title {
+			font-size: 0.72em;
+			text-transform: uppercase;
+			letter-spacing: 0.08em;
+			color: #6a5a8a;
+			border-bottom: 1px solid #2a1e40;
+			padding-bottom: 0.4rem;
+			margin-bottom: 0.1rem;
+		}
+
+		.option-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+		}
+
+		.option-label {
+			display: flex;
+			flex-direction: column;
+			gap: 0.15rem;
+		}
+
+		.option-label span {
+			font-size: 0.88em;
+			color: #d0c0e8;
+		}
+
+		.option-label small {
+			font-size: 0.72em;
+			color: #5a4a7a;
+		}
+
+		.option-control {
+			flex-shrink: 0;
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+		}
+
+		input[type="checkbox"] {
+			width: 1.1em;
+			height: 1.1em;
+			accent-color: #7a50c8;
+			cursor: pointer;
+		}
+
+		input[type="number"] {
+			background: #1a1530;
+			border: 1px solid #3a2a5a;
+			border-radius: 4px;
+			color: #e8dfc8;
+			padding: 0.25em 0.5em;
+			font-size: 0.9em;
+			font-family: inherit;
+			width: 5rem;
+			text-align: center;
+		}
+
+		input[type="number"]:focus {
+			outline: none;
+			border-color: #7a50c8;
+		}
+
+		input[type="number"]:disabled,
+		input[type="number"][readonly] {
+			opacity: 0.4;
+			cursor: not-allowed;
+		}
+
+		select {
+			background: #1a1530;
+			border: 1px solid #3a2a5a;
+			border-radius: 4px;
+			color: #e8dfc8;
+			padding: 0.25em 0.5em;
+			font-size: 0.88em;
+			font-family: inherit;
+			flex: 1;
+			min-width: 0;
+		}
+
+		select:focus {
+			outline: none;
+			border-color: #7a50c8;
+		}
+
+		.voice-row {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+			flex: 1;
+		}
+
+		button.preview-btn {
+			background: #2a1e40;
+			border: 1px solid #4a3a6a;
+			border-radius: 4px;
+			color: #c8b0e8;
+			padding: 0.25em 0.6em;
+			font-size: 0.82em;
+			cursor: pointer;
+			flex-shrink: 0;
+			font-family: inherit;
+		}
+
+		button.preview-btn:hover {
+			background: #3a2e50;
+		}
+
+		.flavor-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+			gap: 0.5rem;
+		}
+
+		.flavor-card {
+			background: #1a1530;
+			border: 1px solid #2a1e40;
+			border-radius: 6px;
+			padding: 0.5rem 0.6rem;
+			cursor: pointer;
+			text-align: center;
+			transition: border-color 0.15s, background 0.15s;
+			user-select: none;
+		}
+
+		.flavor-card:hover {
+			border-color: #6a4aaa;
+			background: #221a3a;
+		}
+
+		.flavor-card.selected {
+			border-color: #9a6ae8;
+			background: #2a1e50;
+		}
+
+		.flavor-card .card-emoji {
+			font-size: 1.4em;
+			display: block;
+			margin-bottom: 0.2em;
+		}
+
+		.flavor-card .card-label {
+			font-size: 0.75em;
+			color: #c8b0e8;
+			font-weight: bold;
+			display: block;
+		}
+
+		.flavor-card .card-desc {
+			font-size: 0.68em;
+			color: #5a4a7a;
+			display: block;
+			margin-top: 0.2em;
+			line-height: 1.3;
+		}
+
+		.unit {
+			font-size: 0.78em;
+			color: #6a5a8a;
+		}
+
+		.divider {
+			border: none;
+			border-top: 1px solid #2a1e40;
+			margin: 0;
+		}
+
+		#statusBar {
+			font-size: 0.72em;
+			color: #5a4a7a;
+			font-style: italic;
+			margin-top: auto;
+		}
+
+		input[type="range"] {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 100%;
+			height: 4px;
+			border-radius: 2px;
+			background: linear-gradient(to right, #3a8a3a, #c8a020, #c83030);
+			outline: none;
+			cursor: pointer;
+		}
+
+		input[type="range"]::-webkit-slider-thumb {
+			-webkit-appearance: none;
+			appearance: none;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #c8b0e8;
+			border: 2px solid #7a50c8;
+			cursor: pointer;
+		}
+
+		.brutality-labels {
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.68em;
+			color: #5a4a7a;
+			margin-top: 0.15rem;
+		}
+
+		#brutalityLabel {
+			font-size: 0.82em;
+			color: #c8b0e8;
+			font-weight: bold;
+			text-align: right;
+			min-width: 5rem;
+			flex-shrink: 0;
+		}
+
+		.header-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 1rem;
+		}
+
+		.randomize-btn {
+			padding: 0.35em 0.85em;
+			background: #1a1530;
+			border: 1px solid #4a3a6a;
+			border-radius: 5px;
+			color: #9a8ac0;
+			font-family: inherit;
+			font-size: 0.82em;
+			cursor: pointer;
+			transition: background 0.15s, border-color 0.15s, color 0.15s;
+			white-space: nowrap;
+		}
+
+		.randomize-btn:hover {
+			background: #2a1e40;
+			border-color: #7a50c8;
+			color: #c8b0e8;
+		}
+
+		.save-close-btn {
+			display: block;
+			width: 100%;
+			padding: 0.65em 1em;
+			background: #5a3a9a;
+			border: 1px solid #7a50c8;
+			border-radius: 6px;
+			color: #e8dfc8;
+			font-family: inherit;
+			font-size: 0.95em;
+			font-weight: bold;
+			letter-spacing: 0.04em;
+			cursor: pointer;
+			transition: background 0.15s;
+		}
+
+		.save-close-btn:hover {
+			background: #6a4aaa;
+		}
+
+		.chip-group {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 0.4rem;
+		}
+
+		.chip {
+			padding: 0.3em 0.75em;
+			font-size: 0.82em;
+			font-family: inherit;
+			background: #1a1530;
+			border: 1px solid #3a2a5a;
+			border-radius: 20px;
+			color: #9a8ac0;
+			cursor: pointer;
+			transition: border-color 0.15s, background 0.15s, color 0.15s;
+			user-select: none;
+		}
+
+		.chip:hover {
+			border-color: #6a4aaa;
+			color: #c8b0e8;
+		}
+
+		.chip.selected {
+			background: #3a2060;
+			border-color: #7a50c8;
+			color: #e8dfc8;
+		}
+
+		::-webkit-scrollbar { width: 5px; }
+		::-webkit-scrollbar-track { background: #0c0a14; }
+		::-webkit-scrollbar-thumb { background: #3a2a5a; border-radius: 3px; }
+	</style>
+</head>
+<body>
+
+<div class="header-row">
+	<h3>⚙️ Game Options</h3>
+	<button class="randomize-btn" id="randomizeBtn">🎲 Randomize</button>
+</div>
+
+<!-- ── STORY ─────────────────────────────────────────────── -->
+<div class="section">
+	<div class="section-title">World Setting</div>
+	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Shapes the world aesthetic, vocabulary, and what exists in it.</p>
+	<div class="flavor-grid" id="settingGrid"></div>
+</div>
+
+<div class="section">
+	<div class="section-title">Campaign Tone</div>
+	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Sets the overall mood and style of the DM's narration. One selection active at a time.</p>
+	<div class="flavor-grid" id="toneGrid"></div>
+</div>
+
+<div class="section">
+	<div class="section-title">Campaign Theme</div>
+	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Shapes the story's core narrative thread and goals. One selection active at a time.</p>
+	<div class="flavor-grid" id="themeGrid"></div>
+</div>
+
+<!-- ── GAMEPLAY ───────────────────────────────────────────── -->
+
+<div class="section">
+	<div class="section-title">Difficulty</div>
+	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Controls enemy strength, DC thresholds, and how punishing mistakes are.</p>
+	<div class="chip-group" id="difficultyChips">
+		<button class="chip" data-value="casual">🌸 Casual</button>
+		<button class="chip" data-value="standard">⚔️ Standard</button>
+		<button class="chip" data-value="hardcore">💀 Hardcore</button>
+		<button class="chip" data-value="merciless">☠️ Merciless</button>
+	</div>
+</div>
+
+<div class="section">
+	<div class="section-title">Content Intensity</div>
+
+	<div class="option-row" style="align-items:flex-start;flex-direction:column;gap:0.5rem;">
+		<div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+			<div class="option-label">
+				<span>Brutality Level</span>
+				<small>Controls how graphic and dark the DM's narration gets</small>
+			</div>
+			<span id="brutalityLabel">Standard</span>
+		</div>
+		<input type="range" id="brutalitySlider" min="0" max="10" step="1" value="5" />
+		<div class="brutality-labels">
+			<span>Kid Safe</span>
+			<span>Standard</span>
+			<span>Ultimate Brutality</span>
+		</div>
+	</div>
+</div>
+
+<div class="section">
+	<div class="section-title">Loot Generosity</div>
+	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">How freely treasure, gold, and magic items are awarded.</p>
+	<div class="chip-group" id="lootChips">
+		<button class="chip" data-value="sparse">💰 Sparse</button>
+		<button class="chip" data-value="fair">💎 Fair</button>
+		<button class="chip" data-value="generous">🎁 Generous</button>
+	</div>
+</div>
+
+<!-- ── PRESENTATION ──────────────────────────────────────── -->
+
+<div class="section">
+	<div class="section-title">Narrator Voice</div>
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>DM Narrator voice</span>
+			<small>Voice used for all DM narration in this lobby</small>
+		</div>
+		<div class="option-control voice-row">
+			<select id="narratorVoiceSelect"><option value="">Loading…</option></select>
+			<button class="preview-btn" id="previewNarratorBtn" title="Preview selected voice">▶</button>
+		</div>
+	</div>
+</div>
+
+<!-- ── RULES ─────────────────────────────────────────────── -->
+
+<div class="section">
+	<div class="section-title">Turn Timer</div>
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>Enable turn timer</span>
+			<small>Players must act within the time limit</small>
+		</div>
+		<div class="option-control">
+			<input type="checkbox" id="timerEnabled" />
+		</div>
+	</div>
+
+	<hr class="divider" />
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>Time per turn</span>
+			<small>1 – 20 minutes</small>
+		</div>
+		<div class="option-control">
+			<input type="number" id="timerMinutes" min="1" max="20" value="3" />
+			<span class="unit">min</span>
+		</div>
+	</div>
+
+	<hr class="divider" />
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>Missed turns before kick</span>
+			<small>Player is removed after this many timeouts</small>
+		</div>
+		<div class="option-control">
+			<input type="number" id="maxMissedTurns" min="1" max="10" value="5" />
+			<span class="unit">turns</span>
+		</div>
+	</div>
+</div>
+
+<!-- ── TECHNICAL ─────────────────────────────────────────── -->
+
+<div class="section">
+	<div class="section-title">AI Model</div>
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>Provider</span>
+			<small>Which AI service powers the DM</small>
+		</div>
+		<div class="option-control" style="gap:1rem;">
+			<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
+				<input type="radio" name="llmProvider" value="openai" id="providerOpenAI" style="accent-color:#7a50c8;cursor:pointer;" />
+				OpenAI
+			</label>
+			<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
+				<input type="radio" name="llmProvider" value="claude" id="providerClaude" style="accent-color:#7a50c8;cursor:pointer;" />
+				Claude
+			</label>
+		</div>
+	</div>
+
+	<hr class="divider" />
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>Model</span>
+			<small>Specific model version to use</small>
+		</div>
+		<div class="option-control" style="flex:1;min-width:0;">
+			<select id="llmModelSelect" style="flex:1;min-width:0;"></select>
+		</div>
+	</div>
+</div>
+
+<button class="save-close-btn" id="saveCloseBtn">Save &amp; Close</button>
+
+<div id="statusBar">Connecting…</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const lobbyId = new URLSearchParams(location.search).get("lobbyId");
+
+const elEnabled        = document.getElementById("timerEnabled");
+const elMinutes        = document.getElementById("timerMinutes");
+const elMaxMissed      = document.getElementById("maxMissedTurns");
+const elNarratorVoice  = document.getElementById("narratorVoiceSelect");
+const elLLMModel       = document.getElementById("llmModelSelect");
+const elBrutality      = document.getElementById("brutalitySlider");
+const elBrutalityLabel = document.getElementById("brutalityLabel");
+const statusBar        = document.getElementById("statusBar");
+
+const BRUTALITY_LABELS = ["Kid Safe", "Kid Safe", "Lighthearted", "Lighthearted", "Standard", "Standard", "Gritty", "Gritty", "Brutal", "Brutal", "Ultimate Brutality"];
+
+function selectChip(groupId, value) {
+	document.querySelectorAll(`#${groupId} .chip`).forEach(c => {
+		c.classList.toggle("selected", c.dataset.value === value);
+	});
+}
+
+function selectedChip(groupId) {
+	return document.querySelector(`#${groupId} .chip.selected`)?.dataset.value || null;
+}
+
+const LLM_MODELS = {
+	openai: [
+		{ value: "gpt-4o",              label: "GPT-4o" },
+		{ value: "gpt-4o-mini",         label: "GPT-4o Mini" },
+		{ value: "gpt-4-turbo",         label: "GPT-4 Turbo" },
+		{ value: "gpt-5-chat-latest",   label: "GPT-5 (latest)" },
+	],
+	claude: [
+		{ value: "claude-opus-4-6",           label: "Claude Opus 4.6" },
+		{ value: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6" },
+		{ value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+	],
+};
+
+// Feature availability (populated from /api/features)
+let features = { openai: true, claude: true, elevenlabs: true, devMode: false };
+
+function populateLLMModels(provider, currentModel) {
+	const models = LLM_MODELS[provider] || [];
+	elLLMModel.innerHTML = models.map(m =>
+		`<option value="${m.value}"${m.value === currentModel ? " selected" : ""}>${m.label}</option>`
+	).join("");
+	if (currentModel && !models.find(m => m.value === currentModel)) {
+		elLLMModel.innerHTML += `<option value="${currentModel}" selected>${currentModel}</option>`;
+	}
+}
+
+function applyFeatureGating() {
+	const openaiRadio = document.getElementById("providerOpenAI");
+	const claudeRadio = document.getElementById("providerClaude");
+
+	// Disable unavailable LLM providers
+	if (!features.openai) {
+		openaiRadio.disabled = true;
+		openaiRadio.parentElement.style.opacity = "0.4";
+		openaiRadio.parentElement.title = "OpenAI API key is missing or invalid";
+		// If OpenAI was selected, switch to Claude
+		if (openaiRadio.checked && features.claude) {
+			claudeRadio.checked = true;
+			populateLLMModels("claude", null);
+		}
+	}
+	if (!features.claude) {
+		claudeRadio.disabled = true;
+		claudeRadio.parentElement.style.opacity = "0.4";
+		claudeRadio.parentElement.title = "Claude API key is missing or invalid";
+		// If Claude was selected, switch to OpenAI
+		if (claudeRadio.checked && features.openai) {
+			openaiRadio.checked = true;
+			populateLLMModels("openai", null);
+		}
+	}
+	if (!features.openai && !features.claude) {
+		elLLMModel.innerHTML = '<option value="">No AI providers available</option>';
+		elLLMModel.disabled = true;
+	}
+
+	// Disable narrator voice if ElevenLabs is unavailable
+	if (!features.elevenlabs) {
+		elNarratorVoice.innerHTML = '<option value="">Narration unavailable (no ElevenLabs key)</option>';
+		elNarratorVoice.disabled = true;
+		document.getElementById("previewNarratorBtn").disabled = true;
+	}
+}
+
+// Campaign flavor state — full objects stored so prompt text is sent to server
+let selectedTone    = null;
+let selectedTheme   = null;
+let selectedSetting = null;
+let flavorsData     = null; // { tones: [], themes: [] }
+
+const SETTINGS_DATA = [
+	{
+		id: "standard",
+		label: "Standard Fantasy",
+		emoji: "⚔️",
+		description: "Classic kingdoms, dungeons, and ancient magic. Elves, dwarves, and dragons. The world most players expect.",
+	},
+	{
+		id: "dark_ages",
+		label: "Dark Ages",
+		emoji: "🏚️",
+		description: "A harsh, pre-medieval world where magic is scarce and feared. Superstition rules, kings are tyrants, and survival is uncertain.",
+	},
+	{
+		id: "steampunk",
+		label: "Steampunk",
+		emoji: "⚙️",
+		description: "Clockwork machines and arcane engines power an industrial age. Cities belch steam, artificers thrive, and magic is partly industrialised.",
+	},
+	{
+		id: "pirate",
+		label: "Pirate Age",
+		emoji: "🏴‍☠️",
+		description: "Sea voyages, island ports, naval battles, and buried treasure. Privateers, sea monsters, and rival factions on every horizon.",
+	},
+	{
+		id: "scifi",
+		label: "Sci-fi Fantasy",
+		emoji: "🚀",
+		description: "A vanished civilisation left behind alien technology. The line between magic and science has blurred — starships and swords coexist.",
+	},
+];
+
+function emitSettings() {
+	if (!window.opener?.socket) {
+		statusBar.textContent = "⚠️ Lost connection to main window.";
+		return;
+	}
+	const selectedProvider = document.querySelector("input[name='llmProvider']:checked")?.value || "claude";
+	window.opener.socket.emit("lobby:settings", {
+		lobbyId,
+		timerEnabled:    elEnabled.checked,
+		timerMinutes:    Number(elMinutes.value),
+		maxMissedTurns:  Number(elMaxMissed.value),
+		narratorVoiceId:   elNarratorVoice.value || null,
+		narratorVoiceName: elNarratorVoice.selectedIndex >= 0 ? elNarratorVoice.options[elNarratorVoice.selectedIndex]?.text || null : null,
+		campaignTone:    selectedTone,
+		campaignTheme:   selectedTheme,
+		brutalityLevel:  Number(elBrutality.value),
+		difficulty:      selectedChip("difficultyChips"),
+		lootGenerosity:  selectedChip("lootChips"),
+		campaignSetting: selectedSetting?.id || "standard",
+		llmProvider:     selectedProvider,
+		llmModel:        elLLMModel.value || null,
+	});
+}
+
+function applyState(state) {
+	if (!state || state.lobbyId !== lobbyId) return;
+	elEnabled.checked    = !!state.timerEnabled;
+	elMinutes.value      = state.timerMinutes   ?? 3;
+	elMaxMissed.value    = state.maxMissedTurns ?? 5;
+	elMinutes.disabled   = !elEnabled.checked;
+	elMaxMissed.disabled = !elEnabled.checked;
+
+	// Narrator voice
+	if (state.narratorVoiceId && elNarratorVoice.options.length > 1) {
+		elNarratorVoice.value = state.narratorVoiceId;
+	} else if (state.narratorVoiceId) {
+		elNarratorVoice.dataset.pendingVoice = state.narratorVoiceId;
+	}
+
+	// Campaign flavor — restore selections from state
+	if (state.campaignTone) {
+		selectedTone = state.campaignTone;
+		highlightCard("toneGrid", state.campaignTone.id);
+	}
+	if (state.campaignTheme) {
+		selectedTheme = state.campaignTheme;
+		highlightCard("themeGrid", state.campaignTheme.id);
+	}
+
+	// World setting card
+	const settingId = state.campaignSetting || "standard";
+	selectedSetting = SETTINGS_DATA.find(s => s.id === settingId) || SETTINGS_DATA[0];
+	highlightCard("settingGrid", settingId);
+
+	// Chip selectors
+	selectChip("difficultyChips", state.difficulty     || "standard");
+	selectChip("lootChips",       state.lootGenerosity || "fair");
+
+	// Brutality
+	const bLevel = state.brutalityLevel ?? 5;
+	elBrutality.value = bLevel;
+	elBrutalityLabel.textContent = BRUTALITY_LABELS[bLevel];
+
+	// LLM provider + model
+	const provider = state.llmProvider || "claude";
+	const providerRadio = document.querySelector(`input[name='llmProvider'][value='${provider}']`);
+	if (providerRadio) providerRadio.checked = true;
+	populateLLMModels(provider, state.llmModel);
+}
+
+function highlightCard(gridId, selectedId) {
+	document.querySelectorAll(`#${gridId} .flavor-card`).forEach(card => {
+		card.classList.toggle("selected", card.dataset.id === selectedId);
+	});
+}
+
+function buildFlavorGrid(gridId, items, getter, setter) {
+	const grid = document.getElementById(gridId);
+	grid.innerHTML = "";
+	for (const item of items) {
+		const card = document.createElement("div");
+		card.className = "flavor-card" + (getter()?.id === item.id ? " selected" : "");
+		card.dataset.id = item.id;
+		card.innerHTML = `
+			<span class="card-emoji">${item.emoji}</span>
+			<span class="card-label">${item.label}</span>
+			<span class="card-desc">${item.description}</span>
+		`;
+		card.addEventListener("click", () => {
+			// Toggle off if already selected
+			const alreadySelected = getter()?.id === item.id;
+			setter(alreadySelected ? null : item);
+			highlightCard(gridId, alreadySelected ? null : item.id);
+			emitSettings();
+		});
+		grid.appendChild(card);
+	}
+}
+
+// Load campaign flavors from JSON
+async function loadFlavors() {
+	try {
+		const res = await fetch("/config/campaignFlavors.json");
+		flavorsData = await res.json();
+		buildFlavorGrid("toneGrid",  flavorsData.tones,  () => selectedTone,  v => { selectedTone  = v; });
+		buildFlavorGrid("themeGrid", flavorsData.themes, () => selectedTheme, v => { selectedTheme = v; });
+	} catch (err) {
+		console.warn("Could not load campaignFlavors.json:", err);
+	}
+}
+
+// Load voices from API and populate the narrator dropdown
+async function loadNarratorVoices() {
+	try {
+		const res = await fetch("/api/voices");
+		const data = await res.json();
+		if (!data.ok) throw new Error("Voice load failed");
+		elNarratorVoice.innerHTML = data.voices
+			.map(v => `<option value="${v.id}">${v.name}${v.accent ? ` (${v.accent})` : ""}</option>`)
+			.join("");
+		const pending = elNarratorVoice.dataset.pendingVoice;
+		if (pending) {
+			elNarratorVoice.value = pending;
+			delete elNarratorVoice.dataset.pendingVoice;
+		}
+	} catch (err) {
+		elNarratorVoice.innerHTML = '<option value="">Error loading voices</option>';
+	}
+}
+
+// Preview the selected narrator voice
+document.getElementById("previewNarratorBtn").addEventListener("click", async () => {
+	const voiceId = elNarratorVoice.value;
+	if (!voiceId) return;
+	try {
+		const res = await fetch(`/api/voice-preview/${voiceId}`);
+		if (res.status === 204) { alert("Voice preview disabled in developer mode."); return; }
+		if (!res.ok) throw new Error(`Preview failed (${res.status})`);
+		const blob = await res.blob();
+		const url = URL.createObjectURL(blob);
+		new Audio(url).play().catch(() => {});
+	} catch (err) {
+		statusBar.textContent = "⚠️ Preview failed.";
+	}
+});
+
+elEnabled.addEventListener("change", () => {
+	elMinutes.disabled   = !elEnabled.checked;
+	elMaxMissed.disabled = !elEnabled.checked;
+	emitSettings();
+});
+elMinutes.addEventListener("change", emitSettings);
+elMaxMissed.addEventListener("change", emitSettings);
+elNarratorVoice.addEventListener("change", emitSettings);
+["difficultyChips", "lootChips"].forEach(groupId => {
+	document.getElementById(groupId).addEventListener("click", e => {
+		const chip = e.target.closest(".chip");
+		if (!chip) return;
+		selectChip(groupId, chip.dataset.value);
+		emitSettings();
+	});
+});
+elLLMModel.addEventListener("change", emitSettings);
+elBrutality.addEventListener("input", () => {
+	elBrutalityLabel.textContent = BRUTALITY_LABELS[Number(elBrutality.value)];
+});
+elBrutality.addEventListener("change", emitSettings);
+document.querySelectorAll("input[name='llmProvider']").forEach(radio => {
+	radio.addEventListener("change", () => {
+		populateLLMModels(radio.value, null);
+		emitSettings();
+	});
+});
+
+// Connect own socket to receive live state updates
+const socket = io();
+
+socket.on("connect", () => {
+	statusBar.textContent = "Connected";
+	if (lobbyId) socket.emit("state:request", { lobbyId });
+});
+
+socket.on("disconnect", () => {
+	statusBar.textContent = "Disconnected";
+});
+
+socket.on("state:update", (state) => {
+	applyState(state);
+});
+
+document.getElementById("saveCloseBtn").addEventListener("click", () => {
+	emitSettings();
+	window.close();
+});
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function randomizeOptions() {
+	// World Setting
+	const newSetting = pick(SETTINGS_DATA);
+	selectedSetting = newSetting;
+	highlightCard("settingGrid", newSetting.id);
+
+	// Campaign Tone & Theme (only if loaded)
+	if (flavorsData?.tones?.length) {
+		selectedTone = pick(flavorsData.tones);
+		highlightCard("toneGrid", selectedTone.id);
+	}
+	if (flavorsData?.themes?.length) {
+		selectedTheme = pick(flavorsData.themes);
+		highlightCard("themeGrid", selectedTheme.id);
+	}
+
+	// Difficulty
+	selectChip("difficultyChips", pick(["casual", "standard", "hardcore", "merciless"]));
+
+	// Brutality Level
+	const bLevel = Math.floor(Math.random() * 11);
+	elBrutality.value = bLevel;
+	elBrutalityLabel.textContent = BRUTALITY_LABELS[bLevel];
+
+	// Loot Generosity
+	selectChip("lootChips", pick(["sparse", "fair", "generous"]));
+
+	// Narrator Voice (only if voices are loaded)
+	if (elNarratorVoice.options.length > 0) {
+		const randomIndex = Math.floor(Math.random() * elNarratorVoice.options.length);
+		elNarratorVoice.selectedIndex = randomIndex;
+	}
+
+	emitSettings();
+}
+
+document.getElementById("randomizeBtn").addEventListener("click", randomizeOptions);
+
+// Boot: load features, flavors, and voices, then seed from main window state
+buildFlavorGrid("settingGrid", SETTINGS_DATA, () => selectedSetting, v => { selectedSetting = v; });
+
+async function boot() {
+	// Fetch service availability first
+	try {
+		const res = await fetch("/api/features");
+		if (res.ok) features = await res.json();
+	} catch (e) { /* use defaults — assume all available */ }
+
+	// Load flavors and voices in parallel
+	await Promise.all([
+		loadFlavors(),
+		features.elevenlabs ? loadNarratorVoices() : Promise.resolve(),
+	]);
+
+	applyFeatureGating();
+	if (window.opener?.currentState) applyState(window.opener.currentState);
+}
+boot();
+</script>
+</body>
+</html>

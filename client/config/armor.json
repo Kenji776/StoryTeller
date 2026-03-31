@@ -1,0 +1,137 @@
+[
+  {
+    "name": "Unarmored",
+    "ac": 10,
+    "material": "none",
+    "type": "none",
+    "startingSelectable": true,
+    "note": "No armor — AC is 10 + DEX modifier",
+    "classes": ["Fighter", "Rogue", "Ranger", "Paladin", "Barbarian", "Bard", "Monk", "Druid", "Wizard", "Sorcerer", "Warlock", "Cleric"]
+  },
+  {
+    "name": "Padded Armor",
+    "ac": 11,
+    "material": "cloth",
+    "type": "light",
+    "startingSelectable": true,
+    "note": "AC 11 + DEX modifier. Disadvantage on stealth.",
+    "classes": ["Fighter", "Rogue", "Ranger", "Paladin", "Barbarian", "Bard", "Cleric"]
+  },
+  {
+    "name": "Leather Armor",
+    "ac": 11,
+    "material": "leather",
+    "type": "light",
+    "startingSelectable": true,
+    "note": "AC 11 + DEX modifier. No stealth penalty.",
+    "classes": ["Fighter", "Rogue", "Ranger", "Bard", "Druid", "Barbarian", "Cleric", "Warlock"]
+  },
+  {
+    "name": "Studded Leather",
+    "ac": 12,
+    "material": "leather",
+    "type": "light",
+    "startingSelectable": true,
+    "note": "AC 12 + DEX modifier. Reinforced with metal rivets.",
+    "classes": ["Fighter", "Rogue", "Ranger", "Bard", "Warlock"]
+  },
+  {
+    "name": "Hide Armor",
+    "ac": 12,
+    "material": "hide",
+    "type": "medium",
+    "startingSelectable": true,
+    "note": "AC 12 + DEX modifier (max +2). Thick pelts and hides.",
+    "classes": ["Barbarian", "Druid", "Ranger", "Fighter"]
+  },
+  {
+    "name": "Chain Shirt",
+    "ac": 13,
+    "material": "metal",
+    "type": "medium",
+    "startingSelectable": true,
+    "note": "AC 13 + DEX modifier (max +2). Lighter than full chain.",
+    "classes": ["Fighter", "Paladin", "Cleric", "Ranger"]
+  },
+  {
+    "name": "Scale Mail",
+    "ac": 14,
+    "material": "metal",
+    "type": "medium",
+    "startingSelectable": true,
+    "note": "AC 14 + DEX modifier (max +2). Disadvantage on stealth.",
+    "classes": ["Fighter", "Paladin", "Cleric", "Ranger", "Barbarian"]
+  },
+  {
+    "name": "Breastplate",
+    "ac": 14,
+    "material": "metal",
+    "type": "medium",
+    "startingSelectable": true,
+    "note": "AC 14 + DEX modifier (max +2). No stealth penalty.",
+    "classes": ["Fighter", "Paladin", "Cleric", "Ranger"]
+  },
+  {
+    "name": "Ring Mail",
+    "ac": 14,
+    "material": "metal",
+    "type": "heavy",
+    "startingSelectable": true,
+    "note": "AC 14. Disadvantage on stealth. No DEX bonus.",
+    "classes": ["Fighter", "Paladin", "Cleric"]
+  },
+  {
+    "name": "Chain Mail",
+    "ac": 16,
+    "material": "metal",
+    "type": "heavy",
+    "startingSelectable": true,
+    "note": "AC 16. Requires STR 13+. Disadvantage on stealth.",
+    "classes": ["Fighter", "Paladin", "Cleric"]
+  },
+  {
+    "name": "Splint Armor",
+    "ac": 17,
+    "material": "metal",
+    "type": "heavy",
+    "startingSelectable": false,
+    "note": "AC 17. Requires STR 15+. Too expensive for starting gear.",
+    "classes": ["Fighter", "Paladin", "Cleric"]
+  },
+  {
+    "name": "Full Plate",
+    "ac": 18,
+    "material": "metal",
+    "type": "heavy",
+    "startingSelectable": false,
+    "note": "AC 18. Requires STR 15+. The pinnacle of armor — must be earned.",
+    "classes": ["Fighter", "Paladin", "Cleric"]
+  },
+  {
+    "name": "Mage Robes",
+    "ac": 11,
+    "material": "cloth",
+    "type": "light",
+    "startingSelectable": true,
+    "note": "AC 11 + DEX modifier. Woven with faint protective runes.",
+    "classes": ["Wizard", "Sorcerer", "Warlock"]
+  },
+  {
+    "name": "Druidic Vestments",
+    "ac": 12,
+    "material": "hide",
+    "type": "medium",
+    "startingSelectable": true,
+    "note": "AC 12 + DEX modifier (max +2). Natural materials only — no metal.",
+    "classes": ["Druid", "Ranger"]
+  },
+  {
+    "name": "Monk's Gi",
+    "ac": 10,
+    "material": "cloth",
+    "type": "none",
+    "startingSelectable": true,
+    "note": "AC 10 + DEX + WIS modifier. Monks add Wisdom to unarmored AC.",
+    "classes": ["Monk"]
+  }
+]

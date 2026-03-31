@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>StoryTeller — Initiative</title>
+	<style>
+		*, *::before, *::after { box-sizing: border-box; }
+
+		body {
+			background: #0c0a14;
+			color: #e8dfc8;
+			font-family: 'Georgia', serif;
+			margin: 0;
+			padding: 0.75rem 1rem;
+			display: flex;
+			flex-direction: column;
+			gap: 0.75rem;
+			min-height: 100vh;
+		}
+
+		.header {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+		}
+		.header h3 {
+			margin: 0;
+			font-size: 1em;
+			color: #c8b0e8;
+			letter-spacing: 0.04em;
+		}
+		.round-badge {
+			background: #1e1830;
+			border: 1px solid #3a2a5a;
+			border-radius: 4px;
+			padding: 0.15em 0.6em;
+			font-size: 0.78em;
+			color: #b0a0d0;
+		}
+
+		.tracker {
+			display: flex;
+			flex-direction: column;
+			gap: 0.4rem;
+		}
+
+		.entry {
+			display: flex;
+			align-items: center;
+			gap: 0.65rem;
+			background: #0f0d1a;
+			border: 1px solid #2a1e40;
+			border-radius: 6px;
+			padding: 0.5rem 0.75rem;
+			transition: background 0.2s, border-color 0.2s;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.entry.active {
+			background: #1a1030;
+			border-color: #7a50c8;
+			box-shadow: 0 0 10px rgba(120, 80, 200, 0.25);
+		}
+
+		.entry.active::before {
+			content: '';
+			position: absolute;
+			left: 0;
+			top: 0;
+			bottom: 0;
+			width: 3px;
+			background: #9060e8;
+			border-radius: 3px 0 0 3px;
+		}
+
+		.pos {
+			font-size: 0.75em;
+			color: #5a4a7a;
+			width: 1.4em;
+			text-align: center;
+			flex-shrink: 0;
+		}
+
+		.entry.active .pos {
+			color: #9060e8;
+			font-weight: bold;
+		}
+
+		.arrow {
+			font-size: 1em;
+			flex-shrink: 0;
+			opacity: 0;
+			transition: opacity 0.2s;
+			color: #c8a0ff;
+		}
+		.entry.active .arrow { opacity: 1; }
+
+		.name {
+			flex: 1;
+			font-size: 0.95em;
+			color: #d0c0e8;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.entry.active .name {
+			color: #f0e8ff;
+			font-weight: bold;
+		}
+
+		.you-badge {
+			font-size: 0.7em;
+			background: #2a1e50;
+			border: 1px solid #5a3a9a;
+			border-radius: 3px;
+			padding: 0.1em 0.4em;
+			color: #b090e0;
+			flex-shrink: 0;
+		}
+
+		.turn-label {
+			font-size: 0.7em;
+			color: #9060e8;
+			text-transform: uppercase;
+			letter-spacing: 0.06em;
+			flex-shrink: 0;
+		}
+
+		#statusBar {
+			font-size: 0.75em;
+			color: #5a4a7a;
+			font-style: italic;
+			margin-top: auto;
+		}
+
+		::-webkit-scrollbar { width: 5px; }
+		::-webkit-scrollbar-track { background: #0c0a14; }
+		::-webkit-scrollbar-thumb { background: #3a2a5a; border-radius: 3px; }
+	</style>
+</head>
+<body>
+
+<div class="header">
+	<h3>⚔️ Initiative Order</h3>
+	<span id="roundBadge" class="round-badge">Waiting…</span>
+</div>
+
+<div id="tracker" class="tracker">
+	<span style="color:#5a4a7a;font-size:0.85em">Waiting for game data…</span>
+</div>
+
+<div id="statusBar">Connecting…</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const params  = new URLSearchParams(location.search);
+const lobbyId = params.get("lobbyId");
+
+let currentOrder   = [];
+let currentPlayer  = null;
+let myName         = params.get("name") || null; // optional: passed in URL
+
+function render(order, current) {
+	currentOrder  = order  || [];
+	currentPlayer = current || null;
+
+	const tracker = document.getElementById("tracker");
+	tracker.innerHTML = "";
+
+	if (!currentOrder.length) {
+		tracker.innerHTML = '<span style="color:#5a4a7a;font-size:0.85em">No players in initiative yet.</span>';
+		document.getElementById("roundBadge").textContent = "—";
+		return;
+	}
+
+	const activeIdx = currentOrder.indexOf(currentPlayer);
+
+	currentOrder.forEach((name, i) => {
+		const isActive = name === currentPlayer;
+
+		const entry = document.createElement("div");
+		entry.className = "entry" + (isActive ? " active" : "");
+
+		const pos = document.createElement("span");
+		pos.className = "pos";
+		pos.textContent = i + 1;
+
+		const arrow = document.createElement("span");
+		arrow.className = "arrow";
+		arrow.textContent = "▶";
+
+		const nameEl = document.createElement("span");
+		nameEl.className = "name";
+		nameEl.textContent = name;
+
+		entry.appendChild(pos);
+		entry.appendChild(arrow);
+		entry.appendChild(nameEl);
+
+		if (isActive) {
+			const label = document.createElement("span");
+			label.className = "turn-label";
+			label.textContent = "Active";
+			entry.appendChild(label);
+		}
+
+		tracker.appendChild(entry);
+	});
+
+	const pos = activeIdx >= 0 ? activeIdx + 1 : "—";
+	document.getElementById("roundBadge").textContent =
+		currentPlayer ? `Turn ${pos} of ${currentOrder.length}` : "—";
+}
+
+const socket = io();
+
+socket.on("connect", () => {
+	document.getElementById("statusBar").textContent = "Connected — waiting for data…";
+	if (lobbyId) {
+		socket.emit("state:request", { lobbyId });
+	}
+});
+
+socket.on("disconnect", () => {
+	document.getElementById("statusBar").textContent = "Disconnected";
+});
+
+// Initial state load
+socket.on("state:update", (state) => {
+	if (state?.lobbyId !== lobbyId) return;
+	const order   = state.initiative || [];
+	const current = order[state.turnIndex] || null;
+	render(order, current);
+	document.getElementById("statusBar").textContent =
+		`${order.length} player${order.length !== 1 ? "s" : ""} in initiative`;
+});
+
+// Live turn updates
+socket.on("turn:update", ({ current, order }) => {
+	render(order, current);
+	document.getElementById("statusBar").textContent =
+		`${(order || []).length} player${(order || []).length !== 1 ? "s" : ""} in initiative`;
+});
+</script>
+</body>
+</html>
