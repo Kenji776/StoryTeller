@@ -26,42 +26,57 @@ function showNarratorIndicator(show, text = "Narrating...") {
 	narratorIndicator.classList.toggle("hidden", !show);
 }
 
-/** === FANTASY TOAST STACKING (fixed top offset version) === **/
-function showToast(message, type = "info", duration = 4000) {
-	const TOAST_HEIGHT = 150; // approximate height of each toast (px)
-	const TOAST_GAP = 10; // spacing between them
+/** === TOAST TEST (call testToasts() from browser console) === **/
+function testToasts() {
+	const samples = [
+		["You gained 25 XP for slaying the goblin!", "success"],
+		["Healing Potion removed from inventory", "warning"],
+		["You took 8 damage from a fire trap", "danger"],
+		["The DM sets the scene...", "info"],
+		["Critical hit! Double damage!", "success"],
+		["A mysterious figure watches from the shadows", "info"],
+		["You found 50 gold coins", "success"],
+		["Poisoned! -2 to all rolls for 3 turns", "danger"],
+	];
+	samples.forEach(([msg, type], i) => {
+		setTimeout(() => showToast(msg, type, 6000), i * 400);
+	});
+}
 
-	// Get or create container
-	let container = document.getElementById("toastContainer");
-	if (!container) {
-		container = document.createElement("div");
-		container.id = "toastContainer";
-		container.style.position = "fixed";
-		container.style.top = "10%";
-		container.style.left = "50%";
-		container.style.transform = "translateX(-50%)";
-		container.style.zIndex = "9999";
-		container.style.width = "100vw";
-		container.style.pointerEvents = "none";
-		document.body.appendChild(container);
+/** === FANTASY TOAST STACKING === **/
+const _toastState = { container: null, toasts: [] }; // tracks active toast elements in order
+
+function _reflowToasts() {
+	const GAP = 10;
+	const baseTopVh = 10; // starting position in vh
+	const basePx = (baseTopVh / 100) * window.innerHeight;
+	let cursor = basePx;
+	for (const t of _toastState.toasts) {
+		t.style.top = `${cursor}px`;
+		cursor += t.offsetHeight + GAP;
 	}
+}
+
+function showToast(message, type = "info", duration = 4000) {
+	// Get or create container
+	if (!_toastState.container || !_toastState.container.isConnected) {
+		const container = document.createElement("div");
+		container.id = "toastContainer";
+		container.style.cssText = "position:fixed;top:0;left:0;width:100%;height:0;z-index:9999;pointer-events:none;";
+		document.body.appendChild(container);
+		_toastState.container = container;
+	}
+	const container = _toastState.container;
 
 	// Create new toast
 	const toast = document.createElement("div");
 	toast.className = `toast ${type}`;
 	toast.innerHTML = `<div class="toast-content"><p>${message}</p></div>`;
-
-	// Add it immediately to measure
 	container.appendChild(toast);
 
-	// Compute stacking offset: base + number of visible toasts * height
-	const visibleToasts = Array.from(container.querySelectorAll(".toast.visible"));
-	const offsetIndex = visibleToasts.length; // 0-based index of the new one
-	const baseTop = 10; // base in percent
-	const topOffsetPx = offsetIndex * (TOAST_HEIGHT + TOAST_GAP);
-
-	// Override the toast's own top value
-	toast.style.top = `calc(${baseTop}% + ${topOffsetPx}px)`;
+	// Track it and reflow so it lands below existing toasts
+	_toastState.toasts.push(toast);
+	_reflowToasts();
 
 	// Animate in
 	requestAnimationFrame(() => toast.classList.add("visible"));
@@ -71,15 +86,9 @@ function showToast(message, type = "info", duration = 4000) {
 		toast.classList.remove("visible");
 		setTimeout(() => {
 			toast.remove();
-
-			// Reposition remaining visible toasts upward
-			const remaining = Array.from(container.querySelectorAll(".toast.visible"));
-			remaining.forEach((t, i) => {
-				t.style.top = `calc(${baseTop}% + ${i * (TOAST_HEIGHT + TOAST_GAP)}px)`;
-			});
-
-			// Remove container if empty
-			if (!container.children.length) container.remove();
+			_toastState.toasts = _toastState.toasts.filter(t => t !== toast);
+			_reflowToasts();
+			if (!container.children.length) { container.remove(); _toastState.container = null; }
 		}, 600);
 	}, duration);
 }

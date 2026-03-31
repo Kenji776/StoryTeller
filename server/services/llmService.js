@@ -1,9 +1,16 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
+
+// ── Test / stub responses for dev mode ──────────────────────────────────────
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const testResponses = JSON.parse(
+	fs.readFileSync(path.join(__dirname, "..", "data", "testLLMResponses.json"), "utf-8")
+);
 
 // ── OpenAI ──────────────────────────────────────────────────────────────────
 const openaiKey   = process.env.OPENAI_API_KEY;
@@ -81,6 +88,9 @@ export async function getLLMResponse(messages, { provider, model } = {}) {
 	const resolvedProvider = provider || DEFAULT_PROVIDER;
 	const resolvedModel    = model    || DEFAULT_MODEL;
 
+	if (resolvedProvider === "test") {
+		return _testResponse(messages);
+	}
 	if (resolvedProvider === "claude") {
 		return _claudeResponse(messages, resolvedModel);
 	}
@@ -151,6 +161,42 @@ async function _claudeResponse(messages, model) {
 		console.error("💥 [Claude] LLM call failed:", err);
 		return "[Error: LLM unavailable or failed to respond]";
 	}
+}
+
+// ── Test / stub implementation (dev mode) ───────────────────────────────────
+const TEST_ADVENTURE_NAMES = [
+	"Shadows of the Forgotten Keep",
+	"The Ember Crown Prophecy",
+	"Blood Beneath the Mountain",
+	"Whispers in the Pale Wood",
+	"The Last Light of Valdris",
+];
+
+async function _testResponse(messages) {
+	const allContent = messages.map(m => m.content || "").join(" ");
+
+	// Adventure name generation — return a plain title string
+	if (allContent.includes("adventure title") || allContent.includes("naming a Dungeons")) {
+		const name = TEST_ADVENTURE_NAMES[Math.floor(Math.random() * TEST_ADVENTURE_NAMES.length)];
+		console.log("🧪 [Test LLM] Returning canned adventure name: %s", name);
+		return name;
+	}
+
+	// Determine if this is a setup prompt or an action prompt
+	const isSetup = allContent.includes("opening") || allContent.includes("introducing a new") || allContent.includes("opening scene");
+
+	const pool = isSetup ? testResponses.setup : testResponses.action;
+	const pick = pool[Math.floor(Math.random() * pool.length)];
+
+	// For action responses, substitute __ACTIVE_PLAYER__ with the actual player name if available
+	let json = JSON.stringify(pick);
+	const lastUserMsg = [...messages].reverse().find(m => m.role === "user");
+	const playerName = lastUserMsg?.name || "Adventurer";
+	json = json.replace(/__ACTIVE_PLAYER__/g, playerName);
+
+	// hp new_total placeholders (0) — the server's JSON parser handles downstream logic
+	console.log("🧪 [Test LLM] Returning canned response (setup=%s)", isSetup);
+	return json;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

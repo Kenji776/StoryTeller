@@ -1,0 +1,152 @@
+{
+  "setup": [
+    {
+      "text": "The evening sun casts long golden shadows across the cobblestone streets of <b>Thornhaven</b>, a modest trading town perched at the edge of the Whispering Wilds. You've each arrived here by different roads — a bounty board posting, a rumour of ancient ruins, a simple need for coin — but fate, as it often does, has drawn you together at the <b>Rusty Flagon Inn</b>.<br><br>The innkeeper, a stout halfling woman named <b>Mabel Thistlebrew</b>, sets tankards of warm ale before you and leans in conspiratorially. <i>\"You lot look like the adventuring sort. There's been trouble at the old Stonecrest Mine north of town — strange lights, missing workers, and sounds that don't belong underground. The mayor's offering fifty gold to anyone brave — or foolish — enough to investigate.\"</i><br><br>She straightens up and wipes her hands on her apron. <i>\"But first, drink up. The road ahead won't be so kind.\"</i><br><br>The tavern hums with quiet conversation. A bard plucks a melancholy tune in the corner. Through the window, the tree line of the Whispering Wilds looms dark against the fading sky.<br><br>What would you like to do?",
+      "music": "tavern",
+      "suggestions": [
+        "Ask Mabel about the missing workers",
+        "Introduce myself to the other adventurers",
+        "Check the bounty board for details",
+        "Order another round of drinks",
+        "Head outside and scout the road north"
+      ]
+    },
+    {
+      "text": "A cold wind howls through the crags of <b>Daggerspine Pass</b> as your wagon lurches to a halt. The driver — a grizzled dwarf named <b>Korrin Ironfist</b> — spits over the side and jerks his thumb ahead. <i>\"End of the line, friends. Bridge is out. You'll have to go through the valley on foot from here.\"</i><br><br>Below the shattered stone bridge, a river churns white with snowmelt. On the far side, the dark mouth of a valley cuts between two jagged peaks. Somewhere in that valley lies the <b>Temple of the Shattered Star</b>, and within it — if the legends hold — the <b>Starweave Amulet</b>, an artefact said to grant its bearer dominion over dreams.<br><br>Your patron, the scholar <b>Elara Nighthollow</b>, is paying each of you handsomely to retrieve it before a rival faction — the <b>Iron Covenant</b> — gets there first. She warned you they would not be far behind.<br><br>The afternoon light is fading. A narrow goat trail winds down toward the river, and you can see the faint remains of stepping stones beneath the rapids.<br><br>What would you like to do?",
+      "music": "exploration",
+      "suggestions": [
+        "Examine the broken bridge for clues",
+        "Look for a safe way across the river",
+        "Set up camp and cross at dawn",
+        "Scout ahead for signs of the Iron Covenant",
+        "Search the wagon for useful supplies"
+      ]
+    },
+    {
+      "text": "The torchlight flickers against damp stone walls as you descend the final staircase into the <b>Undercroft of Velrath</b>. The air smells of earth and old iron. Your guide — a nervous young cleric named <b>Brother Ansel</b> — presses a crumpled map into your hands and steps back toward the stairs.<br><br><i>\"This is as far as I go,\"</i> he stammers. <i>\"The sealed chamber is somewhere beyond the Hall of Echoes. The Archbishop needs whatever is inside that reliquary — and he needs it before the new moon. That gives you three days.\"</i><br><br>He pulls his hood low and vanishes up the steps, leaving you in a wide antechamber lit by phosphorescent moss. Three corridors branch off ahead: one slopes downward into darkness, one is partially collapsed, and one is marked with faded dwarven runes.<br><br>From somewhere deep below, you hear a low, rhythmic <b>thudding</b> — like a heartbeat in the stone itself.<br><br>What would you like to do?",
+      "music": "dungeon_ambient",
+      "suggestions": [
+        "Examine the dwarven runes",
+        "Listen carefully to the thudding sound",
+        "Study Brother Ansel's map",
+        "Explore the downward-sloping corridor",
+        "Check the collapsed passage for a way through"
+      ]
+    }
+  ],
+  "action": [
+    {
+      "text": "You step forward cautiously and examine the area. The dust on the floor has been disturbed recently — footprints, not quite human, lead deeper into the passage. As you kneel to get a closer look, your torch catches something glinting in a crack between the stones: a small <b>iron key</b>, half-buried in grime.<br><br>From further ahead, you hear the faint sound of dripping water and something else — a low, guttural murmur, like a creature talking to itself.<br><br><i>\"Careful,\"</i> the sound seems to say. Or perhaps it's just the wind.",
+      "updates": {
+        "xp": [],
+        "hp": [],
+        "inventory": [{ "player": "__ACTIVE_PLAYER__", "item": "Iron Key", "change": 1, "description": "A small, tarnished iron key found in a crack between the stones.", "change_type": "add", "attributes": {} }],
+        "gold": [],
+        "conditions": [],
+        "abilities": []
+      },
+      "prompt": "You found a small iron key. The passage continues ahead, with unsettling sounds echoing from the darkness.",
+      "roll": null,
+      "suggestions": [
+        "Pocket the key and press forward",
+        "Try to identify the footprints",
+        "Call out to whatever is ahead",
+        "Sneak closer to the murmuring sound",
+        "Go back and try a different route"
+      ],
+      "spellUsed": false,
+      "music": null
+    },
+    {
+      "text": "You draw your weapon and charge at the snarling goblin. It shrieks in surprise as you close the distance. Your blade arcs through the torchlight — a clean, decisive swing that catches the creature across its leather armor.<br><br>The goblin staggers back, clutching its side, but it's tougher than it looks. It bares its yellowed teeth and lunges at you with a rusty dagger, nicking your arm before you can pull away.<br><br>Two more goblins emerge from behind a stack of old crates, their eyes gleaming in the dark. This is about to get messy.",
+      "updates": {
+        "xp": [{ "player": "__ACTIVE_PLAYER__", "amount": 15, "reason": "Engaged goblin in melee combat" }],
+        "hp": [{ "player": "__ACTIVE_PLAYER__", "delta": -3, "reason": "Nicked by goblin's rusty dagger", "new_total": 0 }],
+        "inventory": [],
+        "gold": [],
+        "conditions": [],
+        "abilities": []
+      },
+      "prompt": "You wounded the goblin but took a scratch. Two more goblins have appeared from the shadows.",
+      "roll": { "sides": 20, "stats": ["STR"], "mods": 0, "dc": 13 },
+      "suggestions": [
+        "Focus on finishing the wounded goblin",
+        "Defend against the newcomers",
+        "Kick over the crates to slow them down",
+        "Fall back to a more defensible position",
+        "Shout for help from the party"
+      ],
+      "spellUsed": false,
+      "music": "tense_battle"
+    },
+    {
+      "text": "You reach into your pack and produce a healing potion, uncorking it with your teeth. The ruby-red liquid glows faintly as you down it in one gulp. Warmth floods through your body — cuts close, bruises fade, and the throbbing ache in your ribs subsides to a dull memory.<br><br>You feel refreshed and ready to press on. The corridor ahead opens into a wider chamber. Pale light filters down from cracks in the ceiling high above, illuminating a stone pedestal in the centre of the room. Something rests atop it, wrapped in rotting cloth.",
+      "updates": {
+        "xp": [],
+        "hp": [{ "player": "__ACTIVE_PLAYER__", "delta": 8, "reason": "Drank a healing potion", "new_total": 0 }],
+        "inventory": [{ "player": "__ACTIVE_PLAYER__", "item": "Healing Potion", "change": -1, "description": "A small vial of ruby-red healing liquid.", "change_type": "remove", "attributes": {} }],
+        "gold": [],
+        "conditions": [{ "player": "__ACTIVE_PLAYER__", "add": [], "remove": ["wounded"] }],
+        "abilities": []
+      },
+      "prompt": "You healed yourself. A chamber ahead holds a pedestal with something wrapped in cloth.",
+      "roll": null,
+      "suggestions": [
+        "Approach the pedestal carefully",
+        "Check the chamber for traps",
+        "Examine the light sources above",
+        "Unwrap whatever is on the pedestal",
+        "Wait and listen before entering"
+      ],
+      "spellUsed": false,
+      "music": "mystery"
+    },
+    {
+      "text": "You weave your fingers through the arcane gestures and speak the words of power. A bolt of shimmering energy streaks from your outstretched hand and slams into the skeletal warrior. The impact sends bone fragments scattering across the chamber floor as the creature crumbles into a heap of dusty remains.<br><br>The remaining skeleton hesitates, its hollow eye sockets flickering with pale green fire. It raises its rusted shield and takes a defensive stance, as if reconsidering its chances.<br><br>Behind it, the iron door it was guarding stands slightly ajar. A faint blue glow pulses from beyond.",
+      "updates": {
+        "xp": [{ "player": "__ACTIVE_PLAYER__", "amount": 25, "reason": "Destroyed a skeleton warrior with magic" }],
+        "hp": [],
+        "inventory": [],
+        "gold": [],
+        "conditions": [],
+        "abilities": []
+      },
+      "prompt": "One skeleton destroyed by your spell. Another stands guard before a glowing doorway.",
+      "roll": null,
+      "suggestions": [
+        "Cast another spell at the remaining skeleton",
+        "Rush past it through the door",
+        "Try to intimidate it into fleeing",
+        "Examine the blue glow from a distance",
+        "Search the destroyed skeleton's remains"
+      ],
+      "spellUsed": true,
+      "music": null
+    },
+    {
+      "text": "You kneel beside the locked chest and pull out your thieves' tools. The lock is old but well-made — dwarven craftsmanship, by the look of it. You insert your tension wrench and feel for the pins. <i>Click. Click. Click.</i> The mechanism gives way with a satisfying <b>thunk</b>.<br><br>Inside the chest, you find a small pile of gold coins, a rolled-up scroll sealed with black wax, and a dagger with a blade that seems to shimmer with a faint, oily iridescence. This is no ordinary blade.<br><br>Your companions gather around, eyebrows raised. Not a bad haul for a dusty old chest in a forgotten crypt.",
+      "updates": {
+        "xp": [{ "player": "__ACTIVE_PLAYER__", "amount": 10, "reason": "Successfully picked a dwarven lock" }],
+        "hp": [],
+        "inventory": [
+          { "player": "__ACTIVE_PLAYER__", "item": "Sealed Scroll", "change": 1, "description": "A parchment scroll sealed with black wax bearing an unfamiliar sigil.", "change_type": "add", "attributes": {} },
+          { "player": "__ACTIVE_PLAYER__", "item": "Shimmering Dagger", "change": 1, "description": "A dagger with an iridescent blade that seems to shift colours in the light.", "change_type": "add", "attributes": { "damage": "1d4+1", "type": "piercing", "magical": true } }
+        ],
+        "gold": [{ "player": "__ACTIVE_PLAYER__", "delta": 30 }],
+        "conditions": [],
+        "abilities": []
+      },
+      "prompt": "You picked the lock and found gold, a sealed scroll, and a magical dagger.",
+      "roll": null,
+      "suggestions": [
+        "Examine the shimmering dagger closely",
+        "Break the seal on the scroll",
+        "Pocket everything and move on",
+        "Share the loot with the party",
+        "Check the chest for a false bottom"
+      ],
+      "spellUsed": false,
+      "music": null
+    }
+  ]
+}

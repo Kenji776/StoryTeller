@@ -269,7 +269,7 @@ client/                 # Browser client (vanilla JS, no build step)
     campaignFlavors.json # Campaign tone and theme presets
     classProgression.json # Class ability unlocks per level
     library.json        # Music song list with mood tags
-    voices_cache.json   # Cached ElevenLabs voice list
+    voices_cache.json   # Cached ElevenLabs voice list (auto-generated, gitignored)
   music/                # Music files (.mp3)
   index.html            # Main game client
   app.js                # Client entry point and UI rendering
