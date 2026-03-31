@@ -478,6 +478,10 @@
 				<input type="radio" name="llmProvider" value="claude" id="providerClaude" style="accent-color:#7a50c8;cursor:pointer;" />
 				Claude
 			</label>
+			<label id="providerTestLabel" style="display:none;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
+				<input type="radio" name="llmProvider" value="test" id="providerTest" style="accent-color:#7a50c8;cursor:pointer;" />
+				Test Mode
+			</label>
 		</div>
 	</div>
 
@@ -535,6 +539,9 @@ const LLM_MODELS = {
 		{ value: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6" },
 		{ value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
 	],
+	test: [
+		{ value: "test-stub", label: "Canned Responses (no API)" },
+	],
 };
 
 // Feature availability (populated from /api/features)
@@ -553,6 +560,12 @@ function populateLLMModels(provider, currentModel) {
 function applyFeatureGating() {
 	const openaiRadio = document.getElementById("providerOpenAI");
 	const claudeRadio = document.getElementById("providerClaude");
+
+	// Show Test Mode provider in dev mode
+	if (features.devMode) {
+		const testLabel = document.getElementById("providerTestLabel");
+		testLabel.style.display = "flex";
+	}
 
 	// Disable unavailable LLM providers
 	if (!features.openai) {
@@ -575,9 +588,15 @@ function applyFeatureGating() {
 			populateLLMModels("openai", null);
 		}
 	}
-	if (!features.openai && !features.claude) {
+	if (!features.openai && !features.claude && !features.devMode) {
 		elLLMModel.innerHTML = '<option value="">No AI providers available</option>';
 		elLLMModel.disabled = true;
+	}
+	// If no real providers are available but devMode is on, auto-select Test Mode
+	if (!features.openai && !features.claude && features.devMode) {
+		const testRadio = document.getElementById("providerTest");
+		testRadio.checked = true;
+		populateLLMModels("test", null);
 	}
 
 	// Disable narrator voice if ElevenLabs is unavailable
