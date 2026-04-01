@@ -1,200 +1,283 @@
-// === Narration Stream Control (manual stop + interruption + fade-out + stream cancel) ===
-let mediaSource = null;
-let audioElement = null;
-let sourceBuffer = null;
-let queuedChunks = [];
-let isNarrating = false;
-let narrationCancelled = false;
-let activeStreamId = null;
-let audioQueue = [];
+// === Narration Stream Control ===
+// Two independent audio channels (DM + Player) so they never interfere.
+// Each channel is a self-contained MediaSource pipeline with its own queue.
 
-function initAudioStream() {
-	try {
-		// Clean up any existing stream
-		if (mediaSource) {
-			try {
-				if (mediaSource.readyState === "open") {
-					mediaSource.endOfStream();
-				}
-			} catch (e) {}
+class NarrationChannel {
+	constructor(name) {
+		this.name = name;
+		this.mediaSource = null;
+		this.audio = null;
+		this.sourceBuffer = null;
+		this.queue = [];
+		this.objectURL = null;
+		this.streamId = null;
+		this.active = false;
+		this.cancelled = false;
+		this._stopPromise = null;
+	}
+
+	// ── Pipeline helpers ─────────────────────────────────────────────────────
+
+	_pipelineReady() {
+		return (
+			this.mediaSource &&
+			this.mediaSource.readyState === "open" &&
+			this.sourceBuffer &&
+			!this.sourceBuffer.updating
+		);
+	}
+
+	_safeAppend(chunk) {
+		try {
+			if (!this.sourceBuffer || this.sourceBuffer.updating) return false;
+			this.sourceBuffer.appendBuffer(chunk);
+			return true;
+		} catch (err) {
+			console.warn(`⚠️ [${this.name}] appendBuffer failed — skipping:`, err.message);
+			return false;
 		}
+	}
 
-		if (audioElement) {
-			audioElement.pause();
-			audioElement.src = "";
+	_drainQueue() {
+		if (this.cancelled || !this.sourceBuffer) return;
+		while (this.queue.length > 0 && !this.sourceBuffer.updating) {
+			const next = this.queue.shift();
+			if (this._safeAppend(next)) return; // wait for updateend
 		}
+		this._tryPlay();
+	}
 
-		queuedChunks = [];
-		sourceBuffer = null; // Reset
+	_tryPlay() {
+		try {
+			if (!this.audio || !this.audio.paused || this.cancelled) return;
+			if (this.audio.buffered.length === 0) return;
+			const buffered = this.audio.buffered.end(0) - this.audio.currentTime;
+			if (buffered > 0.3) this.audio.play().catch(() => {});
+		} catch {}
+	}
 
-		// Create new MediaSource
-		mediaSource = new MediaSource();
-		audioElement = new Audio();
-		audioElement.src = URL.createObjectURL(mediaSource);
+	// ── Teardown ─────────────────────────────────────────────────────────────
 
-		mediaSource.addEventListener("sourceopen", () => {
-			console.log(`🔓 MediaSource sourceopen fired. readyState: ${mediaSource.readyState}`);
-
-			if (mediaSource.readyState !== "open") {
-				console.error("❌ MediaSource not open despite sourceopen event");
-				return;
+	_teardown() {
+		try { if (this.mediaSource && this.mediaSource.readyState === "open") this.mediaSource.endOfStream(); } catch {}
+		try {
+			if (this.audio) {
+				this.audio.onerror = null;
+				this.audio.pause();
+				this.audio.removeAttribute("src");
+				this.audio.load();
+				this.audio.remove();
 			}
+		} catch {}
+		if (this.objectURL) { try { URL.revokeObjectURL(this.objectURL); } catch {} this.objectURL = null; }
+		this.sourceBuffer = null;
+		this.mediaSource = null;
+		this.audio = null;
+		this.queue = [];
+	}
 
+	// ── Init ─────────────────────────────────────────────────────────────────
+
+	init(streamId) {
+		this._teardown();
+		this.streamId = streamId;
+		this.queue = [];
+		this.sourceBuffer = null;
+		this.cancelled = false;
+		this.active = true;
+
+		this.mediaSource = new MediaSource();
+		this.audio = new Audio();
+		this.objectURL = URL.createObjectURL(this.mediaSource);
+		this.audio.src = this.objectURL;
+
+		const ms = this.mediaSource;
+		const channel = this;
+
+		ms.addEventListener("sourceopen", () => {
+			if (channel.cancelled || ms !== channel.mediaSource || ms.readyState !== "open") return;
 			try {
-				sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
-				console.log("✅ SourceBuffer created successfully");
-
-				// CRITICAL: Process queued chunks when buffer is ready
-				sourceBuffer.addEventListener("updateend", () => {
-					console.log(`📤 updateend - queued: ${queuedChunks.length}, updating: ${sourceBuffer.updating}`);
-
-					if (narrationCancelled) {
-						return;
-					}
-
-					// Process next queued chunk
-					if (queuedChunks.length > 0 && !sourceBuffer.updating) {
-						const nextChunk = queuedChunks.shift();
-						try {
-							sourceBuffer.appendBuffer(nextChunk);
-							console.log(`📥 Appended queued chunk (${nextChunk.length} bytes). ${queuedChunks.length} remaining`);
-						} catch (err) {
-							console.error("❌ Error appending queued chunk:", err);
-						}
-					}
-
-					// Start playback once we have enough buffered
-					if (audioElement.paused && audioElement.buffered.length > 0) {
-						const buffered = audioElement.buffered.end(0) - audioElement.currentTime;
-						console.log(`🔊 Buffered: ${buffered.toFixed(2)}s, currentTime: ${audioElement.currentTime.toFixed(2)}s`);
-
-						if (buffered > 0.5) {
-							console.log("▶️ Attempting to play...");
-							audioElement
-								.play()
-								.then(() => console.log("✅ Playback started"))
-								.catch((err) => console.error("❌ Play failed:", err));
-						}
-					}
+				channel.sourceBuffer = ms.addSourceBuffer("audio/mpeg");
+				channel.sourceBuffer.addEventListener("updateend", () => channel._drainQueue());
+				channel.sourceBuffer.addEventListener("error", () => {
+					console.warn(`⚠️ [${channel.name}] SourceBuffer error — draining next`);
+					setTimeout(() => channel._drainQueue(), 0);
 				});
-
-				sourceBuffer.addEventListener("error", (e) => {
-					console.error("💥 SourceBuffer error:", e);
-				});
-
-				// Process any chunks that arrived before sourceBuffer was ready
-				if (queuedChunks.length > 0) {
-					console.log(`🔄 Processing ${queuedChunks.length} chunks that arrived early`);
-					const firstChunk = queuedChunks.shift();
-					try {
-						sourceBuffer.appendBuffer(firstChunk);
-						console.log(`✅ Appended first queued chunk (${firstChunk.length} bytes)`);
-					} catch (err) {
-						console.error("❌ Failed to append first chunk:", err);
-					}
-				}
+				channel._drainQueue();
 			} catch (err) {
-				console.error("💥 Failed to create SourceBuffer:", err);
+				console.error(`💥 [${channel.name}] SourceBuffer creation failed:`, err.message);
+				channel._signalDone();
 			}
 		});
 
-		mediaSource.addEventListener("error", (e) => {
-			//console.error("💥 MediaSource error:", e);
+		ms.addEventListener("error", () => {
+			console.warn(`⚠️ [${channel.name}] MediaSource error — signalling done`);
+			channel._signalDone();
 		});
 
-		audioElement.addEventListener("error", (e) => {
-			console.error("💥 Audio element error:");
-			console.error(e);
+		this.audio.addEventListener("error", () => {
+			if (channel.audio && !channel.cancelled) {
+				console.warn(`⚠️ [${channel.name}] Audio element error — continuing`);
+			}
 		});
 
-		audioElement.addEventListener("ended", () => {
-			console.log("🎵 Audio playback ended");
+		this.audio.addEventListener("ended", () => {
+			console.log(`🎵 [${channel.name}] Playback ended`);
+			channel._signalDone();
+		});
+
+		this.audio.addEventListener("canplay", () => channel._tryPlay());
+	}
+
+	// ── Reconstruct if broken ────────────────────────────────────────────────
+
+	_ensurePipeline() {
+		if (this.cancelled) return false;
+		const broken = !this.mediaSource || !this.audio || this.mediaSource.readyState === "closed";
+		if (!broken) return true;
+		console.warn(`⚠️ [${this.name}] Pipeline broken — reconstructing`);
+		const saved = this.queue.slice();
+		const sid = this.streamId;
+		this.init(sid);
+		this.queue.push(...saved);
+		return true;
+	}
+
+	// ── Public: append chunk ─────────────────────────────────────────────────
+
+	appendChunk(chunk) {
+		if (this.cancelled) return;
+		if (!this._ensurePipeline()) return;
+		if (this._pipelineReady()) {
+			if (!this._safeAppend(chunk)) this.queue.push(chunk);
+		} else {
+			this.queue.push(chunk);
+		}
+	}
+
+	// ── Public: finalize stream ──────────────────────────────────────────────
+
+	finalize() {
+		if (!this.mediaSource || this.mediaSource.readyState !== "open") {
+			this._signalDone();
+			return;
+		}
+
+		const channel = this;
+		const close = () => {
+			try { if (channel.mediaSource && channel.mediaSource.readyState === "open") channel.mediaSource.endOfStream(); } catch {}
+		};
+
+		if (this.sourceBuffer && (this.sourceBuffer.updating || this.queue.length > 0)) {
+			let elapsed = 0;
+			const MAX = 10_000, INT = 100;
+			const tick = () => {
+				if (channel.cancelled) return;
+				const drained = !channel.sourceBuffer || (!channel.sourceBuffer.updating && channel.queue.length === 0);
+				if (drained || elapsed >= MAX) {
+					if (elapsed >= MAX) console.warn(`⚠️ [${channel.name}] finalize timed out`);
+					close();
+				} else { elapsed += INT; setTimeout(tick, INT); }
+			};
+			tick();
+		} else {
+			close();
+		}
+	}
+
+	// ── Public: stop (with fade) ─────────────────────────────────────────────
+
+	async stop() {
+		if (this._stopPromise) { await this._stopPromise; return; }
+
+		const doStop = async () => {
+			this.cancelled = true;
+			if (this.active && this.audio) await this._fadeOut();
+			this._teardown();
+			this.active = false;
+		};
+
+		this._stopPromise = doStop();
+		try { await this._stopPromise; } finally { this._stopPromise = null; }
+	}
+
+	async _fadeOut() {
+		const el = this.audio;
+		if (!el) return;
+		const steps = 10, ms = 30;
+		const v0 = el.volume || 1.0;
+		for (let i = steps; i >= 0; i--) {
+			if (!this.audio || this.audio !== el) break;
+			try { el.volume = (i / steps) * v0; } catch { break; }
+			await new Promise(r => setTimeout(r, ms));
+		}
+		try { el.pause(); } catch {}
+	}
+
+	_signalDone() {
+		this.active = false;
+		// Only DM channel signals the server (turn timer), player channel
+		// finishing doesn't need to notify the server.
+		if (this.name === "DM") {
 			showNarratorIndicator(false);
-			isNarrating = false;
-		});
-
-		// canplay fires after endOfStream() so short narrations that never buffered
-		// 0.5 s will still play once all data has arrived
-		audioElement.addEventListener("canplay", () => {
-			if (audioElement.paused && !narrationCancelled) {
-				console.log("▶️ canplay — attempting play");
-				audioElement.play().catch((err) => console.error("❌ canplay play failed:", err));
-			}
-		});
-
-		audioElement.addEventListener("playing", () => {
-			//console.log("🎵 Audio started playing");
-		});
-
-		audioElement.addEventListener("waiting", () => {
-			//console.log("⏸️ Audio waiting for data");
-		});
-
-		console.log("🎬 MediaSource initialized, waiting for sourceopen...");
-	} catch (err) {
-		console.error("💥 initAudioStream failed:", err);
+			document.dispatchEvent(new CustomEvent("narration:playback:ended"));
+		}
 	}
 }
 
-/** Smooth fade-out before stopping playback */
-async function fadeOutAndStop() {
-	if (!audioElement) return;
-	const fadeSteps = 10;
-	const stepDuration = 30; // ms
-	const initialVolume = audioElement.volume || 1.0;
+// ── Two independent channels ─────────────────────────────────────────────────
 
-	for (let i = fadeSteps; i >= 0; i--) {
-		audioElement.volume = (i / fadeSteps) * initialVolume;
-		await new Promise((r) => setTimeout(r, stepDuration));
-	}
+const dmChannel     = new NarrationChannel("DM");
+const playerChannel = new NarrationChannel("Player");
 
-	try {
-		audioElement.pause();
-		audioElement.src = "";
-	} catch {}
-	audioElement.volume = initialVolume;
+/** Map a streamId to whichever channel owns it, or null. */
+function _channelForStream(streamId) {
+	if (dmChannel.streamId === streamId) return dmChannel;
+	if (playerChannel.streamId === streamId) return playerChannel;
+	return null;
 }
 
+// ── Public API (called from sockets.js and eventHandlers.js) ─────────────────
+
+/** Start a new narration stream on the appropriate channel. */
+function startNarration(speaker, streamId) {
+	const isDM = (speaker === "DM");
+	const channel = isDM ? dmChannel : playerChannel;
+
+	// If this channel already has an active stream, tear it down first
+	if (channel.active) channel._teardown();
+	channel.init(streamId);
+
+	const label = isDM ? "🔮 Narrating..." : `🗣️ ${speaker} speaking...`;
+	showNarratorIndicator(true, label);
+}
+
+/** Append an audio chunk to the channel that owns this streamId. */
+function appendAudioChunk(streamId, chunk) {
+	const ch = _channelForStream(streamId);
+	if (ch) ch.appendChunk(chunk);
+}
+
+/** Finalize the stream on the channel that owns this streamId. */
+function finalizeAudioStream(streamId) {
+	const ch = _channelForStream(streamId);
+	if (ch) {
+		ch.finalize();
+	} else {
+		// Stream not found — signal done so the game isn't stuck
+		document.dispatchEvent(new CustomEvent("narration:playback:ended"));
+	}
+}
+
+/** Stop all narration (both channels). Used by the stop button and handleSendAction. */
 async function stopNarration() {
-	console.log("🛑 stopNarration called");
-	narrationCancelled = true;
+	await Promise.all([dmChannel.stop(), playerChannel.stop()]);
+	showNarratorIndicator(false);
+}
 
-	if (isNarrating && audioElement) {
-		await fadeOutAndStop();
-	}
-
-	try {
-		if (mediaSource && mediaSource.readyState === "open") {
-			mediaSource.endOfStream();
-		}
-	} catch (err) {
-		console.warn("MediaSource endOfStream failed:", err);
-	}
-
-	// Cleanup - FIXED: Remove error listener before clearing src
-	try {
-		if (audioElement) {
-			// Remove error listener to prevent "Empty src" error
-			audioElement.onerror = null;
-			audioElement.pause();
-			audioElement.src = "";
-			audioElement.load(); // Important: call load() after clearing src
-			audioElement.remove();
-		}
-	} catch (err) {
-		console.warn("Audio cleanup failed:", err);
-	}
-
-	queuedChunks = [];
-	isNarrating = false;
-	sourceBuffer = null;
-	mediaSource = null;
-	audioElement = null;
-	// Only hide the indicator if narration hasn't already been restarted
-	// (a new narration:start can set isNarrating=true before this async cleanup finishes)
-	if (!isNarrating) {
-		showNarratorIndicator(false);
-	}
+/** Stop only the DM channel (used when player interrupts to submit action). */
+async function stopDMNarration() {
+	await dmChannel.stop();
 }
 
 stopNarrationBtn.addEventListener("click", stopNarration);

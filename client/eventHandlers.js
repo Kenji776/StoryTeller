@@ -236,12 +236,13 @@ function handleRandomizeCharacter() {
 }
 
 // === Send Action ===
-function handleSendAction() {
+async function handleSendAction() {
 	const text = els.actionInput.value.trim();
 	if (!text) return;
 	appendLog(`> ${me.name}: ${text}\n`);
 	els.actionInput.value = "";
-	stopNarration();
+	// Stop the DM narration so the player's action can be read on its own channel
+	await stopDMNarration();
 	socket.emit("action:submit", { lobbyId, text });
 }
 

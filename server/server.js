@@ -235,6 +235,8 @@ if (devMode) {
 const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
 const ELEVEN_VOICE_ID = process.env.ELEVEN_VOICE_ID || "dAcds2QMcvmv86jQMC3Y";
 const REJECTED_REQUEST_STATUS = 204; //this is the http status code that is sent if the server gets a request but decides to skip it, usually due to being in devmode
+const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60000;
+const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 12;
 const VOICE_CACHE_FILE = path.join(__dirname, "..", "client", "config", "voices_cache.json");
 
 let ELEVEN_VOICES = [];
@@ -478,12 +480,12 @@ async function handleTimerExpiry(lobbyId, playerName) {
 		const msgs = store.composeMessages(lobbyId, playerName, skipText, null);
 		const rawReply = await Promise.race([
 			getLLMResponse(msgs, llmOpts(lobbyId)),
-			new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout")), 25000)),
+			new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout")), LLM_TIMEOUT_MS)),
 		]);
 
 		const replyText = typeof rawReply === "string" ? rawReply.trim() : "";
 		if (replyText) {
-			const dmObj = parseDMJson(replyText);
+			const dmObj = await parseDMJson(replyText, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
 			const narrationText = dmObj?.text || replyText;
 
 			if (dmObj && typeof dmObj === "object") {
@@ -558,11 +560,11 @@ async function handleRestResolved(lobbyId, result, type, proposer) {
 		const msgs = store.composeMessages(lobbyId, proposer, restText, null);
 		const rawReply = await Promise.race([
 			getLLMResponse(msgs, llmOpts(lobbyId)),
-			new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout")), 25000)),
+			new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout")), LLM_TIMEOUT_MS)),
 		]);
 		const replyText = typeof rawReply === "string" ? rawReply.trim() : "";
 		if (replyText) {
-			const dmObj = parseDMJson(replyText);
+			const dmObj = await parseDMJson(replyText, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
 			let narrationText = dmObj?.text || replyText;
 			if (!dmObj) {
 				try {
@@ -1071,17 +1073,16 @@ io.on("connection", (socket) => {
 			let setupSuggestions = [];
 			let setupSfx = [];
 			if (typeof openingRaw === "string") {
-				try {
-					const setupObj = JSON.parse(openingRaw.trim());
+				const setupObj = await parseDMJson(openingRaw, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
+				if (setupObj) {
 					log(`🔍 [DEBUG] Parsed setup JSON: music=${setupObj.music}, suggestions=${JSON.stringify(setupObj.suggestions)}`);
 					cleanText = setupObj.text?.trim() || "[Error: no content returned]";
 					setupMusic = setupObj.music || null;
 					setupSuggestions = Array.isArray(setupObj.suggestions) ? setupObj.suggestions : [];
 					setupSfx = Array.isArray(setupObj.sfx) ? setupObj.sfx : [];
-				} catch (parseErr) {
-					log(`⚠️ [DEBUG] Setup JSON parse failed (${parseErr.message}) — falling back to plain text`);
-					// Fallback: treat the whole response as plain text
-					cleanText = openingRaw.trim();
+				} else {
+					log(`⚠️ [DEBUG] Setup JSON parse failed — falling back to plain text`);
+					cleanText = openingRaw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 				}
 			}
 			io.to(room(lobbyId)).emit("debug:setup", {
@@ -1100,11 +1101,10 @@ io.on("connection", (socket) => {
 
 			io.to(room(lobbyId)).emit("narration", { content: cleanText });
 
-			// Emit music and suggestions from the opening scene
-			if (setupMusic) {
-				store.setCurrentMusic(lobbyId, setupMusic);
-				io.to(room(lobbyId)).emit("music:change", { mood: setupMusic });
-			}
+			// Emit music from the opening scene (fall back to "exploration" if LLM didn't provide one)
+			const openingMood = setupMusic || "exploration";
+			store.setCurrentMusic(lobbyId, openingMood);
+			io.to(room(lobbyId)).emit("music:change", { mood: openingMood });
 			if (setupSuggestions.length) {
 				io.to(room(lobbyId)).emit("suggestions:update", { suggestions: setupSuggestions });
 			}
@@ -1210,9 +1210,10 @@ io.on("connection", (socket) => {
 			}
 
 			// --- STEP 2: LLM generates DM narration ---
-			console.time("LLM_response_time");
-			const rawReply = await Promise.race([getLLMResponse(msgs, llmOpts(lobbyId)), new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout after 25s")), 25000))]);
-			console.timeEnd("LLM_response_time");
+			const _timerLabel = `LLM_response_time_${lobbyId}_${Date.now()}`;
+			console.time(_timerLabel);
+			const rawReply = await Promise.race([getLLMResponse(msgs, llmOpts(lobbyId)), new Promise((_, rej) => setTimeout(() => rej(new Error(`LLM timeout after ${LLM_TIMEOUT_MS}ms`)), LLM_TIMEOUT_MS))]);
+			console.timeEnd(_timerLabel);
 
 			const replyText = typeof rawReply === "string" ? rawReply.trim() : "";
 			if (!replyText) {
@@ -1222,7 +1223,7 @@ io.on("connection", (socket) => {
 				return;
 			}
 
-			let dmObj = parseDMJson(replyText);
+			let dmObj = await parseDMJson(replyText, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
 			let narrationText = dmObj?.text || replyText;
 			// If parse failed, prevent raw JSON from poisoning history — strip to plain text best-effort
 			if (!dmObj) {
@@ -1310,6 +1311,11 @@ io.on("connection", (socket) => {
 
 			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 			io.to(room(lobbyId)).emit("ui:unlock");
+
+			// Background: compact history if it's grown too long
+			if (store.needsSummarization(lobbyId, HISTORY_SUMMARIZE_THRESHOLD)) {
+				store.autoSummarize(lobbyId, getLLMResponse, llmOpts(lobbyId)).catch(() => {});
+			}
 		} catch (err) {
 			console.error("💥 Error processing action:", err);
 			socket.emit("toast", {
@@ -1495,9 +1501,9 @@ io.on("connection", (socket) => {
 			// Feed it into the same LLM process
 			store.appendUser(lobbyId, actor.name, text);
 			const messages = store.composeMessages(lobbyId, actor.name, text);
-			getLLMResponse(messages, llmOpts(lobbyId)).then((dm) => {
+			getLLMResponse(messages, llmOpts(lobbyId)).then(async (dm) => {
 				const replyText = typeof dm === "string" ? dm.trim() : "";
-				const dmObj = parseDMJson(replyText);
+				const dmObj = await parseDMJson(replyText, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
 				const narrationText = dmObj?.text || replyText;
 				store.appendDM(lobbyId, narrationText);
 				io.to(room(lobbyId)).emit("narration", { content: narrationText });
@@ -1894,8 +1900,28 @@ function getAvailableCharacters(lobby) {
 		}));
 }
 
+// Compact schema used when asking the LLM to repair malformed JSON
+const DM_JSON_SCHEMA = `{
+  "text": string,
+  "updates": {
+    "xp": [{ "player": string, "amount": number, "reason": string }],
+    "hp": [{ "player": string, "delta": number, "reason": string, "new_total": number }],
+    "inventory": [{ "player": string, "item": string, "change": number, "description": string, "change_type": "add"|"remove", "attributes": object }],
+    "gold": [{ "player": string, "delta": number }],
+    "conditions": [{ "player": string, "add": string[], "remove": string[] }],
+    "abilities": [{ "player": string, "change_type": "add"|"remove", "name": string, "description": string, "attributes": object }]
+  },
+  "prompt": string,
+  "roll": { "sides": number, "stats": string[], "mods": number, "dc": number } | null,
+  "suggestions": string[],
+  "spellUsed": boolean,
+  "music": string | null,
+  "sfx": string[]
+}`;
+
 // Extract and parse the first JSON object from a string. Be tolerant to code fences, bare newlines, and unescaped quotes in string values.
-function parseDMJson(text) {
+// When llmRepairOpts is provided ({ getLLMResponse, llmOpts }), invalid JSON is sent back to the LLM for repair (up to 2 attempts) before falling back to local text hacks.
+async function parseDMJson(text, llmRepairOpts) {
   if (!text) return null;
 
   text = String(text).trim();
@@ -1922,17 +1948,48 @@ function parseDMJson(text) {
 
   // Attempt 1: standard parse
   try { return unwrap(JSON.parse(slice)); } catch (e1) {
-    console.warn(`⚠️ parseDMJson attempt 1 failed: ${e1.message}`);
+    console.warn(`⚠️ parseDMJson attempt 1 (standard parse) failed: ${e1.message}`);
   }
 
-  // Attempt 2: escape bare newlines/tabs inside string values
+  // Attempt 2-3: ask the LLM to fix its own malformed JSON (up to 2 tries)
+  if (llmRepairOpts?.getLLMResponse && llmRepairOpts?.llmOpts) {
+    let lastBadJson = slice;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        console.warn(`🔧 parseDMJson: requesting LLM repair (attempt ${attempt}/2)...`);
+        const repairReply = await llmRepairOpts.getLLMResponse([
+          {
+            role: "system",
+            content: `You are a JSON repair assistant. The following JSON is malformed and cannot be parsed. Fix it so it is valid JSON conforming to this schema:\n\n${DM_JSON_SCHEMA}\n\nRules:\n- Return ONLY the repaired JSON object — no markdown, no code fences, no explanation.\n- Preserve all original content/values — only fix structural JSON issues (missing commas, unescaped quotes, trailing commas, unclosed braces, etc.).\n- Do NOT add or remove fields beyond what is already present.`,
+          },
+          {
+            role: "user",
+            content: lastBadJson,
+          },
+        ], llmRepairOpts.llmOpts);
+
+        const repairText = typeof repairReply === "string" ? repairReply.trim() : "";
+        // Strip code fences the repair LLM might add
+        const cleaned = repairText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        const parsed = JSON.parse(cleaned);
+        console.log(`✅ parseDMJson: LLM repair attempt ${attempt} succeeded`);
+        return unwrap(parsed);
+      } catch (err) {
+        console.warn(`⚠️ parseDMJson LLM repair attempt ${attempt} failed: ${err.message}`);
+        // On the second attempt, feed the latest (still broken) reply back
+        // so the LLM can see its own prior repair attempt
+      }
+    }
+  }
+
+  // Attempt 4: escape bare newlines/tabs inside string values
   try {
     return unwrap(JSON.parse(slice.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t')));
   } catch (e2) {
-    console.warn(`⚠️ parseDMJson attempt 2 failed: ${e2.message}`);
+    console.warn(`⚠️ parseDMJson attempt (newline escape) failed: ${e2.message}`);
   }
 
-  // Attempt 3: repair unescaped double-quotes inside JSON string values.
+  // Attempt 5: repair unescaped double-quotes inside JSON string values.
   // Strategy: walk the string character-by-character tracking whether we're inside
   // a JSON string, and escape any " that isn't already preceded by a backslash
   // and isn't the opening/closing quote of a key or value.
@@ -1975,7 +2032,7 @@ function parseDMJson(text) {
     }
     return unwrap(JSON.parse(repaired));
   } catch (e3) {
-    console.warn(`⚠️ parseDMJson attempt 3 failed: ${e3.message}`);
+    console.warn(`⚠️ parseDMJson attempt (quote repair) failed: ${e3.message}`);
   }
 
   return null;
@@ -2024,6 +2081,12 @@ async function streamNarrationToClients(io, lobbyId, text, voiceId, playerName) 
 
 		if (!ELEVEN_API_KEY) {
 			console.warn("⚠️ ElevenLabs API key not set, skipping TTS.");
+			io.to(room(lobbyId)).emit("narration:start", {
+				speaker: playerName || "DM",
+				streamId,
+				status: REJECTED_REQUEST_STATUS,
+			});
+			io.to(room(lobbyId)).emit("narration:audio:end", { streamId, status: REJECTED_REQUEST_STATUS });
 			return;
 		}
 
@@ -2044,7 +2107,7 @@ async function streamNarrationToClients(io, lobbyId, text, voiceId, playerName) 
 				continue;
 			}
 
-			cleanText = playerName ? playerName + " says " + cleanText : cleanText;
+			// Don't prefix player name — just read their words directly for immersion
 			const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
 				method: "POST",
 				headers: {

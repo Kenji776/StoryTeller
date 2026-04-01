@@ -484,6 +484,61 @@ export class LobbyStore {
 		s.history = [{ role: "assistant", content }];
 		this.persist(lobbyId);
 	}
+
+	/** Returns true if history is long enough to benefit from summarization. */
+	needsSummarization(lobbyId, threshold) {
+		const s = this.index[lobbyId];
+		return s ? s.history.length >= threshold : false;
+	}
+
+	/**
+	 * Compact history: summarise everything except the most recent `keep`
+	 * messages into storyContext, then trim history.
+	 * @param {Function} getLLMResponse - the LLM call function
+	 * @param {object}   llmOpts       - { provider, model }
+	 * @param {number}   keep          - how many recent messages to preserve (default 6)
+	 */
+	async autoSummarize(lobbyId, getLLMResponse, llmOpts, keep = 6) {
+		const s = this.index[lobbyId];
+		if (!s || s.history.length <= keep) return;
+
+		const toSummarize = s.history.slice(0, -keep);
+		const recentHistory = s.history.slice(-keep);
+
+		// Build a condensed transcript from the old messages
+		const transcript = toSummarize.map(m => {
+			const speaker = m.role === "assistant" ? "DM" : (m.name || "Player");
+			// Truncate very long DM narrations to avoid blowing up the summary prompt
+			let text = m.content || "";
+			if (text.length > 500) text = text.slice(0, 500) + "…";
+			return `${speaker}: ${text}`;
+		}).join("\n");
+
+		const existingSummary = s.storyContext || "";
+
+		try {
+			console.log(`📝 Auto-summarizing lobby ${lobbyId}: compacting ${toSummarize.length} messages, keeping ${recentHistory.length}`);
+			const reply = await getLLMResponse([
+				{
+					role: "system",
+					content: `You are a story summarizer for a D&D game. Condense the following game events into a concise narrative summary (max 300 words). Preserve key plot points, NPC names, locations, ongoing threats, unresolved hooks, and important player decisions. Drop routine combat details, dice rolls, and mechanical updates. Write in past tense, third person. Return ONLY the summary text — no JSON, no markdown.`,
+				},
+				{
+					role: "user",
+					content: `Previous summary:\n${existingSummary}\n\nNew events to incorporate:\n${transcript}`,
+				},
+			], llmOpts);
+
+			const summary = typeof reply === "string" ? reply.trim() : existingSummary;
+			s.storyContext = summary;
+			s.history = recentHistory;
+			this.persist(lobbyId);
+			console.log(`✅ Auto-summary complete for lobby ${lobbyId}: ${summary.length} chars, ${s.history.length} messages kept`);
+		} catch (err) {
+			console.warn(`⚠️ Auto-summarize failed for lobby ${lobbyId}: ${err.message} — history preserved`);
+			// Don't discard history on failure
+		}
+	}
 	playersSummary(lobbyId) {
 		const s = this.index[lobbyId];
 		if (!s) return "";
@@ -698,8 +753,8 @@ Always populate the "suggestions" array with 3–5 short action phrases (max 8 w
 			content: `SPELL SLOT / ABILITY USE STATUS (authoritative — do not guess or override):\n${spellLines}\n\nRules:\n- A player can only cast a spell or activate an ability if it is in their known list AND they have slots remaining.\n- Slots are shared between spells and abilities. Each use costs one slot.\n- If the ability/spell is not in their list, or remaining slots = 0, the action FAILS. You MUST reject it — narrate the consequence (embarrassing misfire, wild surge, nothing happens, ability fizzles, etc.) and set "spellUsed": false.\n- If a spell or ability is successfully used, set "spellUsed": true. The server will deduct the slot.\n- Always set "spellUsed": false when no spell or ability was used this turn.\n- IMPORTANT: You must NEVER allow a player to use a spell or ability when remaining slots = 0. This is a hard rule.`,
 		});
 
-		// Recent history for continuity
-		base.push(...(s.history || []).slice(-8));
+		// Recent history for continuity (kept small — older events live in storyContext via auto-summarization)
+		base.push(...(s.history || []).slice(-6));
 
 		// Player action (use sanitized name)
 		base.push({ role: "user", name: safeName, content: String(action) });
@@ -752,6 +807,7 @@ Always populate the "suggestions" array with 3–5 short action phrases (max 8 w
 			llmModel:    s.llmModel    || null,
 			chat: s.chat?.slice(-50) || [],
 			party,
+			currentMusic: s.currentMusic || null,
 		};
 	}
 
