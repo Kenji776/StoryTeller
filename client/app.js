@@ -94,6 +94,40 @@ function showToast(message, type = "info", duration = 4000) {
 }
 
 
+/** === DEV MODE: Quick Start === **/
+async function handleQuickStart() {
+	showLoading("⚡ Quick-starting test game...");
+
+	// 1. Create lobby
+	socket.emit("lobby:create", {});
+
+	// 2. Wait for lobby creation, then set up character and start
+	socket.once("lobby:created", async ({ lobbyId: id, code }) => {
+		lobbyId = id;
+		lobbyCode = code;
+		iAmHost = true;
+		show(els.lobby);
+		enterLobbyMode(code);
+
+		// 3. Randomize and save character
+		await randomizeCharacter();
+		me.name = (document.getElementById("name")?.value || "").trim() || "TestHero";
+		const sheet = buildCurrentSheet();
+		socket.emit("player:sheet", { lobbyId, name: me.name, sheet });
+
+		// 4. Small delay to let server process the sheet
+		await new Promise(r => setTimeout(r, 300));
+
+		// 5. Emit quickstart — server sets LLM to test + marks ready
+		socket.emit("game:quickstart", { lobbyId });
+
+		// 6. Server signals ready — now start the game via normal flow
+		socket.once("game:quickstart:ready", () => {
+			socket.emit("game:start", { lobbyId });
+		});
+	});
+}
+
 // Fetch voices from the server
 async function loadVoices() {
 	try {

@@ -1,0 +1,1043 @@
+{
+	"_instructions": "Add your sound effect files to client/sfx/ and list them in the 'effects' array. Each effect needs a 'file' (filename), 'name' (friendly display name), and 'tags' array. Categories group related effects together for browsing and generation.",
+	"categories": {
+		"combat": [
+			"sword",
+			"clash",
+			"metal",
+			"impact",
+			"fighting",
+			"weapon",
+			"battle",
+			"melee",
+			"strike",
+			"parry"
+		],
+		"magic": [
+			"spell",
+			"magic",
+			"arcane",
+			"mystical",
+			"enchantment",
+			"conjuration",
+			"elemental",
+			"energy",
+			"casting",
+			"aura"
+		],
+		"creature": [
+			"monster",
+			"beast",
+			"creature",
+			"roar",
+			"growl",
+			"screech",
+			"animal",
+			"fantasy",
+			"threatening",
+			"wild"
+		],
+		"environment": [
+			"ambient",
+			"nature",
+			"weather",
+			"wind",
+			"thunder",
+			"rain",
+			"fire",
+			"water",
+			"cave",
+			"forest"
+		],
+		"human": [
+			"voice",
+			"shout",
+			"scream",
+			"crowd",
+			"footsteps",
+			"breathing",
+			"speech",
+			"reaction",
+			"human",
+			"vocal"
+		],
+		"mechanical": [
+			"door",
+			"lock",
+			"chain",
+			"mechanism",
+			"gear",
+			"metal",
+			"stone",
+			"wood",
+			"creak",
+			"machinery"
+		],
+		"explosion": [
+			"boom",
+			"blast",
+			"explosion",
+			"destruction",
+			"shatter",
+			"crash",
+			"rumble",
+			"debris",
+			"collapse",
+			"impact"
+		],
+		"ui": [
+			"notification",
+			"alert",
+			"confirm",
+			"deny",
+			"pickup",
+			"reward",
+			"levelup",
+			"achievement",
+			"interface",
+			"feedback"
+		]
+	},
+	"effects": [
+		{
+			"name": "Fireball Whoosh",
+			"file": "fireball_whoosh_mnf6w5ktiwho.mp3",
+			"tags": [
+				"magic",
+				"elemental",
+				"fire",
+				"spell",
+				"casting",
+				"whoosh",
+				"explosion"
+			],
+			"_generated": {
+				"prompt": "A sound effect of fireball whoosh",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:36.013Z"
+			}
+		},
+		{
+			"name": "Dragon Roar",
+			"file": "dragon_roar_mnf6w8dr4jz3.mp3",
+			"tags": [
+				"creature",
+				"roar",
+				"monster",
+				"beast",
+				"dragon",
+				"threatening",
+				"fantasy"
+			],
+			"_generated": {
+				"prompt": "A sound effect of dragon roar",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:39.461Z"
+			}
+		},
+		{
+			"name": "Woman Scream",
+			"file": "woman_scream_mnf6wb1e6ft9.mp3",
+			"tags": [
+				"human",
+				"scream",
+				"voice",
+				"vocal",
+				"reaction",
+				"fear",
+				"female"
+			],
+			"_generated": {
+				"prompt": "A sound effect of woman scream",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:42.841Z"
+			}
+		},
+		{
+			"name": "Sword Clash",
+			"file": "sword_clash_mnf6wdn8hck5.mp3",
+			"tags": [
+				"combat",
+				"sword",
+				"clash",
+				"metal",
+				"impact",
+				"weapon",
+				"melee"
+			],
+			"_generated": {
+				"prompt": "A sound effect of sword clash",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:46.150Z"
+			}
+		},
+		{
+			"name": "Battle Yelling",
+			"file": "battle_yelling_mnf6wg7aw7ju.mp3",
+			"tags": [
+				"human",
+				"shout",
+				"crowd",
+				"battle",
+				"voice",
+				"fighting",
+				"war cry"
+			],
+			"_generated": {
+				"prompt": "A sound effect of battle yelling",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:49.507Z"
+			}
+		},
+		{
+			"name": "Lightning Strike",
+			"file": "lightning_strike_mnf6wiuhkswx.mp3",
+			"tags": [
+				"magic",
+				"elemental",
+				"thunder",
+				"energy",
+				"weather",
+				"boom",
+				"electric"
+			],
+			"_generated": {
+				"prompt": "A sound effect of lightning strike",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:52.964Z"
+			}
+		},
+		{
+			"name": "Heavy Door Creak",
+			"file": "heavy_door_creak_mnf6wlgldsdw.mp3",
+			"tags": [
+				"mechanical",
+				"door",
+				"creak",
+				"wood",
+				"dungeon",
+				"eerie",
+				"old"
+			],
+			"_generated": {
+				"prompt": "A sound effect of heavy door creak",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:56.359Z"
+			}
+		},
+		{
+			"name": "Arrow Fly-By",
+			"file": "arrow_fly_by_mnf6wo2svbeq.mp3",
+			"tags": [
+				"combat",
+				"weapon",
+				"whoosh",
+				"arrow",
+				"ranged",
+				"fast",
+				"projectile"
+			],
+			"_generated": {
+				"prompt": "A sound effect of arrow fly-by",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:29:59.909Z"
+			}
+		},
+		{
+			"name": "Treasure Chest Open",
+			"file": "treasure_chest_open_mnf6wqthkpnx.mp3",
+			"tags": [
+				"mechanical",
+				"wood",
+				"creak",
+				"reward",
+				"pickup",
+				"loot",
+				"chest"
+			],
+			"_generated": {
+				"prompt": "A sound effect of treasure chest open",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:03.366Z"
+			}
+		},
+		{
+			"name": "Healing Spell Chime",
+			"file": "healing_spell_chime_mnf6wthk7uyg.mp3",
+			"tags": [
+				"magic",
+				"spell",
+				"mystical",
+				"enchantment",
+				"healing",
+				"chime",
+				"warm"
+			],
+			"_generated": {
+				"prompt": "A sound effect of healing spell chime",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:06.767Z"
+			}
+		},
+		{
+			"name": "Wolf Howl",
+			"file": "wolf_howl_mnf6ww3rs42c.mp3",
+			"tags": [
+				"creature",
+				"animal",
+				"wild",
+				"howl",
+				"night",
+				"nature",
+				"eerie"
+			],
+			"_generated": {
+				"prompt": "A sound effect of wolf howl",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:10.219Z"
+			}
+		},
+		{
+			"name": "Shield Block",
+			"file": "shield_block_mnf6wyrm2xxn.mp3",
+			"tags": [
+				"combat",
+				"metal",
+				"impact",
+				"parry",
+				"defense",
+				"clang",
+				"shield"
+			],
+			"_generated": {
+				"prompt": "A sound effect of shield block",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:13.650Z"
+			}
+		},
+		{
+			"name": "Potion Bubble",
+			"file": "potion_bubble_mnf6x1fa2axz.mp3",
+			"tags": [
+				"magic",
+				"alchemy",
+				"liquid",
+				"bubble",
+				"brewing",
+				"mystical",
+				"glass"
+			],
+			"_generated": {
+				"prompt": "A sound effect of potion bubble",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:17.421Z"
+			}
+		},
+		{
+			"name": "Stone Grinding",
+			"file": "stone_grinding_mnf6x4c12snr.mp3",
+			"tags": [
+				"mechanical",
+				"stone",
+				"heavy",
+				"dungeon",
+				"secret passage",
+				"rumble",
+				"grinding"
+			],
+			"_generated": {
+				"prompt": "A sound effect of stone grinding",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:20.970Z"
+			}
+		},
+		{
+			"name": "Ghostly Whisper",
+			"file": "ghostly_whisper_mnf6x72az8m6.mp3",
+			"tags": [
+				"creature",
+				"ghost",
+				"eerie",
+				"whisper",
+				"undead",
+				"haunting",
+				"spectral"
+			],
+			"_generated": {
+				"prompt": "A sound effect of ghostly whisper",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:34.460Z"
+			}
+		},
+		{
+			"name": "Campfire Crackle",
+			"file": "campfire_crackle_mnf6xhh9cdpi.mp3",
+			"tags": [
+				"environment",
+				"fire",
+				"ambient",
+				"nature",
+				"warm",
+				"camp",
+				"crackling"
+			],
+			"_generated": {
+				"prompt": "A sound effect of campfire crackle",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:38.052Z"
+			}
+		},
+		{
+			"name": "Ice Shatter",
+			"file": "ice_shatter_mnf6xk8yefa4.mp3",
+			"tags": [
+				"magic",
+				"elemental",
+				"shatter",
+				"ice",
+				"frost",
+				"impact",
+				"crystalline"
+			],
+			"_generated": {
+				"prompt": "A sound effect of ice shatter",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:41.444Z"
+			}
+		},
+		{
+			"name": "War Horn Blast",
+			"file": "war_horn_blast_mnf6xmv0exwj.mp3",
+			"tags": [
+				"combat",
+				"battle",
+				"horn",
+				"signal",
+				"war",
+				"brass",
+				"deep"
+			],
+			"_generated": {
+				"prompt": "A sound effect of war horn blast",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:44.875Z"
+			}
+		},
+		{
+			"name": "Spell Fizzle",
+			"file": "spell_fizzle_mnf6xpimrwtl.mp3",
+			"tags": [
+				"magic",
+				"spell",
+				"fail",
+				"arcane",
+				"spark",
+				"fizzle",
+				"poof"
+			],
+			"_generated": {
+				"prompt": "A sound effect of spell fizzle",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:48.319Z"
+			}
+		},
+		{
+			"name": "Horse Gallop",
+			"file": "horse_gallop_mnf6xs61scuu.mp3",
+			"tags": [
+				"creature",
+				"animal",
+				"hooves",
+				"gallop",
+				"travel",
+				"horse",
+				"fast"
+			],
+			"_generated": {
+				"prompt": "A sound effect of horse gallop",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:51.858Z"
+			}
+		},
+		{
+			"name": "Chain Rattle",
+			"file": "chain_rattle_mnf6xuwgukl9.mp3",
+			"tags": [
+				"mechanical",
+				"chain",
+				"metal",
+				"dungeon",
+				"prison",
+				"rattle",
+				"clinking"
+			],
+			"_generated": {
+				"prompt": "A sound effect of chain rattle",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:55.349Z"
+			}
+		},
+		{
+			"name": "Thunder Clap",
+			"file": "thunder_clap_mnf6xxldwyjj.mp3",
+			"tags": [
+				"environment",
+				"thunder",
+				"weather",
+				"boom",
+				"storm",
+				"loud",
+				"rumble"
+			],
+			"_generated": {
+				"prompt": "A sound effect of thunder clap",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:30:58.692Z"
+			}
+		},
+		{
+			"name": "Goblin Cackle",
+			"file": "goblin_cackle_mnf6y06aqbjt.mp3",
+			"tags": [
+				"creature",
+				"monster",
+				"goblin",
+				"voice",
+				"laugh",
+				"sinister",
+				"fantasy"
+			],
+			"_generated": {
+				"prompt": "A sound effect of goblin cackle",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:01.995Z"
+			}
+		},
+		{
+			"name": "Bow String Release",
+			"file": "bow_string_release_mnf6y2q3mi5o.mp3",
+			"tags": [
+				"combat",
+				"weapon",
+				"bow",
+				"twang",
+				"ranged",
+				"string",
+				"snap"
+			],
+			"_generated": {
+				"prompt": "A sound effect of bow string release",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:05.319Z"
+			}
+		},
+		{
+			"name": "Waterfall Rush",
+			"file": "waterfall_rush_mnf6y5ae045l.mp3",
+			"tags": [
+				"environment",
+				"water",
+				"nature",
+				"ambient",
+				"flowing",
+				"rushing",
+				"river"
+			],
+			"_generated": {
+				"prompt": "A sound effect of waterfall rush",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:08.683Z"
+			}
+		},
+		{
+			"name": "Teleport Zap",
+			"file": "teleport_zap_mnf6y7vpyh33.mp3",
+			"tags": [
+				"magic",
+				"spell",
+				"arcane",
+				"energy",
+				"teleport",
+				"zap",
+				"dimensional"
+			],
+			"_generated": {
+				"prompt": "A sound effect of teleport zap",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:12.072Z"
+			}
+		},
+		{
+			"name": "Armor Equip",
+			"file": "armor_equip_mnf6yahrcuop.mp3",
+			"tags": [
+				"combat",
+				"metal",
+				"armor",
+				"equip",
+				"clank",
+				"gear",
+				"mechanical"
+			],
+			"_generated": {
+				"prompt": "A sound effect of armor equip",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:15.698Z"
+			}
+		},
+		{
+			"name": "Cave Drip Echo",
+			"file": "cave_drip_echo_mnf6ydavturu.mp3",
+			"tags": [
+				"environment",
+				"cave",
+				"water",
+				"ambient",
+				"drip",
+				"echo",
+				"underground"
+			],
+			"_generated": {
+				"prompt": "A sound effect of cave drip echo",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:19.059Z"
+			}
+		},
+		{
+			"name": "Explosion Blast",
+			"file": "explosion_blast_mnf6yfw9qp8c.mp3",
+			"tags": [
+				"explosion",
+				"boom",
+				"blast",
+				"destruction",
+				"impact",
+				"debris",
+				"loud"
+			],
+			"_generated": {
+				"prompt": "A sound effect of explosion blast",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:22.509Z"
+			}
+		},
+		{
+			"name": "Level Up Fanfare",
+			"file": "level_up_fanfare_mnf6yijp6b51.mp3",
+			"tags": [
+				"ui",
+				"levelup",
+				"reward",
+				"achievement",
+				"fanfare",
+				"positive",
+				"chime"
+			],
+			"_generated": {
+				"prompt": "A sound effect of level up fanfare",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:25.899Z"
+			}
+		},
+		{
+			"name": "Death Knell Bell",
+			"file": "death_knell_bell_mnf6yl66gypd.mp3",
+			"tags": [
+				"environment",
+				"bell",
+				"death",
+				"somber",
+				"toll",
+				"ominous",
+				"deep"
+			],
+			"_generated": {
+				"prompt": "A sound effect of death knell bell",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:29.324Z"
+			}
+		},
+		{
+			"name": "Dagger Stab",
+			"file": "dagger_stab_mnf6yntcspqs.mp3",
+			"tags": [
+				"combat",
+				"weapon",
+				"stab",
+				"melee",
+				"strike",
+				"sharp",
+				"quick"
+			],
+			"_generated": {
+				"prompt": "A sound effect of dagger stab",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:32.737Z"
+			}
+		},
+		{
+			"name": "Orc Battle Cry",
+			"file": "orc_battle_cry_mnf6yqfv6o0l.mp3",
+			"tags": [
+				"creature",
+				"monster",
+				"shout",
+				"battle",
+				"orc",
+				"war cry",
+				"aggressive"
+			],
+			"_generated": {
+				"prompt": "A sound effect of orc battle cry",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:36.213Z"
+			}
+		},
+		{
+			"name": "Magic Portal Hum",
+			"file": "magic_portal_hum_mnf6yt4pkuyf.mp3",
+			"tags": [
+				"magic",
+				"arcane",
+				"energy",
+				"portal",
+				"hum",
+				"dimensional",
+				"ambient"
+			],
+			"_generated": {
+				"prompt": "A sound effect of magic portal hum",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:39.626Z"
+			}
+		},
+		{
+			"name": "Falling Rocks",
+			"file": "falling_rocks_mnf6yvrfgy5f.mp3",
+			"tags": [
+				"environment",
+				"stone",
+				"collapse",
+				"rumble",
+				"debris",
+				"cave",
+				"impact"
+			],
+			"_generated": {
+				"prompt": "A sound effect of falling rocks",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:43.053Z"
+			}
+		},
+		{
+			"name": "Coin Pouch Jingle",
+			"file": "coin_pouch_jingle_mnf6yyehe52u.mp3",
+			"tags": [
+				"mechanical",
+				"metal",
+				"coin",
+				"jingle",
+				"loot",
+				"gold",
+				"reward"
+			],
+			"_generated": {
+				"prompt": "A sound effect of coin pouch jingle",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:46.459Z"
+			}
+		},
+		{
+			"name": "Wand Casting Swish",
+			"file": "wand_casting_swish_mnf6z116xyhh.mp3",
+			"tags": [
+				"magic",
+				"spell",
+				"casting",
+				"swish",
+				"whoosh",
+				"arcane",
+				"wand"
+			],
+			"_generated": {
+				"prompt": "A sound effect of wand casting swish",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:49.835Z"
+			}
+		},
+		{
+			"name": "Crow Caw",
+			"file": "crow_caw_mnf6z3mp8h1t.mp3",
+			"tags": [
+				"creature",
+				"animal",
+				"bird",
+				"nature",
+				"ominous",
+				"eerie",
+				"crow"
+			],
+			"_generated": {
+				"prompt": "A sound effect of crow caw",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:53.163Z"
+			}
+		},
+		{
+			"name": "Forge Hammer Strike",
+			"file": "forge_hammer_strike_mnf6z67kbxrd.mp3",
+			"tags": [
+				"mechanical",
+				"metal",
+				"impact",
+				"hammer",
+				"forge",
+				"anvil",
+				"crafting"
+			],
+			"_generated": {
+				"prompt": "A sound effect of forge hammer strike",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:31:57.214Z"
+			}
+		},
+		{
+			"name": "Wind Gust",
+			"file": "wind_gust_mnf6z9c1pu9b.mp3",
+			"tags": [
+				"environment",
+				"wind",
+				"nature",
+				"ambient",
+				"weather",
+				"rushing",
+				"howling"
+			],
+			"_generated": {
+				"prompt": "A sound effect of wind gust",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:02.504Z"
+			}
+		},
+		{
+			"name": "Zombie Groan",
+			"file": "zombie_groan_mnf6zdevqhba.mp3",
+			"tags": [
+				"creature",
+				"undead",
+				"monster",
+				"groan",
+				"zombie",
+				"eerie",
+				"horror"
+			],
+			"_generated": {
+				"prompt": "A sound effect of zombie groan",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:06.156Z"
+			}
+		},
+		{
+			"name": "Critical Hit Impact",
+			"file": "critical_hit_impact_mnf6zg82ho5z.mp3",
+			"tags": [
+				"combat",
+				"impact",
+				"strike",
+				"critical",
+				"powerful",
+				"melee",
+				"crunch"
+			],
+			"_generated": {
+				"prompt": "A sound effect of critical hit impact",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:09.622Z"
+			}
+		},
+		{
+			"name": "Scroll Unroll",
+			"file": "scroll_unroll_mnf6ziwn55o0.mp3",
+			"tags": [
+				"mechanical",
+				"paper",
+				"scroll",
+				"unroll",
+				"magic",
+				"parchment",
+				"ancient"
+			],
+			"_generated": {
+				"prompt": "A sound effect of scroll unroll",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:13.027Z"
+			}
+		},
+		{
+			"name": "Swamp Bubbles",
+			"file": "swamp_bubbles_mnf6zlj60e9w.mp3",
+			"tags": [
+				"environment",
+				"water",
+				"swamp",
+				"bubble",
+				"nature",
+				"eerie",
+				"ambient"
+			],
+			"_generated": {
+				"prompt": "A sound effect of swamp bubbles",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:16.463Z"
+			}
+		},
+		{
+			"name": "Man Battle Grunt",
+			"file": "man_battle_grunt_mnf6zo6flr68.mp3",
+			"tags": [
+				"human",
+				"voice",
+				"shout",
+				"fighting",
+				"grunt",
+				"effort",
+				"male"
+			],
+			"_generated": {
+				"prompt": "A sound effect of man battle grunt",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:19.824Z"
+			}
+		},
+		{
+			"name": "Dark Incantation",
+			"file": "dark_incantation_mnf6zqs0k7te.mp3",
+			"tags": [
+				"magic",
+				"spell",
+				"arcane",
+				"dark",
+				"chanting",
+				"sinister",
+				"ritual"
+			],
+			"_generated": {
+				"prompt": "A sound effect of dark incantation",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:23.182Z"
+			}
+		},
+		{
+			"name": "Wooden Bridge Creak",
+			"file": "wooden_bridge_creak_mnf6ztdbndvm.mp3",
+			"tags": [
+				"mechanical",
+				"wood",
+				"creak",
+				"bridge",
+				"old",
+				"unstable",
+				"environment"
+			],
+			"_generated": {
+				"prompt": "A sound effect of wooden bridge creak",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:26.946Z"
+			}
+		},
+		{
+			"name": "Skeleton Bone Rattle",
+			"file": "skeleton_bone_rattle_mnf6zw9xpcm5.mp3",
+			"tags": [
+				"creature",
+				"undead",
+				"skeleton",
+				"rattle",
+				"bones",
+				"eerie",
+				"clatter"
+			],
+			"_generated": {
+				"prompt": "A sound effect of skeleton bone rattle",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:30.396Z"
+			}
+		},
+		{
+			"name": "Arcane Explosion",
+			"file": "arcane_explosion_mnf6zyxtop4j.mp3",
+			"tags": [
+				"magic",
+				"explosion",
+				"arcane",
+				"energy",
+				"blast",
+				"powerful",
+				"spell"
+			],
+			"_generated": {
+				"prompt": "A sound effect of arcane explosion",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:33.797Z"
+			}
+		},
+		{
+			"name": "Tavern Crowd Murmur",
+			"file": "tavern_crowd_murmur_mnf701k1nqx3.mp3",
+			"tags": [
+				"human",
+				"crowd",
+				"ambient",
+				"voice",
+				"tavern",
+				"murmur",
+				"background"
+			],
+			"_generated": {
+				"prompt": "A sound effect of tavern crowd murmur",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T22:32:37.156Z"
+			}
+		},
+		{
+			"name": "Truck Backfire",
+			"file": "truck_backfire_mnf8azyobbee.mp3",
+			"tags": [
+				"truck",
+				"backfire",
+				"fire"
+			],
+			"_generated": {
+				"prompt": "A sound effect of truck backfire",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T23:09:06.578Z"
+			}
+		},
+		{
+			"name": "Laser Beam",
+			"file": "laser_beam_mnf8bluz7skb.mp3",
+			"tags": [
+				"laser",
+				"beam"
+			],
+			"_generated": {
+				"prompt": "A sound effect of laser beam",
+				"durationSec": 3,
+				"generatedAt": "2026-03-31T23:09:34.957Z"
+			}
+		},
+		{
+			"name": "Creepy Moan",
+			"file": "creepy_moan_mnfakm7n6raa.mp3",
+			"tags": [
+				"creepy",
+				"moan"
+			],
+			"_generated": {
+				"prompt": "A sound effect of creepy moan",
+				"durationSec": 3,
+				"generatedAt": "2026-04-01T00:12:34.549Z"
+			}
+		}
+	]
+}

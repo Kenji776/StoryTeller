@@ -16,6 +16,7 @@ import { execSync } from "child_process";
 import { broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates, broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState } from "./services/gameUpdates.js";
 import { updateMap, registerMapEndpoints, getDefaultPlayerEmoji } from "./services/mapService.js";
 import { getAbilityForLevel } from "./services/classProgression.js";
+import { resolveSfx, findMatch as findSfxMatch } from "./services/sfxService.js";
 import { pipeline } from "stream/promises";
 
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), ".env") });
@@ -107,9 +108,12 @@ app.post("/api/admin/login", (req, res) => {
 	res.json({ ok: true });
 });
 
-// Check if current session is valid
+// Check if current session is valid — also return authType so the client
+// can gate features (e.g. char-file tool is admin-only, not host).
 app.get("/api/admin/session", (req, res) => {
-	res.json({ authenticated: isAdminAuthenticated(req) || !!isHostToken(req) });
+	if (isAdminAuthenticated(req)) return res.json({ authenticated: true, authType: "admin" });
+	if (isHostToken(req))          return res.json({ authenticated: true, authType: "host" });
+	res.json({ authenticated: false });
 });
 
 // Logout
@@ -499,6 +503,11 @@ async function handleTimerExpiry(lobbyId, playerName) {
 					store.setCurrentMusic(lobbyId, dmObj.music);
 					io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
 				}
+				if (Array.isArray(dmObj.sfx) && dmObj.sfx.length) {
+					resolveSfx(dmObj.sfx, ELEVEN_API_KEY).then(sfxFiles => {
+						if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+					}).catch(err => log("⚠️ SFX resolve error:", err.message));
+				}
 			}
 
 			store.appendDM(lobbyId, narrationText);
@@ -576,6 +585,11 @@ async function handleRestResolved(lobbyId, result, type, proposer) {
 				if (dmObj.music) {
 					store.setCurrentMusic(lobbyId, dmObj.music);
 					io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
+				}
+				if (Array.isArray(dmObj.sfx) && dmObj.sfx.length) {
+					resolveSfx(dmObj.sfx, ELEVEN_API_KEY).then(sfxFiles => {
+						if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+					}).catch(err => log("⚠️ SFX resolve error:", err.message));
 				}
 			}
 			store.appendDM(lobbyId, narrationText);
@@ -991,6 +1005,32 @@ io.on("connection", (socket) => {
 		}
 	});
 
+	// ===== QUICK START (dev mode only) =====
+	socket.on("game:quickstart", async ({ lobbyId }) => {
+		if (!devMode) {
+			return socket.emit("toast", { type: "error", message: "Quick start is only available in dev mode" });
+		}
+		if (!store.isHost(lobbyId, socket.id)) {
+			return socket.emit("toast", { type: "error", message: "Only host can quick start" });
+		}
+
+		log(`⚡ Quick start for lobby ${lobbyId}`);
+
+		// Set LLM to test mode
+		store.setLLMSettings(lobbyId, "test", "test-stub");
+
+		// Mark all players ready
+		const lobby = store.index[lobbyId];
+		if (lobby) {
+			for (const sid of Object.keys(lobby.sockets)) {
+				store.setReady(lobbyId, sid, true);
+			}
+		}
+
+		// Signal client to proceed with game:start
+		socket.emit("game:quickstart:ready", { lobbyId });
+	});
+
 	// ===== GAME FLOW =====
 	socket.on("game:start", async ({ lobbyId }) => {
 		try {
@@ -1029,6 +1069,7 @@ io.on("connection", (socket) => {
 			let cleanText = "[Error: no content returned]";
 			let setupMusic = null;
 			let setupSuggestions = [];
+			let setupSfx = [];
 			if (typeof openingRaw === "string") {
 				try {
 					const setupObj = JSON.parse(openingRaw.trim());
@@ -1036,6 +1077,7 @@ io.on("connection", (socket) => {
 					cleanText = setupObj.text?.trim() || "[Error: no content returned]";
 					setupMusic = setupObj.music || null;
 					setupSuggestions = Array.isArray(setupObj.suggestions) ? setupObj.suggestions : [];
+					setupSfx = Array.isArray(setupObj.sfx) ? setupObj.sfx : [];
 				} catch (parseErr) {
 					log(`⚠️ [DEBUG] Setup JSON parse failed (${parseErr.message}) — falling back to plain text`);
 					// Fallback: treat the whole response as plain text
@@ -1065,6 +1107,13 @@ io.on("connection", (socket) => {
 			}
 			if (setupSuggestions.length) {
 				io.to(room(lobbyId)).emit("suggestions:update", { suggestions: setupSuggestions });
+			}
+
+			// Resolve and emit SFX (non-blocking — don't delay narration)
+			if (setupSfx.length) {
+				resolveSfx(setupSfx, ELEVEN_API_KEY).then(sfxFiles => {
+					if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+				}).catch(err => log("⚠️ SFX resolve error:", err.message));
 			}
 
 			await streamNarrationToClients(io, room(lobbyId), cleanText, store.getNarratorVoice(lobbyId));
@@ -1218,6 +1267,13 @@ io.on("connection", (socket) => {
 				if (dmObj.music) {
 					store.setCurrentMusic(lobbyId, dmObj.music);
 					io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
+				}
+
+				// Resolve and emit SFX (non-blocking)
+				if (Array.isArray(dmObj.sfx) && dmObj.sfx.length) {
+					resolveSfx(dmObj.sfx, ELEVEN_API_KEY).then(sfxFiles => {
+						if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+					}).catch(err => log("⚠️ SFX resolve error:", err.message));
 				}
 			} else {
 				console.warn("⚠️ LLM reply not structured or parse failed");
@@ -1749,6 +1805,32 @@ io.on("connection", (socket) => {
 		io.to(room(lobbyId)).emit("music:change", { mood: mood || null });
 		log(`🎵 ADMIN music → lobby ${lobbyId}: ${mood || "stop"}`);
 		socket.emit("toast", { type: "success", message: mood ? `Music changed to: ${mood}` : "Music stopped" });
+	});
+
+	socket.on("admin:sfx", async ({ code, description }) => {
+		if (!isSocketAdmin(code)) return socket.emit("toast", { type: "error", message: "Not authorized" });
+		if (!description || typeof description !== "string" || !description.trim()) {
+			return socket.emit("toast", { type: "error", message: "Enter a sound effect description" });
+		}
+
+		const desc = description.trim();
+		log(`🔊 ADMIN SFX test → "${desc}"`);
+		try {
+			// Check for pre-existing match before resolving (which may generate)
+			const preExisting = findSfxMatch(desc);
+			const results = await resolveSfx([desc], ELEVEN_API_KEY);
+			if (!results.length) {
+				return socket.emit("admin:sfx:result", { ok: false, error: "No match found and generation failed or unavailable" });
+			}
+			const fx = results[0];
+			// Play on all game clients in the lobby
+			const lobbyId = store.findLobbyByCode(code);
+			if (lobbyId) io.to(room(lobbyId)).emit("sfx:play", { effects: [fx] });
+			socket.emit("admin:sfx:result", { ok: true, effect: fx, source: preExisting ? "library" : "generated" });
+		} catch (err) {
+			log(`💥 ADMIN SFX test error: ${err.message}`);
+			socket.emit("admin:sfx:result", { ok: false, error: err.message });
+		}
 	});
 
 	socket.on("admin:dm", ({ code, content }) => {

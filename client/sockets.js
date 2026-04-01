@@ -552,6 +552,11 @@ function registerSocketEvents() {
 		}
 	});
 
+	// === SOUND EFFECTS ===
+	socket.on("sfx:play", ({ effects }) => {
+		window.sfxManager?.play(effects);
+	});
+
 	// === ROLL REQUIRED ===
 	socket.on("roll:required", ({ player, sides, stats, mods, dc }) => {
 		const statStr = stats.length ? ` using ${stats.map(s => s.toUpperCase()).join(" + ")}` : "";
