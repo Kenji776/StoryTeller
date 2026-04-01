@@ -72,7 +72,10 @@ function registerSocketEvents() {
 
 			// Resume music for players who joined or reconnected mid-game
 			if (state.currentMusic && window.musicManager) {
+				console.log(`🎵 state:update has currentMusic="${state.currentMusic}" — requesting mood`);
 				window.musicManager.requestMood(state.currentMusic);
+			} else if (!state.currentMusic) {
+				console.log("🎵 state:update has no currentMusic");
 			}
 		} else {
 			show(els.lobby);
@@ -143,10 +146,12 @@ function registerSocketEvents() {
 		const msg = `🎲 ${r.player || "Someone"} rolled ${r.kind} → ${r.value}` + (r.detail ? ` (base ${r.detail.base}, bonus ${r.detail.bonus})` : "");
 
 		appendActionLog(msg, "dice-event");
-		const el = document.createElement("div");
-		el.textContent = msg;
-		el.classList.add("fade");
-		els.rollFeed.prepend(el);
+		if (els.rollFeed) {
+			const el = document.createElement("div");
+			el.textContent = msg;
+			el.classList.add("fade");
+			els.rollFeed.prepend(el);
+		}
 	});
 
 	socket.on("action:rejected", ({ reason }) => {
@@ -227,6 +232,7 @@ function registerSocketEvents() {
 		modal.classList.add("modal");
 		modal.innerHTML = `
     <div class="modal-content">
+      <button class="modal-close">✕</button>
       <h3>🎉 Level ${newLevel}!</h3>
       ${abilityPreviewHTML}
       <p style="margin-top:0.75em;">You have <strong>2 points</strong> to distribute among your attributes.</p>

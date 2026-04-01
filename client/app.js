@@ -11,6 +11,17 @@ let joiningInProgress = false; // true when creating a new char to join a runnin
 let pendingJoinCode = null;    // lobby code for the in-progress game being joined
 
 
+// === Global modal close handler ===
+// Any button with class "modal-close" will close its parent modal
+// (works for both static display:none modals and dynamically appended ones)
+document.addEventListener("click", (e) => {
+	const btn = e.target.closest(".modal-close");
+	if (!btn) return;
+	const modal = btn.closest(".modal, .add-modal");
+	if (!modal) return;
+	if (modal.id) { modal.style.display = "none"; } else { modal.remove(); }
+});
+
 let renderedHistoryCount = 0;
 let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const clientId = Math.random()
@@ -137,6 +148,112 @@ async function handleQuickStart() {
 	});
 }
 
+/** === Quick Start (public — real LLM) === **/
+async function handleQuickStartPublic() {
+	const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+	// Load campaign flavors
+	let flavors;
+	try {
+		const res = await fetch("/config/campaignFlavors.json");
+		flavors = await res.json();
+	} catch { showToast("Failed to load campaign options", "danger"); return; }
+
+	const settings = [
+		{ id: "standard",  label: "High Fantasy", emoji: "🏰" },
+		{ id: "dark_ages", label: "Dark Ages",    emoji: "⚔️" },
+		{ id: "steampunk", label: "Steampunk",    emoji: "⚙️" },
+		{ id: "pirate",    label: "Pirate Age",   emoji: "🏴‍☠️" },
+		{ id: "scifi",     label: "Sci-fi Fantasy",emoji: "🚀" },
+	];
+	const difficulties = [
+		{ id: "casual",   label: "Casual" },
+		{ id: "standard", label: "Standard" },
+		{ id: "hardcore", label: "Hardcore" },
+	];
+
+	const tone    = pick(flavors.tones);
+	const theme   = pick(flavors.themes);
+	const setting = pick(settings);
+	const diff    = pick(difficulties);
+	const brutal  = Math.floor(Math.random() * 7) + 2; // 2-8 range, avoid extremes
+	const brutalityLabels = ["Kid Safe","Kid Safe","Lighthearted","Lighthearted","Standard","Standard","Gritty","Gritty","Brutal","Brutal","Ultimate Brutality"];
+
+	// Build summary modal
+	const modal = document.createElement("div");
+	modal.className = "modal";
+	modal.innerHTML = `
+		<div class="modal-content">
+			<button class="modal-close">✕</button>
+			<h2>🎲 Quick Start</h2>
+			<p style="color:#aaa;font-size:0.9em;text-align:center;">Your randomized adventure awaits!</p>
+			<hr/>
+			<div style="display:grid;grid-template-columns:auto 1fr;gap:0.4em 1em;font-size:0.92em;align-items:center;">
+				<span style="color:#888;">World</span>   <strong>${setting.emoji} ${setting.label}</strong>
+				<span style="color:#888;">Tone</span>    <strong>${tone.emoji} ${tone.label}</strong>
+				<span style="color:#888;">Theme</span>   <strong>${theme.emoji} ${theme.label}</strong>
+				<span style="color:#888;">Difficulty</span> <strong>🎯 ${diff.label}</strong>
+				<span style="color:#888;">Intensity</span>  <strong>⚡ ${brutalityLabels[brutal]}</strong>
+			</div>
+			<hr/>
+			<p style="font-size:0.82em;color:#888;text-align:center;">A random character will be created for you.</p>
+			<div class="row" style="justify-content:center;gap:0.75em;margin-top:0.75em;">
+				<button id="qsReroll" class="secondary">🎲 Reroll</button>
+				<button id="qsConfirm" class="primary">⚔️ Begin Adventure</button>
+			</div>
+		</div>`;
+	document.body.appendChild(modal);
+
+	// Reroll just reopens with new random picks
+	modal.querySelector("#qsReroll").addEventListener("click", () => {
+		modal.remove();
+		handleQuickStartPublic();
+	});
+
+	// Confirm — create lobby, set options, randomize char, start
+	modal.querySelector("#qsConfirm").addEventListener("click", async () => {
+		modal.remove();
+		showLoading("🎲 Preparing your adventure...");
+
+		// 1. Create lobby
+		socket.emit("lobby:create", {});
+
+		socket.once("lobby:created", async ({ lobbyId: id, code }) => {
+			lobbyId = id;
+			lobbyCode = code;
+			iAmHost = true;
+			show(els.lobby);
+			enterLobbyMode(code);
+
+			// 2. Set game options
+			socket.emit("lobby:settings", {
+				lobbyId,
+				campaignTone:    { id: tone.id,  label: tone.label,  emoji: tone.emoji,  prompt: tone.prompt },
+				campaignTheme:   { id: theme.id, label: theme.label, emoji: theme.emoji, prompt: theme.prompt },
+				campaignSetting: setting.id,
+				difficulty:      diff.id,
+				brutalityLevel:  brutal,
+			});
+
+			// 3. Randomize and save character
+			await randomizeCharacter();
+			me.name = (document.getElementById("name")?.value || "").trim() || "Adventurer";
+			const sheet = buildCurrentSheet();
+			socket.emit("player:sheet", { lobbyId, name: me.name, sheet });
+
+			// 4. Wait for server to process
+			await new Promise(r => setTimeout(r, 400));
+
+			// 5. Ready up and start
+			socket.emit("player:ready", { lobbyId, ready: true });
+			await new Promise(r => setTimeout(r, 200));
+			socket.emit("game:start", { lobbyId });
+		});
+	});
+}
+
+document.getElementById("quickStartPublicBtn")?.addEventListener("click", handleQuickStartPublic);
+
 // Fetch voices from the server
 async function loadVoices() {
 	try {
@@ -250,6 +367,7 @@ function showCharacterModal(name, sheet, ready) {
 	modal.className = "modal";
 	modal.innerHTML = `
 		<div class="modal-content">
+			<button class="modal-close">✕</button>
 			${sheet.imageUrl ? `<img src="${sheet.imageUrl}" alt="Portrait of ${name}" style="width:100%;border-radius:6px;margin-bottom:10px;display:block;" />` : ""}
 			<h2>🧝 ${name}</h2>
 			<h4>${sheet.race || "Unknown Race"} ${sheet.class || "Adventurer"}</h4>
@@ -308,13 +426,9 @@ function showCharacterModal(name, sheet, ready) {
 			<hr/>
 			<h4>Backstory</h4>
 			<p class="smalltext italic">${sheet.description || "<em>No backstory yet.</em>"}</p>
-			<div class="row" style="margin-top:1em;">
-				<button class="primary" id="closeCharModal">Close</button>
-			</div>
 		</div>
 	`;
 	document.body.appendChild(modal);
-	document.getElementById("closeCharModal").addEventListener("click", () => modal.remove());
 }
 
 function renderLobbyOptions(s) {
@@ -426,6 +540,8 @@ function renderSheet(s) {
 		document.getElementById("charLevel").textContent = `Lv ${p.level || 1}`;
 		document.getElementById("charHP").textContent = p.stats?.hp ?? 10;
 		document.getElementById("charXP").textContent = p.xp ?? 0;
+		const goldEl = document.getElementById("charGold");
+		if (goldEl) goldEl.textContent = p.gold ?? 0;
 		const maxSlots = Number(p.level) || 1;
 		const slotsLeft = Math.max(0, maxSlots - (Number(p.spellSlotsUsed) || 0));
 		document.getElementById("charSpellSlots").textContent = `${slotsLeft}/${maxSlots}`;
@@ -526,15 +642,15 @@ function renderLogs(state) {
 		console.log("Got history");
 		console.log(state.history);
 
+		const pinnedIndices = new Set((state.pinnedMoments || []).map(p => p.index));
+
 		for (let i = renderedHistoryCount; i < history.length; i++) {
 
 			const entry = history[i];
-
-			console.log("Logging Entry into log");
-			console.log(entry);
-			if(!entry?.content || entry?.content.length === 0);
+			if(!entry?.content || entry?.content.length === 0) continue;
 
 			const div = document.createElement("div");
+			div.dataset.historyIndex = i;
 
 			if (entry.role === "assistant") {
 				div.className = "dm-entry";
@@ -553,6 +669,24 @@ function renderLogs(state) {
 				div.className = "story-entry";
 				div.textContent = entry.content;
 			}
+
+			// Pin button
+			if (pinnedIndices.has(i)) div.classList.add("pinned");
+			const pinBtn = document.createElement("button");
+			pinBtn.className = "pin-moment-btn";
+			pinBtn.title = "Pin this moment";
+			pinBtn.textContent = "📌";
+			pinBtn.onclick = () => {
+				const idx = Number(div.dataset.historyIndex);
+				const isPinned = div.classList.toggle("pinned");
+				if (isPinned) {
+					socket.emit("story:pin", { lobbyId, historyIndex: idx });
+				} else {
+					socket.emit("story:unpin", { lobbyId, historyIndex: idx });
+				}
+			};
+			div.appendChild(pinBtn);
+
 			story.appendChild(div);
 		}
 
@@ -561,7 +695,7 @@ function renderLogs(state) {
 	}
 }
 
-function appendLog(text) {
+function appendLog(text, historyIndex) {
 	const logContainer = text.match(/^\[.*\]/) ? els.actionLog : els.storyLog;
 	const div = document.createElement("div");
 	let cls = "story-entry";
@@ -583,7 +717,27 @@ function appendLog(text) {
 	}
 
 	div.className = cls;
-	div.innerHTML = text;
+
+	// Add pin button for story entries with a known history index
+	if (historyIndex != null && logContainer === els.storyLog) {
+		div.dataset.historyIndex = historyIndex;
+		const pinBtn = document.createElement("button");
+		pinBtn.className = "pin-moment-btn";
+		pinBtn.title = "Pin this moment";
+		pinBtn.textContent = "📌";
+		pinBtn.onclick = () => {
+			const idx = Number(div.dataset.historyIndex);
+			const isPinned = div.classList.toggle("pinned");
+			if (isPinned) {
+				socket.emit("story:pin", { lobbyId, historyIndex: idx });
+			} else {
+				socket.emit("story:unpin", { lobbyId, historyIndex: idx });
+			}
+		};
+		div.appendChild(pinBtn);
+	}
+
+	div.insertAdjacentHTML("afterbegin", text);
 	logContainer.appendChild(div);
 	logContainer.scrollTop = logContainer.scrollHeight;
 }
@@ -980,7 +1134,8 @@ function showRejoinModal(lobbyCode, availableChars, hibernating = false) {
 	}).join("");
 
 	modal.innerHTML = `
-		<div class="modal-content" style="max-width:480px;">
+		<div class="modal-content">
+			<button class="modal-close">✕</button>
 			<h3>⚔️ Game In Progress</h3>
 			<p style="color:#aaa;font-size:0.9em;">This adventure is already underway. Reclaim your character or create a new one.</p>
 			${statusNote}
@@ -1009,6 +1164,11 @@ function showRejoinModal(lobbyCode, availableChars, hibernating = false) {
 			const file = e.target.files[0];
 			if (!file) return;
 
+			const uploadLabel = e.target.closest(".rejoin-upload-btn");
+			if (uploadLabel) uploadLabel.style.opacity = "0.5";
+			statusEl.style.color = "#aaa";
+			statusEl.textContent = "⏳ Verifying...";
+
 			try {
 				const text = await file.text();
 				const { v, data, sig } = JSON.parse(text);
@@ -1020,7 +1180,7 @@ function showRejoinModal(lobbyCode, availableChars, hibernating = false) {
 					body: JSON.stringify({ data, sig }),
 				});
 				const json = await res.json();
-				if (!res.ok) { statusEl.textContent = "❌ Invalid file"; statusEl.style.color = "#f66"; return; }
+				if (!res.ok) { statusEl.textContent = "❌ Invalid file"; statusEl.style.color = "#f66"; if (uploadLabel) uploadLabel.style.opacity = ""; return; }
 
 				const fileCharId = json.character?.sheet?.characterId;
 				if (!fileCharId) {
@@ -1028,12 +1188,14 @@ function showRejoinModal(lobbyCode, availableChars, hibernating = false) {
 					if (json.character?.name !== charData.name) {
 						statusEl.textContent = "❌ Wrong character file";
 						statusEl.style.color = "#f66";
+						if (uploadLabel) uploadLabel.style.opacity = "";
 						return;
 					}
 					// Matching name, allow — server accepts if stored char has no ID either
 				} else if (fileCharId !== charData.characterId) {
 					statusEl.textContent = "❌ Wrong character file";
 					statusEl.style.color = "#f66";
+					if (uploadLabel) uploadLabel.style.opacity = "";
 					return;
 				}
 
@@ -1046,6 +1208,7 @@ function showRejoinModal(lobbyCode, availableChars, hibernating = false) {
 			} catch (err) {
 				statusEl.textContent = "❌ Read error";
 				statusEl.style.color = "#f66";
+				if (uploadLabel) uploadLabel.style.opacity = "";
 				console.error("Rejoin file error:", err);
 			}
 		});
@@ -1092,7 +1255,7 @@ function renderLobbiesList(lobbies) {
 
 	if (!lobbies || !lobbies.length) {
 		if (tabsEl) tabsEl.innerHTML = "";
-		listEl.innerHTML = `<p class="hint">No active adventures right now. Create one!</p>`;
+		listEl.innerHTML = `<p class="hint">No adventures right now. Create one!</p>`;
 		return;
 	}
 
@@ -1130,11 +1293,13 @@ function renderLobbiesList(lobbies) {
 		});
 	}
 
-	const filtered = lobbies.filter((l) => tabGroups[_activeTab].phases.includes(l.phase));
+	const searchTerm = (document.getElementById("adventureSearch")?.value || "").trim().toLowerCase();
+	const filtered = lobbies.filter((l) => {
+		if (!tabGroups[_activeTab].phases.includes(l.phase)) return false;
+		if (searchTerm && !(l.adventureName || "").toLowerCase().includes(searchTerm)) return false;
+		return true;
+	});
 
-	const brutalityLabel = ["Kid Safe","Kid Safe","Lighthearted","Lighthearted","Standard","Standard","Gritty","Gritty","Brutal","Brutal","Ultimate Brutality"];
-	const brutalityColor = (n) => n <= 2 ? "#4a9a4a" : n <= 4 ? "#8a8a20" : n <= 6 ? "#7a6a30" : n <= 8 ? "#9a4a20" : "#9a2020";
-	const difficultyLabel = { casual: "Casual", standard: "Standard", hardcore: "Hardcore", merciless: "Merciless" };
 	const settingLabel = { standard: "High Fantasy", dark_ages: "Dark Ages", steampunk: "Steampunk", pirate: "Pirate Age", scifi: "Sci-fi Fantasy" };
 	const isJoinable = (phase) => ["waiting", "running", "hibernating"].includes(phase);
 	const isOver = (phase) => ["wiped", "completed"].includes(phase);
@@ -1146,56 +1311,55 @@ function renderLobbiesList(lobbies) {
 
 	listEl.innerHTML = filtered.map((l) => {
 		const lockIcon = l.hasPassword ? `<span title="Password protected" style="margin-left:0.3em;">🔒</span>` : "";
-		const title = l.adventureName ? `<strong>${l.adventureName}</strong>${lockIcon}` : `<strong>Unnamed Adventure</strong>${lockIcon}`;
+		const name = l.adventureName || "Unnamed Adventure";
 
-		// Player list with class/race/level
+		// Player count + names
+		const playerCount = l.players?.length || 0;
 		let playersHtml;
-		if (l.players && l.players.length) {
+		if (playerCount) {
 			playersHtml = `<div class="lobby-players">${l.players.map((p) => {
-				const detail = [p.race, p.class].filter(Boolean).join(" ");
-				const dot = `<span class="lobby-player-dot ${p.connected ? "lobby-player-dot--online" : "lobby-player-dot--offline"}" title="${p.connected ? "Online" : "Offline"}"></span>`;
-				const hostIcon = p.isHost ? `<span title="Game Host" style="margin-left:0.2em;font-size:0.85em;">👑</span>` : "";
-				return `<span class="lobby-player-tag">${dot}<span class="lobby-player-name">${p.name}</span>${hostIcon}${detail ? ` <span class="lobby-player-detail">${detail} Lv${p.level}</span>` : ""}</span>`;
+				const dot = `<span class="lobby-player-dot ${p.connected ? "lobby-player-dot--online" : "lobby-player-dot--offline"}"></span>`;
+				const hostIcon = p.isHost ? ` 👑` : "";
+				return `<span class="lobby-player-tag">${dot}${p.name}${hostIcon}</span>`;
 			}).join("")}</div>`;
 		} else {
-			playersHtml = `<span class="hint">No players yet</span>`;
+			playersHtml = `<span class="hint" style="font-size:0.8em;">No players yet</span>`;
 		}
 
-		const actions = isJoinable(l.phase)
-			? `<button class="secondary" onclick="quickJoin('${l.code}')">Join</button>`
-			: `<button class="secondary" onclick="showStoryModal('${l.code}')">📖 Read Story</button>`;
-		const lastSeen = l.lastActivity
-			? `<span class="hint" style="font-size:0.8em;">Last active: ${timeAgo(l.lastActivity)}</span>`
-			: "";
+		// Compact flavor — just setting + tone, skip the rest to reduce clutter
+		const flavorParts = [
+			settingLabel[l.campaignSetting] || "",
+			l.campaignTone?.label || "",
+		].filter(Boolean);
+		const flavorStr = flavorParts.length ? `<span class="lobby-flavor-inline">${flavorParts.join(" · ")}</span>` : "";
 
-		const bLevel = l.brutalityLevel ?? 5;
-		const flavorTags = [
-			settingLabel[l.campaignSetting] ? `<span class="lobby-flavor-tag" title="World">🌍 ${settingLabel[l.campaignSetting]}</span>` : "",
-			difficultyLabel[l.difficulty] ? `<span class="lobby-flavor-tag" title="Difficulty">🎯 ${difficultyLabel[l.difficulty]}</span>` : "",
-			l.campaignTone  ? `<span class="lobby-flavor-tag" title="Tone">${l.campaignTone.emoji} ${l.campaignTone.label}</span>`   : "",
-			l.campaignTheme ? `<span class="lobby-flavor-tag" title="Theme">${l.campaignTheme.emoji} ${l.campaignTheme.label}</span>` : "",
-			`<span class="lobby-flavor-tag" style="color:${brutalityColor(bLevel)};" title="Brutality">⚡ ${brutalityLabel[bLevel]}</span>`,
-		].filter(Boolean).join("");
+		const lastSeen = l.lastActivity ? timeAgo(l.lastActivity) : "";
 
-		// Hide lobby code for finished games
-		const codeBlock = isOver(l.phase) ? "" : `<code class="lobby-code-tag">${l.code}</code>`;
+		// Actions — inline row
+		const readBtn = !l.hasPassword ? `<button class="lobby-action-btn" onclick="showStoryModal('${l.code}')">📖 Read</button>` : "";
+		const joinBtn = isJoinable(l.phase) ? `<button class="lobby-action-btn lobby-action-join" onclick="quickJoin('${l.code}')">⚔️ Join</button>` : "";
+		const codeTag = !isOver(l.phase) ? `<code class="lobby-code-tag">${l.code}</code>` : "";
 
 		return `
 			<div class="active-game-row">
-				<div class="lobby-card-info">
-					<div class="lobby-card-header">
-						${title}
-					</div>
+				<div class="lobby-card-left">
+					<div class="lobby-card-title">${name}${lockIcon} ${flavorStr}</div>
 					${playersHtml}
-					${flavorTags ? `<div class="lobby-flavor-row">${flavorTags}</div>` : ""}
-					${lastSeen}
 				</div>
-				<div class="lobby-card-actions">
-					${codeBlock}
-					${actions}
+				<div class="lobby-card-right">
+					${codeTag}
+					<div class="lobby-card-actions">${joinBtn}${readBtn}</div>
+					${lastSeen ? `<span class="lobby-card-meta">${lastSeen}</span>` : ""}
 				</div>
 			</div>`;
 	}).join("");
+}
+
+const _adventureSearchEl = document.getElementById("adventureSearch");
+if (_adventureSearchEl) {
+	_adventureSearchEl.addEventListener("input", () => {
+		if (_lobbiesCache) renderLobbiesList(_lobbiesCache);
+	});
 }
 
 async function fetchActiveLobbies() {
@@ -1206,7 +1370,7 @@ async function fetchActiveLobbies() {
 	} catch (err) {
 		console.warn("Failed to fetch active lobbies:", err);
 		const listEl = document.getElementById("activeGamesList");
-		if (listEl) listEl.innerHTML = `<p class="hint">Could not load active adventures.</p>`;
+		if (listEl) listEl.innerHTML = `<p class="hint">Could not load adventures.</p>`;
 	}
 }
 
@@ -1224,14 +1388,35 @@ function quickJoin(code) {
 async function showStoryModal(code) {
 	const modal = document.getElementById("storyModal");
 	const logEl = document.getElementById("storyModalLog");
+	const summaryEl = document.getElementById("storyModalSummary");
+	const pinnedEl = document.getElementById("storyModalPinned");
 	const titleEl = document.getElementById("storyModalTitle");
 	const metaEl = document.getElementById("storyModalMeta");
 	if (!modal) return;
 
+	const panes = { log: logEl, summary: summaryEl, pinned: pinnedEl };
+
 	titleEl.textContent = "Loading...";
 	metaEl.innerHTML = "";
 	logEl.innerHTML = `<div class="spinner" style="margin:2em auto;"></div>`;
+	summaryEl.innerHTML = "";
+	pinnedEl.innerHTML = "";
+	Object.values(panes).forEach(p => p.style.display = "none");
+	logEl.style.display = "";
 	modal.style.display = "flex";
+
+	// Wire tab switching
+	modal.querySelectorAll(".story-tab").forEach(tab => {
+		tab.onclick = () => {
+			modal.querySelectorAll(".story-tab").forEach(t => t.classList.remove("story-tab--active"));
+			tab.classList.add("story-tab--active");
+			const target = tab.dataset.storyTab;
+			Object.entries(panes).forEach(([k, el]) => el.style.display = k === target ? "" : "none");
+		};
+	});
+	// Reset to Full Story tab
+	modal.querySelectorAll(".story-tab").forEach(t => t.classList.remove("story-tab--active"));
+	modal.querySelector('.story-tab[data-story-tab="log"]')?.classList.add("story-tab--active");
 
 	try {
 		const res = await fetch(`/api/lobby/${code}/story`);
@@ -1242,19 +1427,51 @@ async function showStoryModal(code) {
 		const phaseBadge = { wiped: `<span class="badge" style="background:#550000;">☠️ Party Wiped</span>`, completed: `<span class="badge" style="background:#224400;">🏆 Completed</span>` };
 		metaEl.innerHTML = `${phaseBadge[data.phase] || ""} <span class="hint" style="margin-left:0.5em;">Players: ${data.players.join(", ") || "none"}</span>`;
 
+		// ── Full Story tab ──
+		const pinnedIndices = new Set((data.pinnedMoments || []).map(p => p.index));
 		if (!data.history.length) {
 			logEl.innerHTML = `<p class="hint">No story entries recorded.</p>`;
-			return;
+		} else {
+			logEl.innerHTML = data.history.map((entry, i) => {
+				const pin = pinnedIndices.has(i) ? `<span title="Pinned moment" style="color:#f0c060;margin-right:0.4em;">📌</span>` : "";
+				if (entry.role === "assistant") {
+					return `<div class="story-entry-dm">${pin}${entry.content}</div>`;
+				}
+				const name = entry.name || "Player";
+				const text = entry.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+				return `<div class="story-entry-player">${pin}<strong>${name}:</strong> ${text}</div>`;
+			}).join("");
 		}
 
-		logEl.innerHTML = data.history.map((entry) => {
-			if (entry.role === "assistant") {
-				return `<div class="story-entry-dm">${entry.content}</div>`;
-			}
-			const name = entry.name || "Player";
-			const text = entry.content.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-			return `<div class="story-entry-player"><strong>${name}:</strong> ${text}</div>`;
-		}).join("");
+		// ── Summary tab ──
+		// DM/summarizer content contains intentional HTML (bold, italic, line breaks) — render it directly.
+		let summaryHtml = "";
+		if (data.ancientHistory) {
+			const ancientHtml = data.ancientHistory.replace(/\n/g, "<br>");
+			summaryHtml += `<h4 style="color:#b0baff;margin:0 0 0.5em;">📜 Campaign Backstory</h4><div class="story-entry-dm" style="white-space:pre-wrap;opacity:0.85;border-left:3px solid #665599;">${ancientHtml}</div><hr style="border-color:rgba(255,255,255,0.1);margin:1em 0;"/>`;
+		}
+		if (data.storyContext && data.storyContext !== "—") {
+			const ctxHtml = data.storyContext.replace(/\n/g, "<br>");
+			summaryHtml += `<h4 style="color:#b0baff;margin:0 0 0.5em;">📋 Recent Arc</h4><div class="story-entry-dm" style="white-space:pre-wrap;">${ctxHtml}</div>`;
+		}
+		summaryEl.innerHTML = summaryHtml || `<p class="hint">No summary available yet — the story is still in its early stages.</p>`;
+
+		// ── Pinned Moments tab ──
+		const pins = data.pinnedMoments || [];
+		if (!pins.length) {
+			pinnedEl.innerHTML = `<p class="hint">No pinned moments yet. Players can pin important story beats during gameplay.</p>`;
+		} else {
+			pinnedEl.innerHTML = pins.map(p => {
+				const entry = data.history[p.index];
+				const content = entry
+					? (entry.role === "assistant" ? entry.content : `<strong>${entry.name || "Player"}:</strong> ${(entry.content || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}`)
+					: `<em>${p.snippet}</em>`;
+				return `<div class="story-entry-dm" style="border-left:3px solid #f0c060;">
+					<div style="font-size:0.78em;color:#888;margin-bottom:0.3em;">📌 Pinned by ${p.pinnedBy}</div>
+					${content}
+				</div>`;
+			}).join("");
+		}
 	} catch (err) {
 		logEl.innerHTML = `<p class="hint">Could not load story log.</p>`;
 	}
@@ -1323,6 +1540,9 @@ function updateGameUI(state) {
 
 	const xpEl = document.getElementById("charXP");
 	if (xpEl) xpEl.textContent = meChar.xp ?? 0;
+
+	const goldEl2 = document.getElementById("charGold");
+	if (goldEl2) goldEl2.textContent = meChar.gold ?? 0;
 
 	// === XP Progress Bar ===
 	const thresholds = [0, 300, 900, 2700, 6500];

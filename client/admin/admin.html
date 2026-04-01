@@ -437,6 +437,7 @@
 						<button class="tab-btn" data-tab="eventsPane">Player Events</button>
 						<button class="tab-btn" data-tab="dmPane">DM Tools</button>
 						<button class="tab-btn" data-tab="feedPane">Event Feed</button>
+						<button class="tab-btn" data-tab="storyPane">Story Summary</button>
 						<button class="tab-btn" data-tab="rawPane">Raw Lobby JSON</button>
 					</div>
 
@@ -524,6 +525,53 @@
 									<input id="invReason" class="admin-input" placeholder="Reason" />
 									<button id="invApply" class="btn btn-primary">Apply</button>
 								</div>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary>Grant Equipment</summary>
+							<div>
+								<div class="form-row">
+									<input id="grantItemName" class="admin-input" placeholder="Item name (e.g. Flamebrand Longsword)" style="flex:2;" />
+									<select id="grantItemType" class="admin-select" style="min-width:100px;">
+										<option value="weapon">Weapon</option>
+										<option value="armor">Armor</option>
+										<option value="trinket">Trinket</option>
+										<option value="consumable">Consumable</option>
+									</select>
+								</div>
+								<div class="form-row" id="grantWeaponFields">
+									<input id="grantDamage" class="admin-input" placeholder="Damage (e.g. 2d6)" style="max-width:100px;" />
+									<select id="grantDamageType" class="admin-select" style="min-width:100px;">
+										<option value="slashing">Slashing</option>
+										<option value="piercing">Piercing</option>
+										<option value="bludgeoning">Bludgeoning</option>
+										<option value="fire">Fire</option>
+										<option value="cold">Cold</option>
+										<option value="lightning">Lightning</option>
+										<option value="necrotic">Necrotic</option>
+										<option value="radiant">Radiant</option>
+										<option value="force">Force</option>
+									</select>
+									<select id="grantRange" class="admin-select" style="min-width:80px;">
+										<option value="melee">Melee</option>
+										<option value="ranged">Ranged</option>
+										<option value="thrown">Thrown</option>
+									</select>
+								</div>
+								<div class="form-row hidden" id="grantArmorFields">
+									<input id="grantAC" type="number" class="admin-input" placeholder="AC" style="max-width:80px;" />
+									<select id="grantArmorType" class="admin-select" style="min-width:100px;">
+										<option value="light">Light</option>
+										<option value="medium">Medium</option>
+										<option value="heavy">Heavy</option>
+										<option value="shield">Shield</option>
+									</select>
+								</div>
+								<div class="form-row">
+									<textarea id="grantDescription" class="admin-input" rows="2" placeholder="Description & special effects (free text — the LLM will interpret this when the item is used, e.g. 'Deals extra 1d6 fire damage. Glows in the presence of undead.')" style="flex:1;resize:vertical;"></textarea>
+								</div>
+								<button id="grantItemBtn" class="btn btn-primary">Grant to Player</button>
 							</div>
 						</details>
 
@@ -663,6 +711,17 @@
 						</div>
 						<p class="hint">Tests the SFX pipeline. Generates via ElevenLabs if no library match.</p>
 
+						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:1.25rem 0 0.6rem;">AI Model</h3>
+						<div class="form-row" style="align-items:center;">
+							<select id="llmProviderSelect" class="admin-select" style="flex:0 0 auto;width:120px;">
+								<option value="openai">OpenAI</option>
+								<option value="claude">Claude</option>
+							</select>
+							<select id="llmModelSelect" class="admin-select" style="flex:1;"></select>
+							<button id="applyLlmBtn" class="btn btn-primary">Apply</button>
+						</div>
+						<p class="hint">Current: <strong id="currentLlmLabel">--</strong></p>
+
 						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:1.25rem 0 0.6rem;">Phase & Turn Control</h3>
 						<div class="form-row">
 							<button id="phaseCharacter" class="btn">Character Creation</button>
@@ -700,6 +759,15 @@
 							<div class="event-feed-empty">Connect to a lobby to see live events.</div>
 						</div>
 					</div>
+					<!-- ── Story Summary Tab ── -->
+					<div id="storyPane" class="tab-pane" style="padding-bottom:1rem;">
+						<div class="form-row" style="margin-bottom:0.5rem;">
+							<button id="refreshSummary" class="btn btn-sm">Refresh</button>
+							<button id="copySummary" class="btn btn-sm">Copy to Clipboard</button>
+						</div>
+						<pre id="storySummaryDisplay" style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.75rem;max-height:600px;overflow:auto;font-family:'Courier New',monospace;font-size:0.85rem;color:#ccc;white-space:pre-wrap;word-break:break-word;margin-top:0.5rem;line-height:1.5;">Connect to a lobby to view its story summary.</pre>
+					</div>
+
 					<!-- ── Raw Lobby JSON Tab ── -->
 					<div id="rawPane" class="tab-pane" style="padding-bottom:1rem;">
 						<div class="form-row">

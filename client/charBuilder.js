@@ -444,6 +444,10 @@ function buildCurrentSheet() {
 		? { name: armorEntry.name, ac: armorEntry.ac, type: armorEntry.type, material: armorEntry.material, note: armorEntry.note }
 		: null;
 
+	// Read gold from the UI (populated on import or state update)
+	const goldEl = document.getElementById("charGold");
+	const gold = Number(goldEl?.textContent) || 0;
+
 	return {
 		class: cls,
 		race,
@@ -463,6 +467,7 @@ function buildCurrentSheet() {
 		conditions,
 		weapon,
 		armor,
+		gold,
 	};
 }
 
@@ -615,13 +620,13 @@ function showAddModal(type, onSubmit) {
 	modal.className = "add-modal";
 	modal.innerHTML = `
 		<div class="add-modal-content">
+			<button class="modal-close">✕</button>
 			<h3>Add New ${type}</h3>
 			<label>Name</label>
 			<input id="addName" />
 			<label>Description</label>
 			<textarea id="addDesc"></textarea>
 			<button id="addConfirm">Add</button>
-			<button id="addCancel">Cancel</button>
 		</div>
 	`;
 	document.body.appendChild(modal);
@@ -632,6 +637,4 @@ function showAddModal(type, onSubmit) {
 		if (name) onSubmit({ name, description: desc });
 		modal.remove();
 	};
-
-	modal.querySelector("#addCancel").onclick = () => modal.remove();
 }

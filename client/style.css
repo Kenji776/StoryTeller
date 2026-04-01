@@ -59,6 +59,19 @@ header h1 {
 	gap: 16px;
 	padding:10px;
 }
+.lobby-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	grid-template-areas:
+		"head-l  head-r"
+		"row1-l  row1-r"
+		"row2-l  row2-r"
+		"row3-l  ."
+		"row4-l  .";
+	gap: 10px 16px;
+	padding: 10px;
+	align-items: center;
+}
 .grid.three {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
@@ -119,13 +132,6 @@ button.secondary {
 }
 button.secondary:hover {
 	background: rgba(50, 40, 70, 0.9);
-}
-button:disabled {
-	opacity: 0.6;
-	cursor: not-allowed;
-	background: linear-gradient(90deg, #222, #333);
-	border-color: #444;
-	color: #aaa;
 }
 .hidden {
 	display: none;
@@ -247,15 +253,21 @@ hr {
 	padding: 6px 12px;
 	border: 1px solid #334155;
 }
+.equip-btn {
+	font-size: 0.75em;
+	padding: 3px 10px;
+	cursor: pointer;
+	background: rgba(100,180,255,0.12);
+	border-color: #5b8fbf;
+	white-space: nowrap;
+}
+.equip-btn:hover {
+	background: rgba(100,180,255,0.25);
+}
 #yourSheet label {
 	color: #f0dca7;
 	font-weight: bold;
 	text-shadow: 0 0 4px rgba(200, 170, 100, 0.4);
-}
-#pointsRemaining {
-	color: #ffd866;
-	font-weight: bold;
-	text-shadow: 0 0 6px rgba(255, 220, 150, 0.5);
 }
 #turnBanner {
 	background: #16213a;
@@ -277,7 +289,7 @@ hr {
 	background: none;
 	border: none;
 	border-bottom: 2px solid transparent;
-	color: rgba(255,255,255,0.5);
+	color: rgba(255,255,255,0.65);
 	padding: 0.5em 1em;
 	font-size: 0.9em;
 	cursor: pointer;
@@ -305,47 +317,79 @@ hr {
 .active-game-row {
 	display: flex;
 	justify-content: space-between;
-	align-items: flex-start;
-	padding: 1em 1.25em;
-	margin-bottom: 0.65em;
-	background: rgba(255,255,255,0.04);
-	border: 1px solid rgba(255,255,255,0.08);
+	align-items: center;
+	padding: 0.75em 1em;
+	margin-bottom: 0.5em;
+	background: rgba(255,255,255,0.03);
+	border: 1px solid rgba(255,255,255,0.07);
 	border-radius: 8px;
-	gap: 1.25em;
+	gap: 1em;
+	transition: background 0.15s;
 }
+.active-game-row:hover { background: rgba(255,255,255,0.06); }
 .active-game-row:last-child { margin-bottom: 0; }
-.lobby-card-info { flex: 1; min-width: 0; }
-.lobby-card-header { margin-bottom: 0.45em; }
-.lobby-card-actions {
+
+.lobby-card-left { flex: 1; min-width: 0; }
+.lobby-card-title {
+	font-size: 0.95em;
+	font-weight: bold;
+	margin-bottom: 0.3em;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.lobby-flavor-inline {
+	font-size: 0.78em;
+	color: #b8a8d8;
+	font-weight: normal;
+	margin-left: 0.6em;
+}
+.lobby-card-right {
 	display: flex;
-	flex-direction: column;
-	align-items: flex-end;
-	gap: 0.5em;
+	align-items: center;
+	gap: 0.6em;
 	flex-shrink: 0;
 }
-.lobby-flavor-row {
+.lobby-card-actions {
 	display: flex;
-	flex-wrap: wrap;
 	gap: 0.4em;
-	margin-top: 0.45em;
 }
-.lobby-flavor-tag {
-	font-size: 0.75em;
-	color: #9a8ac0;
-	background: rgba(255,255,255,0.05);
-	border: 1px solid rgba(255,255,255,0.08);
-	border-radius: 3px;
-	padding: 0.15em 0.5em;
+.lobby-action-btn {
+	padding: 0.3em 0.7em;
+	font-size: 0.8em;
+	border-radius: 6px;
+	background: rgba(25,20,40,0.8);
+	border: 1px solid rgba(200,150,100,0.25);
+	color: #d0c8b0;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: background 0.15s, border-color 0.15s;
+}
+.lobby-action-btn:hover {
+	background: rgba(50,40,70,0.9);
+	border-color: rgba(200,150,100,0.5);
+}
+.lobby-action-join {
+	background: linear-gradient(90deg, #a67c52, #d4a05a);
+	color: #fff9e6;
+	border-color: #e5b56f;
+}
+.lobby-action-join:hover {
+	background: linear-gradient(90deg, #d4a05a, #a67c52);
+}
+.lobby-card-meta {
+	font-size: 0.72em;
+	color: #999;
 	white-space: nowrap;
 }
 .lobby-code-tag {
 	font-family: monospace;
-	font-size: 1em;
-	letter-spacing: 0.15em;
-	background: rgba(255,255,255,0.08);
-	padding: 0.25em 0.6em;
+	font-size: 0.82em;
+	letter-spacing: 0.12em;
+	background: rgba(255,255,255,0.06);
+	padding: 0.2em 0.5em;
 	border-radius: 4px;
-	color: #aab4ff;
+	color: #aab4dd;
 }
 
 /* === Player tags in lobby cards === */
@@ -379,20 +423,15 @@ hr {
 	font-weight: 600;
 }
 .lobby-player-detail {
-	color: #8a8ac0;
+	color: #b0b0d8;
 	font-size: 0.9em;
 	margin-left: 0.2em;
 }
 .fade {
 	animation: fade 1.6s ease-out forwards;
 }
-.story-reader {
-	width: min(720px, 95%);
-}
-
 /* === Help Modal === */
 .help-modal-content {
-	width: min(1000px, 95%);
 	font-family: 'Lora', Georgia, serif;
 }
 .help-modal-content h2 {
@@ -466,6 +505,44 @@ hr {
 .help-section-tip h3 {
 	color: #7ecf9a;
 }
+.story-tab {
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	color: rgba(255,255,255,0.65);
+	padding: 0.5em 1.2em;
+	font-size: 0.9em;
+	cursor: pointer;
+	transition: color 0.2s, border-color 0.2s;
+	border-radius: 0;
+}
+.story-tab:hover { color: rgba(255,255,255,0.8); }
+.story-tab--active {
+	color: #aab4ff;
+	border-bottom-color: #aab4ff;
+}
+/* Pin button on story entries */
+.pin-moment-btn {
+	float: right;
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0 0 0 0.5em;
+	font-size: 0.8em;
+	cursor: pointer;
+	opacity: 0.2;
+	transition: opacity 0.15s;
+}
+.story-entry:hover .pin-moment-btn,
+.dm-entry:hover .pin-moment-btn,
+.player-entry:hover .pin-moment-btn { opacity: 0.6; }
+.pin-moment-btn:hover { opacity: 1 !important; }
+.pinned .pin-moment-btn { opacity: 1; }
+.pinned {
+	border-left: 3px solid #f0c060 !important;
+	background: rgba(240, 192, 96, 0.06) !important;
+}
+
 .story-log-reader {
 	max-height: 65vh;
 	overflow-y: auto;
@@ -508,13 +585,6 @@ hr {
 	transition: width 0.4s ease;
 }
 
-input[disabled], select[disabled], textarea[disabled],
-input.locked, select.locked, textarea.locked {
-  opacity: 0.6;
-  background: #222;
-  cursor: not-allowed;
-}
-
 /* === Unified Fantasy Modal === */
 .modal {
 	position: fixed;
@@ -526,21 +596,57 @@ input.locked, select.locked, textarea.locked {
 	backdrop-filter: blur(3px);
 	z-index: 9999;
 	animation: fadeIn 0.2s ease-out;
+	min-height: 60vh;
 }
 
 /* core content box */
 .modal-content {
+	position: relative;
 	background: rgba(20, 20, 40, 0.95);
 	color: #fff;
 	border: 2px solid #aa7733;
 	border-radius: 1rem;
 	padding: 1.5rem 2rem;
-	width: min(500px, 90%);
+	width: min(600px, 92%);
 	max-height: 85vh;
 	overflow-y: auto;
 	box-shadow: 0 0 25px rgba(150,150,255,0.25);
 	font-family: 'Cinzel', serif;
 	text-align: left;
+	min-height: 60vh;
+}
+/* size variants */
+.modal-narrow { width: min(400px, 92%); }
+.modal-wide   { width: min(960px, 95%); }
+.modal-full   { width: min(1100px, 95%); }
+
+/* universal modal close button */
+.modal-close {
+	position: sticky;
+	float: right;
+	top: 0;
+	right: 0;
+	z-index: 1;
+	width: 28px;
+	height: 28px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	margin: -0.5rem -0.75rem 0 0;
+	border: 1px solid rgba(200,150,100,0.3);
+	border-radius: 50%;
+	background: rgba(25,20,40,0.85);
+	color: #e6d7a8;
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.modal-close:hover {
+	background: rgba(170,80,50,0.6);
+	color: #fff;
+	border-color: rgba(255,180,100,0.5);
 }
 
 /* headings */
@@ -581,8 +687,8 @@ input.locked, select.locked, textarea.locked {
 	padding: 4px;
 }
 
-/* buttons */
-.modal-content button {
+/* buttons — only style unclassed action buttons; .primary/.secondary/.modal-close keep their own styles */
+.modal-content button:not(.primary):not(.secondary):not(.modal-close):not(.danger):not(.font-option):not(.lobby-tab) {
 	margin: auto;
 	display: block;
 	padding: 0.5em 1.5em;
@@ -593,7 +699,7 @@ input.locked, select.locked, textarea.locked {
 	border: none;
 	cursor: pointer;
 }
-.modal-content button:hover {
+.modal-content button:not(.primary):not(.secondary):not(.modal-close):not(.danger):not(.font-option):not(.lobby-tab):hover {
 	background: linear-gradient(90deg, #6fb3ff, #5560ff);
 }
 
@@ -671,7 +777,7 @@ input.locked, select.locked, textarea.locked {
 	font-size: 0.72em;
 	text-transform: uppercase;
 	letter-spacing: 0.08em;
-	color: #6a5a8a;
+	color: #a090c0;
 	margin-bottom: 0.5em;
 }
 
@@ -689,7 +795,7 @@ input.locked, select.locked, textarea.locked {
 
 .lgo-key {
 	font-size: 0.78em;
-	color: #7a6a9a;
+	color: #a898c0;
 }
 
 .lgo-val {
@@ -698,7 +804,7 @@ input.locked, select.locked, textarea.locked {
 }
 
 .lgo-muted {
-	color: #5a4a6a;
+	color: #8878a0;
 	font-style: italic;
 }
 
@@ -1064,7 +1170,7 @@ textarea.locked {
 
 #actionLog { color: #ccc; font-family: monospace; }
 #actionLog .player { color: #8ef; font-weight: bold; }
-#actionLog .timestamp { color: #888; }
+#actionLog .timestamp { color: #aaa; }
 
 /* === Font Picker === */
 .font-picker {
@@ -1101,7 +1207,7 @@ textarea.locked {
 
 .font-option .font-name {
   font-size: 0.75em;
-  color: #a0a0b0;
+  color: #c0c0d0;
   font-family: 'Cinzel', serif;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1126,25 +1232,6 @@ textarea.locked {
   border-radius: 0.5em;
 }
 
-/* DM narration — soft, immersive */
-.story-entry.dm-narration {
-  color: #ccc;
-  margin: 0.25em 0;
-}
-
-/* Player actions — bold and distinct */
-.story-entry.player-action {
-  background: rgba(60, 120, 255, 0.15);
-  border-left: 3px solid #4a8df8;
-  padding: 0.5em 0.75em;
-  margin: 0.4em 0;
-  border-radius: 0.25em;
-  color: #b0cfff;
-  font-weight: 600;
-  font-style: italic;
-  box-shadow: 0 0 6px rgba(60, 120, 255, 0.3);
-  animation: fadeIn 0.3s ease-out;
-}
 /* === Base Story Entry === */
 .story-entry {
   margin: 0.35em 0;
@@ -1316,6 +1403,9 @@ textarea.locked {
 	cursor: help;
 }
 #pointsRemaining {
+  color: #ffd866;
+  font-weight: bold;
+  text-shadow: 0 0 6px rgba(255, 220, 150, 0.5);
   transition: color 0.3s, transform 0.2s;
 }
 #pointsRemaining.flash {
@@ -1447,35 +1537,11 @@ textarea.locked {
 	}
 }
 
-@keyframes fadeIn {
-	from { opacity: 0; }
-	to { opacity: 1; }
-}
-
-/* Smooth fade animation for new entries */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-/* Subtle fade-in animation */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
 
 @keyframes fade {
 	from {

@@ -22,6 +22,7 @@ const FADE_STEPS       = 50;
 class MusicManager {
 	constructor() {
 		this.library        = null;      // loaded from library.json
+		this._loadPromise   = null;      // resolved once library.json is fetched
 		this.currentMood    = null;
 		this.currentFile    = null;
 		this.currentTitle   = null;
@@ -33,21 +34,37 @@ class MusicManager {
 		this._bindControls();
 	}
 
-	async load() {
-		try {
-			const res = await fetch("/config/library.json");
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			this.library = await res.json();
-			console.log(`🎵 Music library loaded — ${this.library.songs?.length ?? 0} songs`);
-		} catch (err) {
-			console.warn("🎵 Music library unavailable:", err.message);
-		}
+	load() {
+		if (this._loadPromise) return this._loadPromise;
+		this._loadPromise = (async () => {
+			try {
+				const res = await fetch("/config/library.json");
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				this.library = await res.json();
+				console.log(`🎵 Music library loaded — ${this.library.songs?.length ?? 0} songs`);
+			} catch (err) {
+				console.warn("🎵 Music library unavailable:", err.message);
+			}
+		})();
+		return this._loadPromise;
 	}
 
 	// Called by the socket handler when the DM specifies a music mood.
-	requestMood(mood) {
-		if (!this.library?.songs?.length) return;
-		if (mood === this.currentMood) return; // no change needed
+	// Waits for the library to be ready if it hasn't loaded yet.
+	async requestMood(mood) {
+		// Ensure library is loaded before proceeding
+		if (!this.library && this._loadPromise) {
+			console.log(`🎵 requestMood("${mood}") — waiting for library to load...`);
+			await this._loadPromise;
+		}
+		if (!this.library?.songs?.length) {
+			console.warn(`🎵 requestMood("${mood}") — library not available, skipping`);
+			return;
+		}
+		if (mood === this.currentMood) {
+			console.log(`🎵 requestMood("${mood}") — already playing this mood`);
+			return;
+		}
 
 		const song = this._findBestMatch(mood);
 		if (!song) {
@@ -55,6 +72,7 @@ class MusicManager {
 			return;
 		}
 
+		console.log(`🎵 requestMood("${mood}") — playing "${song.title}"`);
 		this.currentMood  = mood;
 		this.currentTitle = song.title;
 		this._crossfadeTo(song);

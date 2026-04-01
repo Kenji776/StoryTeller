@@ -116,7 +116,10 @@ class NarrationChannel {
 		});
 
 		this.audio.addEventListener("error", () => {
-			if (channel.audio && !channel.cancelled) {
+			// Suppress errors during teardown or before any data arrived —
+			// these are just the browser complaining about a revoked object URL
+			// or an empty MediaSource and are completely harmless.
+			if (channel.audio && !channel.cancelled && channel.sourceBuffer) {
 				console.warn(`⚠️ [${channel.name}] Audio element error — continuing`);
 			}
 		});
@@ -243,6 +246,12 @@ function _channelForStream(streamId) {
 function startNarration(speaker, streamId) {
 	const isDM = (speaker === "DM");
 	const channel = isDM ? dmChannel : playerChannel;
+
+	// When a player starts speaking, stop the DM so they don't overlap
+	if (!isDM && dmChannel.active) {
+		dmChannel._teardown();
+		dmChannel.active = false;
+	}
 
 	// If this channel already has an active stream, tear it down first
 	if (channel.active) channel._teardown();

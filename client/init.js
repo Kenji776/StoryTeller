@@ -27,7 +27,7 @@ function init() {
 	const refreshBtn = document.getElementById("refreshLobbies");
 	if (refreshBtn) refreshBtn.addEventListener("click", fetchActiveLobbies);
 
-	// Show Quick Start button if devMode is active
+	// Show appropriate Quick Start button based on devMode
 	fetch("/api/features").then(r => r.json()).then(f => {
 		if (f.devMode) {
 			const btn = document.getElementById("quickStartBtn");
@@ -35,6 +35,9 @@ function init() {
 				btn.style.display = "";
 				btn.addEventListener("click", handleQuickStart);
 			}
+		} else {
+			const btn = document.getElementById("quickStartPublicBtn");
+			if (btn) btn.style.display = "";
 		}
 	}).catch(() => {});
 }
