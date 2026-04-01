@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>D&D AI DM — Lobbies</title>
+    <title>StoryTeller - AI D&D (Sorta)</title>
     <link rel="stylesheet" href="/style.css" />
 	<link rel="stylesheet" href="/components.css" />
 	<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative&family=Cormorant+Garamond:wght@400;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -17,38 +17,53 @@
 
       <!-- LANDING PAGE -->
       <section id="landing" class="panel">
-        <div class="row space-between" style="align-items:flex-start;flex-wrap:wrap;gap:0.5em;">
-          <h2 style="margin:0;">Play a Janky AI Powered D&amp;D game with friends or by yourself</h2>
-          <button id="helpBtn" class="secondary" style="flex-shrink:0;">📖 How to Play</button>
-        </div>
-		<p>Loosely based on classic D&amp;D, this application will allow you to play an AI powered narrative story loosely based on D&amp;D 5e. Expect a lot of weirdness and things that don't make sense but it should still be fun enough to be worth while for a bit.</p>
-        <div class="grid two">
-          <div class="form">
-            <h3>Create Lobby</h3>
-            <button id="createLobby" class="primary">Create Lobby</button>
-			<button id="quickStartBtn" class="primary" style="display:none;background:#4a3;border-color:#4a3;">⚡ Quick Start (Test Mode)</button>
-			<label style="display:flex;align-items:center;gap:0.5em;margin-bottom:0.5em;cursor:pointer;">
-              <input type="checkbox" id="lobbyPrivate" />
-              <span>🔒 Password protect</span>
-            </label>
-            <input type="password" id="lobbyPassword" placeholder="Set password…" style="display:none;margin-bottom:0.5em;" />
-          </div>
-          <div class="form">
-            <h3>Join Lobby</h3>
-            <input id="joinCode" placeholder="Enter code (e.g., B9K3FD)" />
-            <button id="joinLobby">Join</button>
-          </div>
+        
+        <button id="helpBtn" class="secondary" style="flex-shrink:0; float:right">📖 How to Play</button>
+       
+		<p>Loosely based on classic D&amp;D, here you can play an AI powered narrative reminiscent of D&amp;D style gameplay. Expect a lot of weirdness and things that don't make sense but it should still be fun enough to be worth while for a bit.</p>
+        <div class="lobby-grid">
+          <h3 style="grid-area:head-l;">Create Lobby</h3>
+          <h3 style="grid-area:head-r;">Join Lobby</h3>
+
+          <button id="createLobby" class="primary" style="grid-area:row1-l;">Create Custom Game</button>
+          <input id="joinCode" placeholder="Enter code (e.g., B9K3FD)" style="grid-area:row1-r;" />
+
+          <button id="quickStartBtn" class="primary" style="grid-area:row2-l;display:none;background:#4a3;border-color:#4a3;">⚡ Quick Start (Test Mode)</button>
+          <button id="quickStartPublicBtn" class="primary" style="grid-area:row2-l;display:none;background:linear-gradient(90deg,#5a3a8a,#7a50c8);border-color:#9a70e8;">🎲 Quick Start</button>
+          <button id="joinLobby" style="grid-area:row2-r;">Join</button>
+
+          <label style="grid-area:row3-l;display:flex;align-items:center;gap:0.5em;cursor:pointer;">
+            <input type="checkbox" id="lobbyPrivate" />
+            <span>🔒 Password protect</span>
+          </label>
+
+          <input type="password" id="lobbyPassword" placeholder="Set password…" style="grid-area:row4-l;display:none;" />
         </div>
 
-        <!-- Active games list -->
+        <!-- Adventure board -->
         <div id="activeGamesSection" style="margin-top:2em;">
           <div class="row space-between" style="margin-bottom:0.5em;">
-            <h3 style="margin:0;">Active Adventures</h3>
-            <button id="refreshLobbies" class="secondary" style="padding:0.3em 0.8em;font-size:0.85em;">↻ Refresh</button>
+            <h3 style="margin:0;">Adventure Board</h3>
+            <div style="display:flex;align-items:center;gap:0.5em;">
+              <input id="adventureSearch" type="text" placeholder="Search by name..." style="padding:0.3em 0.6em;font-size:0.85em;width:160px;" />
+              <button id="refreshLobbies" class="secondary" style="padding:0.3em 0.8em;font-size:0.85em;">↻ Refresh</button>
+            </div>
           </div>
           <div id="lobbyTabs" class="lobby-tabs"></div>
-          <div id="activeGamesList"><p class="hint">Loading adventures...</p></div>
+          <div id="activeGamesList" style="max-height:400px;overflow-y:auto;"><p class="hint">Loading adventures...</p></div>
         </div>
+
+        <footer style="margin-top:2.5em;padding-top:1.5em;border-top:1px solid #333;text-align:center;color:#888;font-size:0.88em;">
+          <p style="margin:0 0 0.75em;">
+            <a href="https://github.com/Kenji776/StoryTeller" target="_blank" rel="noopener" style="color:#9a8aff;text-decoration:none;">⚙️ GitHub — Kenji776/StoryTeller</a>
+          </p>
+          <p style="margin:0 0 0.5em;">Tokens cost money — help keep the game going!</p>
+          <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:0.5em;">
+            <a href="https://paypal.me/DanLlewellyn" target="_blank" rel="noopener" style="padding:0.35em 0.9em;border-radius:6px;background:#0070ba;color:#fff;text-decoration:none;font-size:0.88em;">PayPal <span style="opacity:0.75;">@Kenji776</span></a>
+            <a href="https://cash.app/$Kenji776" target="_blank" rel="noopener" style="padding:0.35em 0.9em;border-radius:6px;background:#00c244;color:#fff;text-decoration:none;font-size:0.88em;">Cash App <span style="opacity:0.75;">$Kenji776</span></a>
+            <a href="https://venmo.com/Kenji776" target="_blank" rel="noopener" style="padding:0.35em 0.9em;border-radius:6px;background:#3d95ce;color:#fff;text-decoration:none;font-size:0.88em;">Venmo <span style="opacity:0.75;">@Kenji776</span></a>
+          </div>
+        </footer>
       </section>
 
       <!-- LOBBY PAGE -->
@@ -76,7 +91,7 @@
             <div class="form">
               <!-- Character portrait — placeholder until generated -->
               <div id="charImageContainer" style="text-align:center;margin-bottom:12px;">
-                <div id="charImagePlaceholder" style="width:100%;height:200px;background:#1a1a2e;border:2px dashed #444;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#555;flex-direction:column;gap:8px;">
+                <div id="charImagePlaceholder" style="width:100%;height:200px;background:#1a1a2e;border:2px dashed #444;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#888;flex-direction:column;gap:8px;">
                   <span style="font-size:3em;">🧝</span>
                   <span style="font-size:0.8em;">Portrait will appear here</span>
                 </div>
@@ -278,6 +293,7 @@
 <!-- MAP DISABLED: 		<button id="openMapBtn" class="secondary">🗺️ Open Map</button> -->
 		<button id="openInitiativeBtn" class="secondary">⚔️ Initiative</button>
 		<button id="openChat" class="secondary chat-toggle" onclick="openChat()">💬 Chat</button>
+		<button id="readStoryGameBtn" class="secondary">📖 Read Story</button>
 		<button id="openPlayerOptionsBtn" class="secondary">⚙️ Options</button>
 		<button id="dmOptionsBtn" class="secondary hidden">🛡️ DM Controls</button>
 		<button id="endCampaignBtn" class="secondary hidden">🏆 End Campaign</button>
@@ -435,7 +451,8 @@
 	</section>
 	<!-- === Rest Vote Modal === -->
 	<div id="restVoteModal" class="modal" style="display:none;">
-		<div class="modal-content" style="max-width:400px;text-align:center;">
+		<div class="modal-content modal-narrow" style="text-align:center;">
+			<button class="modal-close" data-modal-close>✕</button>
 			<h2 id="restVoteTitle">⛺ Rest Vote</h2>
 			<p id="restVoteDesc" style="color:#aaa;font-size:0.9em;"></p>
 			<div class="rest-vote-counts">
@@ -455,7 +472,8 @@
 
 	<!-- === Password Modal === -->
 	<div id="passwordModal" class="modal" style="display:none;">
-		<div class="modal-content" style="max-width:340px;">
+		<div class="modal-content modal-narrow">
+			<button class="modal-close" data-modal-close>✕</button>
 			<h2>🔒 Password Required</h2>
 			<p style="color:#aaa;font-size:0.9em;">This lobby is password protected. Enter the password to join.</p>
 			<input type="password" id="lobbyPasswordInput" placeholder="Enter password…" style="width:100%;margin-bottom:1em;" />
@@ -468,11 +486,9 @@
 
 	<!-- === How to Play Modal === -->
 	<div id="helpModal" class="modal" style="display:none;">
-		<div class="modal-content help-modal-content">
-			<div class="row space-between" style="align-items:flex-start;margin-bottom:0.75em;">
-				<h2 style="margin:0;">📖 How to Play StoryTeller</h2>
-				<button id="helpModalClose" class="secondary">✕ Close</button>
-			</div>
+		<div class="modal-content modal-full help-modal-content">
+			<button class="modal-close" data-modal-close>✕</button>
+			<h2 style="margin:0 0 0.75em;">📖 How to Play StoryTeller</h2>
 
 			<nav class="help-toc">
 				<a href="#help-what">What is this?</a>
@@ -497,7 +513,7 @@
 				<h3>🏰 Getting Started</h3>
 				<ul>
 					<li><strong>Create a Lobby</strong> — Click "Create Lobby" and share the 6-character join code with your friends. You can optionally password-protect the game with the 🔒 checkbox.</li>
-					<li><strong>Join a Lobby</strong> — Enter the 6-character code and click Join. Public games also appear in the <em>Active Adventures</em> list.</li>
+					<li><strong>Join a Lobby</strong> — Enter the 6-character code and click Join. Public games also appear in the <em>Adventure Board</em>.</li>
 					<li><strong>Build your Character</strong> — Fill in your name, race, class, stats, abilities, and backstory in the lobby before the game starts. Click <strong>Save Sheet</strong> when done.</li>
 					<li><strong>Export your Character</strong> — Hit 📤 Export to save a <code>.stchar</code> file to your computer. <strong>Do this before leaving!</strong> You'll need it to rejoin later.</li>
 					<li><strong>Start the Game</strong> — Once all players are ready, the host clicks <strong>Start Game</strong>.</li>
@@ -557,7 +573,7 @@
 				<h3>💾 Character Export &amp; Rejoin</h3>
 				<ul>
 					<li>Click 📤 <strong>Export</strong> (in the lobby or in-game) to download your character as a <code>.stchar</code> file. Keep it safe — it contains your full character sheet including XP, gold, and inventory.</li>
-					<li>If you disconnect and come back, find the game in the Active Adventures list and click it. You'll see a list of absent character slots.</li>
+					<li>If you disconnect and come back, find the game in the Adventure Board and click it. You'll see a list of absent character slots.</li>
 					<li>Click <em>Upload .stchar</em> next to your character's name and select your file. The game cryptographically verifies the file before letting you back in.</li>
 					<li>Click 📥 <strong>Import</strong> in the lobby to load a previously saved character into the character builder.</li>
 				</ul>
@@ -604,19 +620,17 @@
 
 	<!-- === DM Options Auth Modal === -->
 	<div id="dmAuthModal" class="modal" style="display:none;">
-		<div class="modal-content" style="max-width:440px;text-align:center;">
+		<div class="modal-content modal-narrow" style="text-align:center;">
+			<button class="modal-close" data-modal-close>✕</button>
 			<h2>🛡️ DM Authentication</h2>
 			<p style="color:#aaa;font-size:0.9em;margin-bottom:0.5em;">
 				To access the DM tools, upload your exported character file (<strong>.stchar</strong>) to verify you are the game host.
 			</p>
-			<p style="color:#777;font-size:0.82em;margin-bottom:1.25em;">
+			<p style="color:#999;font-size:0.82em;margin-bottom:1.25em;">
 				You can export your character from the <strong>Options</strong> menu in-game. Only the host's character file will be accepted.
 			</p>
 			<div id="dmAuthStatus" style="min-height:1.5em;margin-bottom:1em;font-size:0.9em;"></div>
-			<div class="row" style="gap:0.75em;justify-content:center;">
-				<button id="dmAuthUploadBtn" class="primary">📂 Upload .stchar File</button>
-				<button id="dmAuthCancelBtn" class="secondary">Cancel</button>
-			</div>
+			<button id="dmAuthUploadBtn" class="primary" style="margin:0 auto;">📂 Upload .stchar File</button>
 			<input type="file" id="hostCharFileInput" accept=".stchar" style="display:none" />
 		</div>
 	</div>
@@ -632,29 +646,33 @@
 
 	<!-- === NARRATION INDICATOR === -->
 	<div id="narratorIndicator" class="hidden">
-		<span class="icon">🔮</span>
 		<span id="narratorText">Narrating...</span>
 		<button id="stopNarrationBtn" title="Stop narration">⏹ Stop</button>
 	</div>
 	
 	<!-- === STORY READER MODAL === -->
 	<div id="storyModal" class="modal" style="display:none;">
-		<div class="modal-content story-reader">
-			<div class="row space-between" style="margin-bottom:1em;align-items:flex-start;">
-				<div>
-					<h2 id="storyModalTitle" style="margin:0 0 0.25em;">—</h2>
-					<div id="storyModalMeta"></div>
-				</div>
-				<button id="storyModalClose" class="secondary">✕ Close</button>
+		<div class="modal-content modal-wide">
+			<button class="modal-close" data-modal-close>✕</button>
+			<h2 id="storyModalTitle" style="margin:0 0 0.25em;">—</h2>
+			<div id="storyModalMeta" style="margin-bottom:0.75em;"></div>
+			<div class="story-tabs" style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:0.75em;">
+				<button class="story-tab story-tab--active" data-story-tab="log">📖 Full Story</button>
+				<button class="story-tab" data-story-tab="summary">📋 Summary</button>
+				<button class="story-tab" data-story-tab="pinned">📌 Pinned</button>
 			</div>
 			<div id="storyModalLog" class="story-log-reader"></div>
+			<div id="storyModalSummary" class="story-log-reader" style="display:none;"></div>
+			<div id="storyModalPinned" class="story-log-reader" style="display:none;"></div>
 		</div>
 	</div>
 
 	<!-- === PLAYER OPTIONS MODAL === -->
 	<div id="playerOptionsModal" class="modal" style="display:none;">
-		<div class="modal-content" style="width:min(420px,90%);">
+		<div class="modal-content">
+			<button class="modal-close" data-modal-close>✕</button>
 			<h2>Options</h2>
+			<div id="playerOptionsGameSettings"></div>
 			<hr />
 			<h4 style="margin-bottom:0.5em;">Story Font</h4>
 			<p style="font-size:0.82em;color:#999;margin:0 0 1em;">Choose the typeface used in the story log.</p>
@@ -677,7 +695,7 @@
 			<div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.25em 0;">
 				<div>
 					<span style="font-size:0.9em;">Enable narration audio</span><br>
-					<small style="color:#777;">Turn off if multiple players are in the same room</small>
+					<small style="color:#999;">Turn off if multiple players are in the same room</small>
 				</div>
 				<label style="display:flex;align-items:center;gap:0.5em;cursor:pointer;font-size:0.88em;">
 					<input type="checkbox" id="narrationEnabledToggle" style="width:1.1em;height:1.1em;accent-color:#7a50c8;cursor:pointer;" checked />
@@ -686,8 +704,6 @@
 			<hr style="margin-top:1.25em;" />
 			<h4 style="margin-bottom:0.5em;">Character</h4>
 			<button id="exportCharGameBtn" style="margin:0 0 0.5em;display:block;width:100%;background:linear-gradient(90deg,#3a5a3a,#4a7a4a);border-color:#5a9a5a;color:#cfffcf;">📤 Export Character Sheet</button>
-			<hr />
-			<button id="playerOptionsClose" class="secondary" style="margin:0;display:block;width:100%;">Close</button>
 		</div>
 	</div>
 

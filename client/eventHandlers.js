@@ -360,6 +360,9 @@ function handleToggleReady() {
 	// Mid-game join: send sheet and request to join the running game
 	if (joiningInProgress) {
 		const sheet = buildCurrentSheet();
+		// Restore imported XP/gold so they aren't lost on mid-game join
+		if (_pendingImportXP   !== null) sheet.xp   = Number(_pendingImportXP)   || 0;
+		if (_pendingImportGold !== null) sheet.gold  = Number(_pendingImportGold) || 0;
 		socket.emit("player:join:game", {
 			lobbyCode: pendingJoinCode,
 			name: me.name,
@@ -471,7 +474,35 @@ function handleOpenPlayerOptions() {
 	const saved = localStorage.getItem("storyFont") || "Lora";
 	applyStoryFont(saved);
 	applyNarrationToggle();
+	renderPlayerOptionsGameSettings();
 	els.playerOptionsModal.style.display = "flex";
+}
+
+function renderPlayerOptionsGameSettings() {
+	const el = document.getElementById("playerOptionsGameSettings");
+	if (!el || !currentState) { if (el) el.innerHTML = ""; return; }
+	const s = currentState;
+
+	const brutalityLabels = ["Kid Safe","Kid Safe","Lighthearted","Lighthearted","Standard","Standard","Gritty","Gritty","Brutal","Brutal","Ultimate Brutality"];
+	const brutalityColors = (n) => n <= 2 ? "#4a9a4a" : n <= 4 ? "#8a8a20" : n <= 6 ? "#9a8050" : n <= 8 ? "#9a4a20" : "#9a2020";
+	const bLevel = s.brutalityLevel ?? 5;
+	const SETTING_LABELS = { standard: "⚔️ High Fantasy", dark_ages: "🏚️ Dark Ages", steampunk: "⚙️ Steampunk", pirate: "🏴‍☠️ Pirate Age", scifi: "🚀 Sci-fi Fantasy" };
+	const DIFF_LABELS    = { casual: "🌸 Casual", standard: "⚔️ Standard", hardcore: "💀 Hardcore", merciless: "☠️ Merciless" };
+	const LOOT_LABELS    = { sparse: "💰 Sparse", fair: "💎 Fair", generous: "🎁 Generous" };
+
+	const rows = [
+		s.campaignTone  ? `<div class="lgo-row"><span class="lgo-key">Tone</span><span class="lgo-val">${s.campaignTone.emoji} ${s.campaignTone.label}</span></div>` : "",
+		s.campaignTheme ? `<div class="lgo-row"><span class="lgo-key">Theme</span><span class="lgo-val">${s.campaignTheme.emoji} ${s.campaignTheme.label}</span></div>` : "",
+		`<div class="lgo-row"><span class="lgo-key">Setting</span><span class="lgo-val">${SETTING_LABELS[s.campaignSetting || "standard"]}</span></div>`,
+		`<div class="lgo-row"><span class="lgo-key">Difficulty</span><span class="lgo-val">${DIFF_LABELS[s.difficulty || "standard"]}</span></div>`,
+		`<div class="lgo-row"><span class="lgo-key">Loot</span><span class="lgo-val">${LOOT_LABELS[s.lootGenerosity || "fair"]}</span></div>`,
+		`<div class="lgo-row"><span class="lgo-key">Intensity</span><span class="lgo-val" style="color:${brutalityColors(bLevel)};">⚡ ${brutalityLabels[bLevel]}</span></div>`,
+	].filter(Boolean).join("");
+
+	el.innerHTML = `
+		<hr />
+		<h4 style="margin-bottom:0.5em;">Game Settings</h4>
+		<div class="lgo-panel">${rows}</div>`;
 }
 
 function handleClosePlayerOptions() {
@@ -487,7 +518,10 @@ function handleFontOptionClick(e) {
 }
 
 safeAddEvent(els.openPlayerOptionsBtn, "click", handleOpenPlayerOptions);
-safeAddEvent(els.playerOptionsClose, "click", handleClosePlayerOptions);
+safeAddEvent(document.getElementById("readStoryGameBtn"), "click", () => {
+	if (lobbyCode) showStoryModal(lobbyCode);
+});
+// playerOptionsClose removed — handled by centralized .modal-close
 if (els.playerOptionsModal) {
 	els.playerOptionsModal.addEventListener("click", (e) => {
 		if (e.target === els.playerOptionsModal) handleClosePlayerOptions();
@@ -658,6 +692,14 @@ async function handleImportCharacter(e) {
 	if (!file) return;
 	e.target.value = ""; // reset so the same file can be re-imported
 
+	const importBtn = els.importCharBtn;
+	let prevLabel;
+	if (importBtn) {
+		prevLabel = importBtn.textContent;
+		importBtn.disabled = true;
+		importBtn.textContent = "⏳ Importing...";
+	}
+
 	try {
 		const text       = await file.text();
 		const { v, data, sig } = JSON.parse(text);
@@ -693,6 +735,10 @@ async function handleImportCharacter(e) {
 		if (els.desc)         els.desc.value         = sheet.description || "";
 		if (els.voiceSelect)  els.voiceSelect.value  = sheet.voice_id   || "";
 
+		// Update the gold display so buildCurrentSheet() can read it
+		const goldDisplayEl = document.getElementById("charGold");
+		if (goldDisplayEl) goldDisplayEl.textContent = _pendingImportGold;
+
 		// Show XP / gold in the action log so the player can see what was preserved
 		if (_pendingImportXP || _pendingImportGold) {
 			appendLog(`[Import] Preserving XP: ${_pendingImportXP} | Gold: ${_pendingImportGold} — will apply on Save Sheet`);
@@ -718,6 +764,11 @@ async function handleImportCharacter(e) {
 	} catch (err) {
 		console.error("Import error:", err);
 		showToast("Failed to read character file", "danger");
+	} finally {
+		if (importBtn) {
+			importBtn.disabled = false;
+			importBtn.textContent = prevLabel;
+		}
 	}
 }
 
@@ -734,7 +785,7 @@ const lobbyPrivateChk = document.getElementById("lobbyPrivate");
 const lobbyPasswordFld = document.getElementById("lobbyPassword");
 if (lobbyPrivateChk && lobbyPasswordFld) {
 	lobbyPrivateChk.addEventListener("change", () => {
-		lobbyPasswordFld.style.display = lobbyPrivateChk.checked ? "block" : "none";
+		lobbyPasswordFld.style.display = lobbyPrivateChk.checked ? "" : "none";
 		if (!lobbyPrivateChk.checked) lobbyPasswordFld.value = "";
 	});
 }
@@ -847,9 +898,7 @@ safeAddEvent(document.getElementById("dmOptionsBtn"), "click", handleDMOptions);
 safeAddEvent(document.getElementById("dmAuthUploadBtn"), "click", () => {
 	document.getElementById("hostCharFileInput")?.click();
 });
-safeAddEvent(document.getElementById("dmAuthCancelBtn"), "click", () => {
-	document.getElementById("dmAuthModal").style.display = "none";
-});
+// dmAuthCancelBtn removed — handled by centralized .modal-close
 
 // === End Campaign ===
 function handleEndCampaign() {
@@ -858,17 +907,9 @@ function handleEndCampaign() {
 }
 safeAddEvent(els.endCampaignBtn, "click", handleEndCampaign);
 
-// === Story Modal Close ===
-safeAddEvent(document.getElementById("storyModalClose"), "click", () => {
-	document.getElementById("storyModal").style.display = "none";
-});
-
 // === Help Modal ===
 safeAddEvent(document.getElementById("helpBtn"), "click", () => {
 	document.getElementById("helpModal").style.display = "flex";
-});
-safeAddEvent(document.getElementById("helpModalClose"), "click", () => {
-	document.getElementById("helpModal").style.display = "none";
 });
 // Close on backdrop click
 safeAddEvent(document.getElementById("helpModal"), "click", (e) => {

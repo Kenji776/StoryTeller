@@ -31,6 +31,7 @@ const defaults = {
 	inventory: [],
 	description: "",
 	spellSlotsUsed: 0,
+	trinket: null,   // { name, description, attributes }
 };
 
 export class LobbyStore {
@@ -102,7 +103,10 @@ export class LobbyStore {
 			players: {},
 			sockets: {},
 			history: [],
+			summarizedUpTo: 0,
 			storyContext: "—",
+			ancientHistory: "",
+			pinnedMoments: [],
 			initiative: [],
 			turnIndex: 0,
 			timerEnabled: true,
@@ -335,9 +339,10 @@ export class LobbyStore {
 		}
 		// Preserve generated image URL across sheet re-saves
 		if (existing.imageUrl && !merged.imageUrl) merged.imageUrl = existing.imageUrl;
-		// Preserve weapon and armor if the new sheet didn't supply one
-		if (existing.weapon && !merged.weapon) merged.weapon = existing.weapon;
-		if (existing.armor  && !merged.armor)  merged.armor  = existing.armor;
+		// Preserve weapon, armor, and trinket if the new sheet didn't supply one
+		if (existing.weapon  && !merged.weapon)  merged.weapon  = existing.weapon;
+		if (existing.armor   && !merged.armor)   merged.armor   = existing.armor;
+		if (existing.trinket && !merged.trinket)  merged.trinket = existing.trinket;
 		// Preserve characterId across re-saves; assign one on first save
 		merged.characterId = existing.characterId || randomUUID();
 		// If this is the host's first character save, record their characterId
@@ -473,70 +478,207 @@ export class LobbyStore {
 		const s = this.index[lobbyId];
 		if (!s) return;
 		s.history.push({ role: "assistant", content });
-		s.storyContext = content;
+		// Only set storyContext if no summary exists yet — once autoSummarize
+		// has built a proper summary we must not overwrite it with a single response.
+		if (!s._hasSummary) s.storyContext = content;
 		this.persist(lobbyId);
 	}
 	summarize(lobbyId, content) {
-		// Keep this for explicit admin tooling that wants to reset + compress history.
+		// Admin tooling: update the running summary without deleting history.
 		const s = this.index[lobbyId];
 		if (!s) return;
 		s.storyContext = content;
-		s.history = [{ role: "assistant", content }];
+		s._hasSummary = true;
+		s.summarizedUpTo = s.history.length;
 		this.persist(lobbyId);
 	}
 
-	/** Returns true if history is long enough to benefit from summarization. */
+	/**
+	 * Returns true when enough NEW (unsummarized) messages have accumulated.
+	 * We never count already-summarized history — only messages after summarizedUpTo.
+	 */
 	needsSummarization(lobbyId, threshold) {
 		const s = this.index[lobbyId];
-		return s ? s.history.length >= threshold : false;
+		if (!s) return false;
+		const unsummarized = s.history.length - (s.summarizedUpTo || 0);
+		return unsummarized >= threshold;
+	}
+
+	// ── Pinned Moments ──
+	static MAX_PINS = 12;
+
+	pinMoment(lobbyId, historyIndex, who) {
+		const s = this.index[lobbyId];
+		if (!s) return { ok: false, reason: "not_found" };
+		if (historyIndex < 0 || historyIndex >= s.history.length) return { ok: false, reason: "invalid_index" };
+		if (!s.pinnedMoments) s.pinnedMoments = [];
+		if (s.pinnedMoments.some(p => p.index === historyIndex)) return { ok: false, reason: "already_pinned" };
+		if (s.pinnedMoments.length >= LobbyStore.MAX_PINS) return { ok: false, reason: "limit_reached" };
+		const entry = s.history[historyIndex];
+		s.pinnedMoments.push({
+			index: historyIndex,
+			pinnedBy: who,
+			pinnedAt: new Date().toISOString(),
+			speaker: entry.role === "assistant" ? "DM" : (entry.name || "Player"),
+			snippet: (entry.content || "").slice(0, 300),
+		});
+		this.persist(lobbyId);
+		return { ok: true, remaining: LobbyStore.MAX_PINS - s.pinnedMoments.length };
+	}
+	unpinMoment(lobbyId, historyIndex) {
+		const s = this.index[lobbyId];
+		if (!s || !s.pinnedMoments) return false;
+		const before = s.pinnedMoments.length;
+		s.pinnedMoments = s.pinnedMoments.filter(p => p.index !== historyIndex);
+		if (s.pinnedMoments.length < before) { this.persist(lobbyId); return true; }
+		return false;
 	}
 
 	/**
-	 * Compact history: summarise everything except the most recent `keep`
-	 * messages into storyContext, then trim history.
-	 * @param {Function} getLLMResponse - the LLM call function
-	 * @param {object}   llmOpts       - { provider, model }
-	 * @param {number}   keep          - how many recent messages to preserve (default 6)
+	 * Build a running summary of unsummarized history and advance the bookmark.
+	 * NEVER deletes history — the full log is always preserved for story reading.
+	 *
+	 * Uses a two-tier system:
+	 *   - storyContext ("recent arc"): detailed summary of recent events (~800 words)
+	 *   - ancientHistory: heavily compressed backstory of everything before the recent arc
+	 *
+	 * When storyContext exceeds maxSummaryLen, its content is compressed into
+	 * ancientHistory and storyContext resets to just the new batch.
+	 *
+	 * @param {Function} getLLMResponse  - the LLM call function
+	 * @param {object}   llmOpts        - { provider, model }
+	 * @param {number}   keep           - recent messages to leave unsummarized (sent verbatim to LLM)
+	 * @param {number}   maxSummaryLen  - when storyContext exceeds this, promote to ancientHistory
 	 */
-	async autoSummarize(lobbyId, getLLMResponse, llmOpts, keep = 6) {
+	async autoSummarize(lobbyId, getLLMResponse, llmOpts, keep = 6, maxSummaryLen = 60000) {
 		const s = this.index[lobbyId];
-		if (!s || s.history.length <= keep) return;
+		if (!s) return;
 
-		const toSummarize = s.history.slice(0, -keep);
-		const recentHistory = s.history.slice(-keep);
+		// Prevent concurrent summarizations
+		if (s._summarizing) {
+			console.log(`⏭️ [summarize] Lobby ${lobbyId} — already in progress, skipping`);
+			return;
+		}
+		s._summarizing = true;
 
-		// Build a condensed transcript from the old messages
-		const transcript = toSummarize.map(m => {
+		// Migration for existing lobbies
+		if (s.summarizedUpTo == null) s.summarizedUpTo = 0;
+		if (s.ancientHistory == null) s.ancientHistory = "";
+		if (s.pinnedMoments == null) s.pinnedMoments = [];
+
+		// Snapshot: summarize from summarizedUpTo to (current length - keep)
+		const snapshotLen = s.history.length;
+		const summarizeEnd = Math.max(snapshotLen - keep, s.summarizedUpTo);
+		const toSummarize = s.history.slice(s.summarizedUpTo, summarizeEnd);
+
+		if (toSummarize.length === 0) {
+			s._summarizing = false;
+			return;
+		}
+
+		// Build a condensed transcript from the new unsummarized messages
+		const transcript = toSummarize.map((m, i) => {
 			const speaker = m.role === "assistant" ? "DM" : (m.name || "Player");
-			// Truncate very long DM narrations to avoid blowing up the summary prompt
 			let text = m.content || "";
 			if (text.length > 500) text = text.slice(0, 500) + "…";
-			return `${speaker}: ${text}`;
+			return `[${i + 1}] ${speaker}: ${text}`;
 		}).join("\n");
 
+		// Collect pinned moment text to protect from summarization loss
+		const pinnedText = (s.pinnedMoments || []).map(p =>
+			`[PINNED by ${p.pinnedBy}] ${p.speaker}: ${p.snippet}`
+		).join("\n");
+
 		const existingSummary = s.storyContext || "";
+		const needsPromotion = existingSummary.length > maxSummaryLen;
+
+		console.log(`📝 [summarize] Lobby ${lobbyId}: incorporating ${toSummarize.length} new messages (history: ${snapshotLen}, bookmark: ${s.summarizedUpTo})${needsPromotion ? " [PROMOTING storyContext → ancientHistory]" : ""}`);
 
 		try {
-			console.log(`📝 Auto-summarizing lobby ${lobbyId}: compacting ${toSummarize.length} messages, keeping ${recentHistory.length}`);
+			// ── STEP 1: If storyContext is too long, compress it into ancientHistory ──
+			if (needsPromotion) {
+				const archiveReply = await getLLMResponse([
+					{
+						role: "system",
+						content: `You are a campaign chronicler. Compress the following detailed summary into a SHORT backstory overview (~300 words). Keep ONLY: major plot beats, key NPCs and their fates, important decisions, and unresolved mysteries. Drop all combat details, routine events, and atmospheric description.
+
+CRITICAL: Any lines below marked [PINNED] were flagged by players as important. These MUST appear in your output as near-verbatim bullet points — do not paraphrase, merge, or omit them. They are the most important facts in the entire summary.
+
+Return ONLY the compressed text — no JSON, no fences.`,
+					},
+					{
+						role: "user",
+						content: `${s.ancientHistory ? "Existing backstory:\n" + s.ancientHistory + "\n\n" : ""}Summary to compress:\n${existingSummary}${pinnedText ? "\n\nPINNED MOMENTS (must preserve):\n" + pinnedText : ""}`,
+					},
+				], llmOpts);
+
+				const archived = typeof archiveReply === "string" ? archiveReply.trim() : "";
+				if (archived && !archived.startsWith("[Error")) {
+					s.ancientHistory = archived;
+					s.storyContext = ""; // reset — will be rebuilt below
+					console.log(`   📜 ancientHistory updated (${archived.length} chars)`);
+				}
+			}
+
+			// ── STEP 2: Merge new events into storyContext (the "recent arc") ──
+			const currentSummary = s.storyContext || "";
 			const reply = await getLLMResponse([
 				{
 					role: "system",
-					content: `You are a story summarizer for a D&D game. Condense the following game events into a concise narrative summary (max 300 words). Preserve key plot points, NPC names, locations, ongoing threats, unresolved hooks, and important player decisions. Drop routine combat details, dice rolls, and mechanical updates. Write in past tense, third person. Return ONLY the summary text — no JSON, no markdown.`,
+					content: `You are a campaign chronicler for a D&D game. Your job is to maintain a structured, running summary of RECENT events that a DM can use to stay consistent. Merge the previous summary with the new events into the format below (max 800 words / ~1000 tokens). Return ONLY the summary — no JSON, no markdown fences.${pinnedText ? "\n\nIMPORTANT — these moments were flagged by players as significant. Ensure they appear in the summary:\n" + pinnedText : ""}
+
+FORMAT:
+CURRENT GOAL: [One or two sentences: what the party is currently trying to accomplish and why]
+
+SETTING: [Current location, environment, time of day, and any notable atmospheric details]
+
+KEY CHARACTERS:
+- [Name] — [Role/relationship to party, disposition, last known status, notable traits or abilities]
+(Include ALL named NPCs, allies, enemies, and creatures encountered. For each, note whether they are: allied, neutral, hostile, dead, or unknown. Remove only those confirmed dead AND no longer plot-relevant.)
+
+PARTY STATUS:
+- [Brief note per player character: current situation, any ongoing personal arcs or promises they've made]
+
+STORY SO FAR:
+- [Bullet point per major plot beat, decision, or revelation — chronological order]
+- [Keep bullets concise but complete: who did what, where, why, and the consequence]
+- [Preserve unresolved hooks, promises, threats, and mysteries]
+- [Include important dialogue, bargains, alliances, and betrayals]
+- [Drop routine combat rounds, dice results, and mechanical details]
+- [Always include the most recent events — never truncate the end]
+- [As the story grows, compress older events into fewer bullets but never delete them entirely]
+
+OPEN THREADS:
+- [Unresolved plot hooks, unanswered questions, pending threats]
+- [Promises or deals the party has made]
+- [Known enemies still at large]
+- [Items, locations, or mysteries yet to be explored]`,
 				},
 				{
 					role: "user",
-					content: `Previous summary:\n${existingSummary}\n\nNew events to incorporate:\n${transcript}`,
+					content: `Previous summary:\n${currentSummary || "(Starting fresh — older events are in the backstory.)"}\n\nNew events to incorporate:\n${transcript}`,
 				},
 			], llmOpts);
 
-			const summary = typeof reply === "string" ? reply.trim() : existingSummary;
+			const summary = typeof reply === "string" ? reply.trim() : "";
+			if (!summary || summary.startsWith("[Error")) {
+				console.warn(`⚠️ [summarize] LLM returned empty/error — history untouched`);
+				return;
+			}
+
+			// Advance the bookmark — history is NEVER deleted
+			s.summarizedUpTo = summarizeEnd;
 			s.storyContext = summary;
-			s.history = recentHistory;
+			s._hasSummary = true;
 			this.persist(lobbyId);
-			console.log(`✅ Auto-summary complete for lobby ${lobbyId}: ${summary.length} chars, ${s.history.length} messages kept`);
+
+			console.log(`✅ [summarize] Lobby ${lobbyId} complete:`);
+			console.log(`   - Summarized up to message ${summarizeEnd} of ${s.history.length}`);
+			console.log(`   - storyContext: ${summary.length} chars | ancientHistory: ${(s.ancientHistory || "").length} chars`);
 		} catch (err) {
-			console.warn(`⚠️ Auto-summarize failed for lobby ${lobbyId}: ${err.message} — history preserved`);
-			// Don't discard history on failure
+			console.warn(`⚠️ [summarize] Failed for lobby ${lobbyId}: ${err.message} — history untouched`);
+		} finally {
+			s._summarizing = false;
 		}
 	}
 	playersSummary(lobbyId) {
@@ -552,7 +694,8 @@ export class LobbyStore {
 				const xp = p.xp ?? 0;
 				const wpn = p.weapon ? `${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "unarmed";
 			const arm = p.armor  ? `${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "unarmored (AC 10)";
-			return `${p.name} [${p.class} L${p.level}; XP ${xp}; weapon ${wpn}; armor ${arm}; stats ${stats}; inv ${inv}; abilities ${abil}]`;
+			const trn = p.trinket ? `${p.trinket.name}` : "none";
+			return `${p.name} [${p.class} L${p.level}; XP ${xp}; weapon ${wpn}; armor ${arm}; trinket ${trn}; stats ${stats}; inv ${inv}; abilities ${abil}]`;
 			})
 			.join("\n");
 	}
@@ -602,6 +745,12 @@ export class LobbyStore {
 
 		// If storyContext contains the setup prompt, treat as no prior context
 		const storyContext = s.storyContext?.includes("You are a creative, cinematic Dungeon Master") ? "(The story has just begun. No prior context.)" : s.storyContext || "(No prior story yet.)";
+		const ancientHistory = s.ancientHistory || "";
+
+		// Collect pinned moments for the LLM
+		const pinnedText = (s.pinnedMoments || []).filter(p => p.snippet).map(p =>
+			`[PINNED by ${p.pinnedBy}] ${p.speaker}: ${p.snippet}`
+		).join("\n");
 
 		const players = Object.keys(s.players || {});
 const schema = `
@@ -628,7 +777,7 @@ Schema: {
   "updates": {
     "xp": [{ "player": string, "amount": number, "reason": string }],
     "hp": [{ "player": string, "delta": number, "reason": string, "new_total": number }],
-    "inventory": [{ "player": string, "item": string, "change": number, "description": string, "change_type": "add" | "remove", "attributes": object }],
+    "inventory": [{ "player": string, "item": string, "change": number, "description": string, "change_type": "add" | "remove", "attributes": { "item_type"?: "weapon" | "armor" | "trinket" | "consumable", "damage"?: string, "damage_type"?: string, "range"?: string, "ac"?: number, "armor_type"?: string, ...any } }],
     "gold": [{ "player": string, "delta": number }],
     "conditions": [{ "player": string, "add": string[], "remove": string[] }],
     "abilities": [{ "player": string, "change_type": "add" | "remove", "name": string, "description": string, "attributes": object }]
@@ -662,7 +811,9 @@ Respect dice outcomes given by the server. Always reply as the DM narrating even
 Use the "music" field to set background music mood. Only change it when the scene shifts significantly — entering or leaving combat, arriving at a new location type, a death, a major revelation, a victory. Set to null when the current music still fits (which is most of the time). Available moods: lively_town, tense_battle, boss_fight, peaceful_nature, dungeon_ambient, tavern, mystery, exploration, sad_moment, victory, horror.
 Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${lootInstruction}${flavorInstruction}`,
 			},
-			{ role: "system", content: `Story so far: ${storyContext}` },
+			...(ancientHistory ? [{ role: "system", content: `Campaign backstory (older events, for reference):\n${ancientHistory}` }] : []),
+			{ role: "system", content: `Recent story arc:\n${storyContext}` },
+			...(pinnedText ? [{ role: "system", content: `Player-pinned important moments (do NOT forget or contradict these):\n${pinnedText}` }] : []),
 			{ role: "system", content: `Active players: ${players.join(", ")}` },
 			...(s.currentMusic
 				? [{ role: "system", content: `Currently playing music mood: "${s.currentMusic}". Only change this if the scene genuinely calls for a different mood — set "music" to null to keep the current music.` }]
@@ -701,7 +852,14 @@ Condition	Effect
 💤	unconscious - Incapacitated, can't move or speak, unaware. Drops held items. Attacks have advantage; hits within 5 ft. are critical hits.
 
 Do not skip updates just because the action fails — always include the logical consequence.
-Always populate the "suggestions" array with 3–5 short action phrases (max 8 words each) that the active player could plausibly do next given the current scene. These are shown as quick-action hints in the UI. Make them specific to what is happening, not generic.`,
+Always populate the "suggestions" array with 3–5 short action phrases (max 8 words each) that the active player could plausibly do next given the current scene. These are shown as quick-action hints in the UI. Make them specific to what is happening, not generic.
+
+EQUIPPABLE ITEMS: When you give a player a weapon, armor, or trinket (ring, amulet, cloak, etc.) via the "inventory" update, you MUST include the "attributes" object with:
+- Weapons: { "item_type": "weapon", "damage": "1d8", "damage_type": "slashing", "range": "melee" }
+- Armor: { "item_type": "armor", "ac": 15, "armor_type": "medium" }
+- Trinkets: { "item_type": "trinket", ...any special properties }
+- Consumables: { "item_type": "consumable", ...any properties }
+The player can then choose to equip weapons, armor, and trinkets from their inventory. Always include realistic D&D stats when giving equipment.`,
 			},
 			{ role: "system", content: "FORMAT: Output minified JSON only. Do not include commentary, markdown, or code fences. The 'text' property of your response may contain basic formatted HTML using structural and formatting tags. CRITICAL: Any dialogue or quoted speech inside the 'text' HTML must use single quotes (e.g. <em>'Hello there'</em>) — never double quotes, as double quotes break JSON string encoding." },
 			{
@@ -746,15 +904,18 @@ Always populate the "suggestions" array with 3–5 short action phrases (max 8 w
 			const warning = remaining === 0 ? " ⚠️ NO SLOTS REMAINING — all spell/ability uses fail" : "";
 			const wpnStr = p.weapon ? `weapon: ${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "weapon: unarmed";
 			const armStr = p.armor  ? `armor: ${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "armor: unarmored (AC 10)";
-			return `  - ${p.name} (${p.class || "?"} Lv ${max}): ${wpnStr} | ${armStr} | abilities/spells known: [${spellStr}] | slots: ${remaining}/${max}${warning}`;
+			const trnStr = p.trinket ? `trinket: ${p.trinket.name}${p.trinket.description ? ` (${p.trinket.description})` : ""}` : "trinket: none";
+			return `  - ${p.name} (${p.class || "?"} Lv ${max}): ${wpnStr} | ${armStr} | ${trnStr} | abilities/spells known: [${spellStr}] | slots: ${remaining}/${max}${warning}`;
 		}).join("\n");
 		base.push({
 			role: "system",
 			content: `SPELL SLOT / ABILITY USE STATUS (authoritative — do not guess or override):\n${spellLines}\n\nRules:\n- A player can only cast a spell or activate an ability if it is in their known list AND they have slots remaining.\n- Slots are shared between spells and abilities. Each use costs one slot.\n- If the ability/spell is not in their list, or remaining slots = 0, the action FAILS. You MUST reject it — narrate the consequence (embarrassing misfire, wild surge, nothing happens, ability fizzles, etc.) and set "spellUsed": false.\n- If a spell or ability is successfully used, set "spellUsed": true. The server will deduct the slot.\n- Always set "spellUsed": false when no spell or ability was used this turn.\n- IMPORTANT: You must NEVER allow a player to use a spell or ability when remaining slots = 0. This is a hard rule.`,
 		});
 
-		// Recent history for continuity (kept small — older events live in storyContext via auto-summarization)
-		base.push(...(s.history || []).slice(-6));
+		// Recent unsummarized history for continuity — everything after summarizedUpTo
+		// (older events are captured in storyContext via auto-summarization)
+		const fromIdx = s.summarizedUpTo || 0;
+		base.push(...(s.history || []).slice(fromIdx));
 
 		// Player action (use sanitized name)
 		base.push({ role: "user", name: safeName, content: String(action) });
@@ -789,7 +950,9 @@ Always populate the "suggestions" array with 3–5 short action phrases (max 8 w
 			connected,
 			hostPlayer: this.hostPlayerName(lobbyId) || null,
 			storyContext: s.storyContext,
-			history: s.history.slice(-50),
+			ancientHistory: s.ancientHistory || "",
+			pinnedMoments: s.pinnedMoments || [],
+			history: s.history,
 			initiative: s.initiative,
 			turnIndex: s.turnIndex,
 			timerEnabled: s.timerEnabled || false,
@@ -1208,6 +1371,111 @@ Always populate the "suggestions" array with 3–5 short action phrases (max 8 w
 
 		this.persist(lobbyId);
 		return existing?.count || 0;
+	}
+
+	/**
+	 * Equip an item from the player's inventory as weapon, armor, or trinket.
+	 * The previously equipped item (if any) goes back into inventory.
+	 * Returns { equipped, unequipped } with the item objects, or null on failure.
+	 */
+	equipItem(lobbyId, playerName, itemName, slot) {
+		const l = this.index[lobbyId];
+		const key = this.findPlayerKey(lobbyId, playerName);
+		if (!l || !key) return null;
+		const p = l.players[key];
+		if (!p) return null;
+
+		if (!Array.isArray(p.inventory)) p.inventory = [];
+
+		// Find the item in inventory (case-insensitive)
+		const idx = p.inventory.findIndex(i =>
+			(typeof i === "string" ? i : i.name || "").toLowerCase() === itemName.toLowerCase()
+		);
+		if (idx === -1) return null;
+
+		const invItem = typeof p.inventory[idx] === "string"
+			? { name: p.inventory[idx], count: 1, description: "", attributes: {} }
+			: p.inventory[idx];
+
+		// Build the new equipped object based on slot
+		let newEquip = null;
+		let oldEquip = null;
+
+		if (slot === "weapon") {
+			const a = invItem.attributes || {};
+			newEquip = {
+				name: invItem.name,
+				damage: a.damage || "1d4",
+				damageType: a.damage_type || a.damageType || "bludgeoning",
+				range: a.range || "melee",
+			};
+			oldEquip = p.weapon;
+			p.weapon = newEquip;
+		} else if (slot === "armor") {
+			const a = invItem.attributes || {};
+			newEquip = {
+				name: invItem.name,
+				ac: Number(a.ac) || 10,
+				type: a.type || a.armor_type || "light",
+				material: a.material || "",
+				note: a.note || "",
+			};
+			oldEquip = p.armor;
+			p.armor = newEquip;
+		} else if (slot === "trinket") {
+			newEquip = {
+				name: invItem.name,
+				description: invItem.description || "",
+				attributes: invItem.attributes || {},
+			};
+			oldEquip = p.trinket || null;
+			p.trinket = newEquip;
+		} else {
+			return null;
+		}
+
+		// Remove equipped item from inventory (decrement count or remove)
+		if (invItem.count > 1) {
+			invItem.count -= 1;
+		} else {
+			p.inventory.splice(idx, 1);
+		}
+
+		// Return old equipped item to inventory (if there was one)
+		if (oldEquip && oldEquip.name) {
+			const existing = p.inventory.find(i =>
+				(typeof i === "string" ? i : i.name || "").toLowerCase() === oldEquip.name.toLowerCase()
+			);
+			if (existing && typeof existing === "object") {
+				existing.count = (existing.count || 1) + 1;
+			} else {
+				// Build inventory entry from the old equipped item
+				const attrs = {};
+				if (slot === "weapon") {
+					if (oldEquip.damage)     attrs.damage = oldEquip.damage;
+					if (oldEquip.damageType) attrs.damage_type = oldEquip.damageType;
+					if (oldEquip.range)      attrs.range = oldEquip.range;
+					attrs.item_type = "weapon";
+				} else if (slot === "armor") {
+					if (oldEquip.ac)       attrs.ac = oldEquip.ac;
+					if (oldEquip.type)     attrs.armor_type = oldEquip.type;
+					if (oldEquip.material) attrs.material = oldEquip.material;
+					attrs.item_type = "armor";
+				} else if (slot === "trinket") {
+					Object.assign(attrs, oldEquip.attributes || {});
+					attrs.item_type = "trinket";
+				}
+				p.inventory.push({
+					name: oldEquip.name,
+					count: 1,
+					description: oldEquip.description || oldEquip.note || "",
+					attributes: attrs,
+				});
+			}
+		}
+
+		this.persist(lobbyId);
+		return { equipped: newEquip, unequipped: oldEquip };
 	}
 
 	// ==== Chat (single, non-duplicated implementation) ====

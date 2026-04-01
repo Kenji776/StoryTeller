@@ -39,7 +39,8 @@ function showConditionsInfoModal() {
 		`<tr><td>${c.emoji}</td><td><strong>${c.name}</strong></td><td>${c.effect}</td></tr>`
 	).join("");
 	modal.innerHTML = `
-		<div class="modal-content" style="max-width:600px;max-height:80vh;overflow-y:auto;">
+		<div class="modal-content modal-wide">
+			<button class="modal-close">✕</button>
 			<h2>⚔️ Conditions Reference</h2>
 			<p style="color:#aaa;font-size:0.85em;text-align:center;">Standard D&amp;D 5e conditions that can be applied during play.</p>
 			<table style="width:100%;border-collapse:collapse;font-size:0.88em;">
@@ -50,7 +51,6 @@ function showConditionsInfoModal() {
 				</tr></thead>
 				<tbody>${rows}</tbody>
 			</table>
-			<button class="primary" id="closeConditionsModal" style="margin-top:1em;">Close</button>
 		</div>
 	`;
 	modal.querySelectorAll("tbody tr").forEach((row, i) => {
@@ -58,7 +58,6 @@ function showConditionsInfoModal() {
 		row.querySelectorAll("td").forEach(td => { td.style.padding = "5px 8px; vertical-align:top"; });
 	});
 	document.body.appendChild(modal);
-	document.getElementById("closeConditionsModal").addEventListener("click", () => modal.remove());
 	modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
 }
 
@@ -79,6 +78,35 @@ async function getTemplate(path) {
  * @param {string} containerId - ID of the target <div>
  * @param {Array} items - Array of { name, count, description }
  */
+/** Detect whether an inventory item is equippable, and which slot it fits. */
+function _detectEquipSlot(item) {
+	const a = item.attributes || {};
+	const type = (a.item_type || "").toLowerCase();
+
+	// 1. Explicit item_type from LLM or admin tool (authoritative)
+	if (type === "weapon")  return "weapon";
+	if (type === "armor")   return "armor";
+	if (type === "trinket" || type === "ring" || type === "amulet" || type === "necklace" || type === "bracelet" || type === "cloak") return "trinket";
+
+	// 2. Mechanical attributes imply slot
+	if (a.damage || a.damage_type) return "weapon";
+	if (a.ac || a.armor_type)      return "armor";
+
+	// 3. Name keyword heuristics
+	const n = (item.name || "").toLowerCase();
+	const weaponWords = ["sword", "axe", "bow", "dagger", "mace", "staff", "spear", "hammer", "blade", "crossbow", "halberd", "flail", "rapier", "scimitar", "warhammer", "greataxe", "greatsword", "glaive", "trident", "whip", "javelin", "sling", "wand", "club", "morningstar", "pike", "lance", "scythe"];
+	const armorWords  = ["armor", "shield", "mail", "plate", "leather armor", "chainmail", "breastplate", "splint", "studded", "half plate", "scale mail", "padded armor", "hide armor", "buckler"];
+	const trinketWords = ["ring", "amulet", "necklace", "bracelet", "cloak", "pendant", "brooch", "circlet", "charm", "talisman", "torc", "cape", "mantle", "crown", "tiara", "belt", "sash", "orb", "gem", "jewel"];
+	if (weaponWords.some(w => n.includes(w))) return "weapon";
+	if (armorWords.some(w => n.includes(w)))  return "armor";
+	if (trinketWords.some(w => n.includes(w))) return "trinket";
+
+	// 4. If the item has a consumable type, it's not equippable
+	if (type === "consumable") return null;
+
+	return null;
+}
+
 async function drawInventoryComponent(containerId, items = [], canAdd = false) {
 	const container = document.getElementById(containerId);
 	if (!container) return console.warn(`drawInventoryComponent: #${containerId} not found`);
@@ -98,19 +126,48 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false) {
 
 	const tbody = container.querySelector("#inventoryRows");
 	if (!sorted.length) {
-		tbody.innerHTML = `<tr><td colspan="3" class="hint">Empty</td></tr>`;
+		tbody.innerHTML = `<tr><td colspan="4" class="hint">Empty</td></tr>`;
 		return;
 	}
 
 	for (const item of sorted) {
+		const slot = _detectEquipSlot(item);
 		const row = document.createElement("tr");
+
+		let equipBtn = "";
+		if (slot) {
+			const slotLabel = slot === "weapon" ? "⚔️" : slot === "armor" ? "🛡️" : "💍";
+			equipBtn = `<button class="equip-btn chip" data-item="${item.name.replace(/"/g, "&quot;")}" data-slot="${slot}" title="Equip as ${slot}">${slotLabel} Equip</button>`;
+		}
+
+		// Show attributes summary for equippable items
+		const a = item.attributes || {};
+		let statsHint = "";
+		if (a.damage) statsHint += ` [${a.damage} ${a.damage_type || ""}]`;
+		if (a.ac) statsHint += ` [AC ${a.ac}]`;
+
 		row.innerHTML = `
-			<td><strong>${item.name}</strong></td>
+			<td><strong>${item.name}</strong>${statsHint ? `<span style="opacity:0.6;font-size:0.85em;">${statsHint}</span>` : ""}</td>
 			<td>${item.count ?? 1}</td>
 			<td>${item.description || ""}</td>
+			<td>${equipBtn}</td>
 		`;
 		tbody.appendChild(row);
+
+		console.log(`🎒 Inventory item: "${item.name}" | slot=${slot || "none"} | attributes=`, item.attributes);
 	}
+
+	// Wire up equip buttons
+	container.querySelectorAll(".equip-btn").forEach(btn => {
+		btn.addEventListener("click", () => {
+			const itemName = btn.dataset.item;
+			const slot = btn.dataset.slot;
+			console.log(`⚔️ Equip clicked: "${itemName}" → ${slot}`);
+			if (typeof socket !== "undefined" && socket) {
+				socket.emit("item:equip", { lobbyId, itemName, slot });
+			}
+		});
+	});
 
 	if (canAdd) {
 		container.querySelector("#invAddBtn").onclick = () =>

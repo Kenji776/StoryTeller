@@ -65,9 +65,10 @@ function parseCookie(cookieStr) {
 	return obj;
 }
 
-// === MUSIC DOWNLOAD CONFIG ===
+// === ASSET DOWNLOAD CONFIG ===
 import readline from "readline";
 const MUSIC_ZIP_URL = "https://github.com/Kenji776/StoryTeller/releases/download/resource/music.zip";
+const SFX_ZIP_URL   = "https://github.com/Kenji776/StoryTeller/releases/download/sfx/sfx.zip";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -236,7 +237,8 @@ const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
 const ELEVEN_VOICE_ID = process.env.ELEVEN_VOICE_ID || "dAcds2QMcvmv86jQMC3Y";
 const REJECTED_REQUEST_STATUS = 204; //this is the http status code that is sent if the server gets a request but decides to skip it, usually due to being in devmode
 const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60000;
-const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 12;
+const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 20;
+const MAX_SUMMARY_LENGTH = Number(process.env.MAX_SUMMARY_LENGTH) || 60000;
 const VOICE_CACHE_FILE = path.join(__dirname, "..", "client", "config", "voices_cache.json");
 
 let ELEVEN_VOICES = [];
@@ -297,6 +299,55 @@ async function ensureMusic() {
 		log(`   You can manually download music.zip from:`);
 		log(`   ${MUSIC_ZIP_URL}`);
 		log(`   and extract the MP3 files into: ${MUSIC_DIR}`);
+		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+	}
+}
+
+// === SFX ASSET DOWNLOAD ===
+const SFX_DIR = path.join(__dirname, "..", "client", "sfx");
+
+async function ensureSfx() {
+	const sfxFiles = fs.existsSync(SFX_DIR)
+		? fs.readdirSync(SFX_DIR).filter(f => f.endsWith(".mp3"))
+		: [];
+	if (sfxFiles.length > 0) return; // sfx already present
+
+	if (!fs.existsSync(SFX_DIR)) fs.mkdirSync(SFX_DIR, { recursive: true });
+
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+	const answer = await new Promise(resolve => {
+		rl.question("🔊 No sound effects found. Download the standard SFX library? (y/n): ", resolve);
+	});
+	rl.close();
+
+	if (answer.trim().toLowerCase() !== "y") {
+		log("⏭️  Skipping SFX download. The game will run without sound effects.");
+		log(`   You can manually place MP3 files in: ${SFX_DIR}`);
+		return;
+	}
+
+	const zipPath = path.join(SFX_DIR, "sfx.zip");
+
+	log("🔊 Downloading SFX pack...");
+	log(`   ${SFX_ZIP_URL}`);
+
+	try {
+		const res = await fetch(SFX_ZIP_URL);
+		if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+		await pipeline(res.body, fs.createWriteStream(zipPath));
+		log("🔊 Download complete. Extracting...");
+
+		execSync(`tar -xf "${zipPath}" -C "${SFX_DIR}"`);
+		fs.unlinkSync(zipPath);
+
+		const count = fs.readdirSync(SFX_DIR).filter(f => f.endsWith(".mp3")).length;
+		log(`🔊 SFX ready — ${count} effects extracted.`);
+	} catch (err) {
+		log(`❌ SFX download failed: ${err.message}`);
+		log(`   You can manually download sfx.zip from:`);
+		log(`   ${SFX_ZIP_URL}`);
+		log(`   and extract the MP3 files into: ${SFX_DIR}`);
 		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 	}
 }
@@ -642,6 +693,7 @@ io.on("connection", (socket) => {
 	socket.on("state:request", ({ lobbyId }) => {
 		const state = store.publicState(lobbyId);
 		if (!state) return;
+		log(`🎵 state:request for lobby ${lobbyId} — currentMusic=${state.currentMusic || "null"}, phase=${state.phase}`);
 		socket.join(room(lobbyId));
 		socket.emit("state:update", state);
 	});
@@ -961,6 +1013,35 @@ io.on("connection", (socket) => {
 			broadcastLobbies();
 		} catch (err) {
 			log("💥 Error saving sheet:", err);
+		}
+	});
+
+	socket.on("item:equip", ({ lobbyId, itemName, slot }) => {
+		try {
+			if (!store.belongs(lobbyId, socket.id)) return;
+			if (!["weapon", "armor", "trinket"].includes(slot)) {
+				return socket.emit("toast", { type: "error", message: "Invalid equipment slot." });
+			}
+			const playerName = store.playerBySid(lobbyId, socket.id)?.name;
+			if (!playerName) return;
+
+			const result = store.equipItem(lobbyId, playerName, itemName, slot);
+			if (!result) {
+				return socket.emit("toast", { type: "error", message: `Could not equip "${itemName}".` });
+			}
+
+			log(`⚔️ ${playerName} equipped "${itemName}" as ${slot} (lobby ${lobbyId})`);
+			socket.emit("toast", { type: "success", message: `Equipped ${result.equipped.name} as ${slot}.` });
+			if (result.unequipped?.name) {
+				socket.emit("toast", { type: "info", message: `${result.unequipped.name} returned to inventory.` });
+			}
+
+			// Send full state so client sees updated weapon/armor/trinket + inventory
+			sendState(lobbyId);
+			broadcastPartyState(io, store, lobbyId);
+		} catch (err) {
+			log("💥 Error equipping item:", err);
+			socket.emit("toast", { type: "error", message: "Failed to equip item." });
 		}
 	});
 
@@ -1312,9 +1393,12 @@ io.on("connection", (socket) => {
 			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 			io.to(room(lobbyId)).emit("ui:unlock");
 
-			// Background: compact history if it's grown too long
+			// Background: update running summary if enough new turns have accumulated.
+			// keep=10: always leave the 10 most recent messages unsummarized (sent verbatim to LLM).
+			// That's ~5 full player turns of exact wording for continuity.
+			// Threshold triggers the pass; keep controls how many survive as verbatim context.
 			if (store.needsSummarization(lobbyId, HISTORY_SUMMARIZE_THRESHOLD)) {
-				store.autoSummarize(lobbyId, getLLMResponse, llmOpts(lobbyId)).catch(() => {});
+				store.autoSummarize(lobbyId, getLLMResponse, llmOpts(lobbyId), 10, MAX_SUMMARY_LENGTH).catch(() => {});
 			}
 		} catch (err) {
 			console.error("💥 Error processing action:", err);
@@ -1540,6 +1624,27 @@ io.on("connection", (socket) => {
 		}
 	});
 
+	// === Pin / Unpin story moments ===
+	socket.on("story:pin", ({ lobbyId, historyIndex }) => {
+		if (!store.belongs(lobbyId, socket.id)) return;
+		const playerName = store.index[lobbyId]?.sockets?.[socket.id]?.playerName || "Unknown";
+		const result = store.pinMoment(lobbyId, historyIndex, playerName);
+		if (result.ok) {
+			sendState(lobbyId);
+			if (result.remaining <= 3) {
+				socket.emit("toast", { message: `📌 Pinned! ${result.remaining} pin${result.remaining === 1 ? "" : "s"} remaining.`, type: "warning" });
+			}
+		} else if (result.reason === "limit_reached") {
+			socket.emit("toast", { message: `📌 Pin limit reached (${store.constructor.MAX_PINS}). Unpin a less important moment first.`, type: "warning" });
+		}
+	});
+	socket.on("story:unpin", ({ lobbyId, historyIndex }) => {
+		if (!store.belongs(lobbyId, socket.id)) return;
+		if (store.unpinMoment(lobbyId, historyIndex)) {
+			sendState(lobbyId);
+		}
+	});
+
 	// Client signals that narration audio has finished playing — start the turn timer now
 	socket.on("narration:done", ({ lobbyId }) => {
 		if (pendingTimerStarts.has(lobbyId)) {
@@ -1678,6 +1783,8 @@ io.on("connection", (socket) => {
 					description: payload.description || "",
 					attributes: payload.attributes || {},
 				});
+				// Push full state so the game UI re-renders with the new item
+				io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 				break;
 			}
 			case "player:death": {
@@ -1811,6 +1918,16 @@ io.on("connection", (socket) => {
 		io.to(room(lobbyId)).emit("music:change", { mood: mood || null });
 		log(`🎵 ADMIN music → lobby ${lobbyId}: ${mood || "stop"}`);
 		socket.emit("toast", { type: "success", message: mood ? `Music changed to: ${mood}` : "Music stopped" });
+	});
+
+	socket.on("admin:llm", ({ code, provider, model }) => {
+		if (!isSocketAdmin(code)) return socket.emit("toast", { type: "error", message: "Not authorized" });
+		const lobbyId = store.findLobbyByCode(code);
+		if (!lobbyId) return socket.emit("toast", { type: "error", message: "Lobby not found" });
+		store.setLLMSettings(lobbyId, provider, model);
+		sendState(lobbyId);
+		log(`🤖 ADMIN LLM → lobby ${lobbyId}: ${provider}/${model}`);
+		socket.emit("toast", { type: "success", message: `LLM switched to ${provider} / ${model}` });
 	});
 
 	socket.on("admin:sfx", async ({ code, description }) => {
@@ -2233,6 +2350,9 @@ app.get("/api/lobby/:code/story", (req, res) => {
 		phase: s.phase,
 		players: Object.keys(s.players || {}),
 		history: s.history || [],
+		storyContext: s.storyContext || null,
+		ancientHistory: s.ancientHistory || "",
+		pinnedMoments: s.pinnedMoments || [],
 	});
 });
 
@@ -2568,7 +2688,7 @@ function validateConfigFiles() {
 	if (allOk) log("📋 All config files OK");
 }
 
-ensureMusic().then(() => {
+ensureMusic().then(() => ensureSfx()).then(() => {
 	server.listen(PORT, async () => {
 		log(`✅ Server running at http://localhost:${PORT}`);
 		validateConfigFiles();

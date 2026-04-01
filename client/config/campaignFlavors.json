@@ -55,6 +55,20 @@
       "emoji": "🏴‍☠️",
       "description": "High adventure and daring escapades. Think pirates, daring heists, and impossible odds.",
       "prompt": "The tone is swashbuckling adventure. Prioritize momentum, daring, and style. Heroes do the impossible with flair. Describe action in vivid, cinematic terms. NPCs are colorful. Schemes are audacious. The spirit of adventure should never stall."
+    },
+    {
+      "id": "tragic",
+      "label": "Tragic",
+      "emoji": "🎭",
+      "description": "Bittersweet and melancholic. Victory always costs something, and loss shapes the story.",
+      "prompt": "The tone is tragic. Every triumph should carry a cost — sacrifices, hard choices, and pyrrhic victories. NPCs the party grows attached to should face real peril. Build emotional investment before testing it. The story should feel meaningful precisely because things can be lost. Beauty exists alongside sorrow."
+    },
+    {
+      "id": "mythic",
+      "label": "Mythic",
+      "emoji": "🌟",
+      "description": "Larger-than-life legends. Gods meddle, prophecies unfold, and heroes become the stuff of myth.",
+      "prompt": "The tone is mythic and legendary. Events should feel like they will be retold for generations. Gods, titans, and cosmic forces take interest in the party. Descriptions should be grand and poetic. NPCs speak with gravitas. The stakes are civilizational or divine, not personal. Heroes are not ordinary — they are becoming legends."
     }
   ],
   "themes": [
@@ -113,6 +127,20 @@
       "emoji": "🌍",
       "description": "No grand arc — just a living world that reacts to what the players do.",
       "prompt": "This is a sandbox story. There is no predetermined arc — the world reacts organically to what the players do. Factions have ongoing agendas whether or not the players engage. Prioritize player agency and let consequences of past actions ripple forward."
+    },
+    {
+      "id": "survival_exodus",
+      "label": "Exodus / Migration",
+      "emoji": "🚶",
+      "description": "The homeland is lost. Lead a group of survivors to safety through hostile territory.",
+      "prompt": "The story is an exodus. The party is leading or travelling with a group of refugees or survivors fleeing a catastrophe. Resources are scarce, morale matters, and every stop brings new dangers and hard choices about who to help and what to leave behind. NPCs in the caravan have their own fears and agendas. The destination may be uncertain."
+    },
+    {
+      "id": "tournament",
+      "label": "Tournament / Arena",
+      "emoji": "🏟️",
+      "description": "Compete in a grand tournament. Rivals, rules, politics, and glory await.",
+      "prompt": "The story revolves around a grand tournament, arena, or structured competition. There are brackets, rivals, rules (some of which can be bent), and spectators. Between bouts there is intrigue — sabotage, alliances, gambling, and politics. NPCs are fellow competitors with their own motivations. Victory brings fame, but the real story is what happens off the field."
     }
   ]
 }

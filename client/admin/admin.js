@@ -116,6 +116,13 @@ socket.on("admin:connected", (state) => {
 	if (els.currentMoodLabel) {
 		els.currentMoodLabel.textContent = state.currentMusic ? state.currentMusic.replace(/_/g, " ") : "--";
 	}
+	// Sync LLM selector to current lobby state
+	if (state.llmProvider && $("llmProviderSelect")) {
+		$("llmProviderSelect").value = state.llmProvider;
+		updateLlmModelSelect();
+		if (state.llmModel) $("llmModelSelect").value = state.llmModel;
+	}
+	updateCurrentLlmLabel();
 	renderRawJson();
 });
 
@@ -258,6 +265,8 @@ socket.on("admin:update", (state) => {
 	currentState = state;
 	renderLobbyInfo(state);
 	renderPlayers(state);
+	renderStorySummary();
+	updateCurrentLlmLabel();
 	renderRawJson();
 });
 
@@ -367,6 +376,49 @@ $("invApply").addEventListener("click", () => {
 	emitEvent("inventory:update", { player, item, change: parseInt($("invChange").value) || 0, description: $("invReason").value || "Manual" });
 });
 
+// ── Grant Equipment ──
+// Toggle weapon/armor fields based on item type
+$("grantItemType").addEventListener("change", () => {
+	const type = $("grantItemType").value;
+	$("grantWeaponFields").classList.toggle("hidden", type !== "weapon");
+	$("grantArmorFields").classList.toggle("hidden", type !== "armor");
+});
+
+$("grantItemBtn").addEventListener("click", () => {
+	const player = els.playerSelect.value;
+	const name = $("grantItemName").value.trim();
+	if (!player) return alert("Select a player");
+	if (!name) return alert("Enter an item name");
+
+	const type = $("grantItemType").value;
+	const description = $("grantDescription").value.trim();
+	const attributes = { item_type: type };
+
+	if (type === "weapon") {
+		attributes.damage      = $("grantDamage").value.trim() || "1d6";
+		attributes.damage_type = $("grantDamageType").value;
+		attributes.range       = $("grantRange").value;
+	} else if (type === "armor") {
+		attributes.ac         = parseInt($("grantAC").value) || 12;
+		attributes.armor_type = $("grantArmorType").value;
+	}
+
+	emitEvent("inventory:update", {
+		player,
+		item: name,
+		change: 1,
+		description: description || name,
+		attributes,
+	});
+
+	// Clear form
+	$("grantItemName").value = "";
+	$("grantDescription").value = "";
+	$("grantDamage").value = "";
+	$("grantAC").value = "";
+	feedEvent("admin", `Granted "${name}" (${type}) to ${player}`);
+});
+
 $("sendRollRequired").addEventListener("click", () => {
 	const player = els.playerSelect.value;
 	if (!player) return alert("Select a player");
@@ -445,6 +497,59 @@ socket.on("admin:sfx:result", ({ ok, effect, source, error }) => {
 	els.sfxResultAudio.play().catch(() => {});
 });
 
+// LLM Model Switching
+const LLM_MODELS = {
+	openai: [
+		{ value: "gpt-4o",              label: "GPT-4o" },
+		{ value: "gpt-4o-mini",         label: "GPT-4o Mini" },
+		{ value: "gpt-4-turbo",         label: "GPT-4 Turbo" },
+		{ value: "gpt-5-chat-latest",   label: "GPT-5 (latest)" },
+	],
+	claude: [
+		{ value: "claude-opus-4-6",           label: "Claude Opus 4.6" },
+		{ value: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6" },
+		{ value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+	],
+};
+
+function updateLlmModelSelect() {
+	const provider = $("llmProviderSelect").value;
+	const models = LLM_MODELS[provider] || [];
+	const sel = $("llmModelSelect");
+	sel.innerHTML = models.map(m => `<option value="${m.value}">${m.label}</option>`).join("");
+	// Restore current model if it matches this provider
+	if (currentState?.llmProvider === provider && currentState?.llmModel) {
+		sel.value = currentState.llmModel;
+	}
+}
+
+function updateCurrentLlmLabel() {
+	const label = $("currentLlmLabel");
+	if (!label || !currentState) return;
+	const p = currentState.llmProvider || "?";
+	const m = currentState.llmModel || "?";
+	const modelLabel = Object.values(LLM_MODELS).flat().find(x => x.value === m)?.label || m;
+	label.textContent = `${p} / ${modelLabel}`;
+}
+
+$("llmProviderSelect").addEventListener("change", updateLlmModelSelect);
+$("applyLlmBtn").addEventListener("click", () => {
+	if (!currentLobby) return alert("Connect to a lobby first");
+	const provider = $("llmProviderSelect").value;
+	const model = $("llmModelSelect").value;
+	socket.emit("admin:llm", { code: currentLobby, provider, model });
+});
+
+// Initialize model list and disable unavailable providers
+updateLlmModelSelect();
+fetch("/api/features").then(r => r.json()).then(f => {
+	const provSel = $("llmProviderSelect");
+	for (const opt of provSel.options) {
+		if (opt.value === "openai" && !f.openai) { opt.disabled = true; opt.textContent += " (no key)"; }
+		if (opt.value === "claude" && !f.claude)  { opt.disabled = true; opt.textContent += " (no key)"; }
+	}
+}).catch(() => {});
+
 // Phase & Turn
 $("phaseCharacter").addEventListener("click", () => {
 	if (!currentLobby) return;
@@ -461,6 +566,27 @@ $("phaseRunning").addEventListener("click", () => {
 $("nextTurn").addEventListener("click", () => {
 	if (!currentLobby) return;
 	socket.emit("admin:nextTurn", { code: currentLobby });
+});
+
+// ═══ STORY SUMMARY ═══
+function renderStorySummary() {
+	const el = $("storySummaryDisplay");
+	if (!el) return;
+	if (!currentState) { el.textContent = "No lobby connected."; return; }
+	const ctx = currentState.storyContext;
+	el.textContent = (ctx && ctx !== "—") ? ctx : "No story summary yet — one will be generated after a few turns.";
+}
+$("refreshSummary").addEventListener("click", () => {
+	if (currentLobby) socket.emit("admin:connect", { code: currentLobby });
+	renderStorySummary();
+});
+$("copySummary").addEventListener("click", () => {
+	const text = $("storySummaryDisplay").textContent;
+	navigator.clipboard.writeText(text).then(() => {
+		const btn = $("copySummary");
+		btn.textContent = "Copied!";
+		setTimeout(() => btn.textContent = "Copy to Clipboard", 1500);
+	});
 });
 
 // ═══ RAW LOBBY JSON ═══
