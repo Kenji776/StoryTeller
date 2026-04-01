@@ -187,25 +187,25 @@ class MusicManager {
 		});
 	}
 
+	/** Make the music row visible (called once when entering game mode). */
+	showWidget() {
+		const row     = document.getElementById("musicRow");
+		const divider = document.getElementById("audioDivider");
+		if (row)     row.classList.remove("hidden");
+		if (divider) divider.classList.remove("hidden");
+		this._updateWidget();
+	}
+
 	_updateWidget() {
-		const row       = document.getElementById("musicRow");
-		const divider   = document.getElementById("audioDivider");
 		const muteBtn   = document.getElementById("musicMuteBtn");
 		const titleEl   = document.getElementById("musicSongTitle");
 		const slider    = document.getElementById("musicVolumeSlider");
 
-		if (!row) return;
-
-		if (!this.currentMood) {
-			row.classList.add("hidden");
-			if (divider) divider.classList.add("hidden");
-			return;
+		if (titleEl) {
+			titleEl.textContent = this.currentMood
+				? (this.currentTitle || MOOD_LABELS[this.currentMood] || this.currentMood.replace(/_/g, " "))
+				: "No music";
 		}
-
-		row.classList.remove("hidden");
-		if (divider) divider.classList.remove("hidden");
-
-		if (titleEl) titleEl.textContent = this.currentTitle || (MOOD_LABELS[this.currentMood] || this.currentMood.replace(/_/g, " "));
 		if (muteBtn) muteBtn.textContent = this.muted ? "🔇" : "🎵";
 		if (slider && !slider.matches(":active")) slider.value = Math.round(this.muted ? 0 : this.volume * 100);
 	}

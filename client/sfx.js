@@ -1,32 +1,55 @@
 // === SfxManager ===
 // Plays one-shot sound effects received from the server via the sfx:play
-// socket event.  Effects are layered (multiple can play at once) and each
-// gets its own Audio element that is disposed after playback ends.
+// socket event.  Effects play in series (queued) with a configurable gap
+// between them so they don't overlap.
+
+const SFX_GAP_MS = 1500; // pause between consecutive effects
 
 class SfxManager {
 	constructor() {
 		this.muted  = false;
 		this.volume = 0.5;   // default SFX volume (independent of music)
+		this._queue = [];    // pending effects: { file, name }
+		this._playing = false;
 		this._bindControls();
 	}
 
-	// Play one or more effects.  `effects` is an array of { file, name }.
+	// Enqueue one or more effects to play in series.
 	play(effects) {
 		if (!Array.isArray(effects) || this.muted) return;
-
 		for (const fx of effects) {
 			if (!fx?.file) continue;
-			const audio  = new Audio(`/sfx/${fx.file}`);
-			audio.volume = this.volume;
-
-			audio.play().catch(err => console.warn("🔊 SFX playback failed:", err.message));
-
-			// Clean up after playback finishes
-			audio.addEventListener("ended", () => { audio.src = ""; });
-			audio.addEventListener("error", ()  => { audio.src = ""; });
-
-			console.log(`🔊 Playing SFX: ${fx.name || fx.file}`);
+			this._queue.push(fx);
 		}
+		this._pump();
+	}
+
+	// Process the next effect in the queue.
+	_pump() {
+		if (this._playing || this._queue.length === 0) return;
+		this._playing = true;
+
+		const fx    = this._queue.shift();
+		const audio = new Audio(`/sfx/${fx.file}`);
+		audio.volume = this.volume;
+
+		console.log(`🔊 Playing SFX: ${fx.name || fx.file}`);
+
+		const next = () => {
+			audio.src = "";
+			this._playing = false;
+			if (this._queue.length > 0) {
+				setTimeout(() => this._pump(), SFX_GAP_MS);
+			}
+		};
+
+		audio.addEventListener("ended", next);
+		audio.addEventListener("error", next);
+
+		audio.play().catch(err => {
+			console.warn("🔊 SFX playback failed:", err.message);
+			next();
+		});
 	}
 
 	toggleMute() {

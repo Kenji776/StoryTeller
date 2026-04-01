@@ -69,6 +69,11 @@ function registerSocketEvents() {
 			}
 			enterGameMode();
 			updateGameUI(state);
+
+			// Resume music for players who joined or reconnected mid-game
+			if (state.currentMusic && window.musicManager) {
+				window.musicManager.requestMood(state.currentMusic);
+			}
 		} else {
 			show(els.lobby);
 		}
@@ -152,73 +157,22 @@ function registerSocketEvents() {
 		showToast(message, type);
 	});
 
-	// Handle streamed audio
+	// Handle streamed audio — route to the channel that owns this streamId
 	socket.on("narration:audio", ({ data, streamId }) => {
 		try {
-			if (streamId !== activeStreamId || narrationCancelled) {
-				return;
-			}
-
 			const chunk = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-
-			// Check if we have a valid sourceBuffer AND MediaSource is open
-			const isReady = sourceBuffer && mediaSource && mediaSource.readyState === "open";
-
-			// Always queue if not ready
-			if (!isReady) {
-				queuedChunks.push(chunk);
-				return;
-			}
-
-			// Append or queue the chunk
-			if (!sourceBuffer.updating) {
-				try {
-					sourceBuffer.appendBuffer(chunk);
-				} catch (err) {
-					console.error("❌ appendBuffer error:", err);
-					queuedChunks.push(chunk);
-				}
-			} else {
-				queuedChunks.push(chunk);
-			}
+			appendAudioChunk(streamId, chunk);
 		} catch (err) {
-			console.error("💥 narration:audio handler failed:", err);
+			console.warn("⚠️ narration:audio skipped bad chunk:", err.message);
 		}
 	});
 
 	socket.on("narration:audio:end", ({ streamId }) => {
-		if (streamId !== activeStreamId) {
-			return;
-		}
-
-		if (!mediaSource || mediaSource.readyState !== "open") {
-			console.warn(`⚠️ MediaSource not open (state: ${mediaSource?.readyState})`);
-			return;
-		}
-
-		const closeStream = () => {
-			try {
-				if (mediaSource.readyState === "open") {
-					mediaSource.endOfStream();
-				}
-			} catch (err) {
-				console.warn("⚠️ endOfStream error:", err);
-			}
-		};
-
-		// Wait for all queued chunks to be processed
-		if (sourceBuffer && (sourceBuffer.updating || queuedChunks.length > 0)) {
-			const waitForQueue = () => {
-				console.log(`⏳ Check: updating=${sourceBuffer.updating}, queued=${queuedChunks.length}`);
-				if (!sourceBuffer.updating && queuedChunks.length === 0) {
-					closeStream();
-				} else {
-					setTimeout(waitForQueue, 100);
-				}
-			};
-			waitForQueue();
-		} else {
-			closeStream();
+		try {
+			finalizeAudioStream(streamId);
+		} catch (err) {
+			console.warn("⚠️ narration:audio:end error — signalling done:", err.message);
+			document.dispatchEvent(new CustomEvent("narration:playback:ended"));
 		}
 	});
 
@@ -231,41 +185,21 @@ function registerSocketEvents() {
 			} catch {}
 		}
 		appendLog("DM: " + narrationContent + "\n\n");
-		// Audio init is handled by narration:start; only handle the no-audio case here
 		if (!(content && content.trim().length > 0) || status === 204) {
 			showNarratorIndicator(false);
-			isNarrating = false;
-			narrationCancelled = false;
 		}
 	});
 
 	socket.on("narration:start", ({ speaker, streamId, status }) => {
-
 		// 🧩 Handle dev mode or no-audio condition gracefully
 		if (status === 204 || localStorage.getItem("narrationEnabled") === "false") {
 			showNarratorIndicator(false);
-			isNarrating = false;
-			narrationCancelled = true;
-			activeStreamId = streamId; // track so audio chunks for this stream are ignored
-			// No audio will play — signal done immediately so the server can start the turn timer
+			// Signal done immediately so the server can start the turn timer
 			document.dispatchEvent(new CustomEvent("narration:playback:ended"));
 			return;
 		}
 
-		const prevStreamId = activeStreamId;
-		activeStreamId = streamId;
-
-		// Stop any existing narration before starting a new one
-		if (prevStreamId && prevStreamId !== streamId && isNarrating) {
-			stopNarration();
-		}
-		initAudioStream();
-		narrationCancelled = false;
-
-		isNarrating = true;
-
-		const label = speaker === "DM" ? "🔮 Narrating..." : `🗣️ ${speaker} speaking...`;
-		showNarratorIndicator(true, label);
+		startNarration(speaker, streamId);
 	});
 
 	// === LEVEL UP EVENT HANDLING (client-side) ===
@@ -273,6 +207,7 @@ function registerSocketEvents() {
 		// Update visible level field
 		els.level.value = newLevel;
 		appendActionLog(`🎉 <strong>${me.name}</strong> reached level ${newLevel}!`, "levelup-event");
+		window.sfxManager?.play([{ file: "level_up_fanfare_mnf6yijp6b51.mp3", name: "Level up" }]);
 
 		// Build the new ability preview block
 		const abilityPreviewHTML = upcomingAbility
@@ -432,6 +367,7 @@ function registerSocketEvents() {
 		}
 
 		showToast(`You got ${amount} XP because ${reason}`, "success");
+		window.sfxManager?.play([{ file: "treasure_chest_open_mnf6wqthkpnx.mp3", name: "XP gain" }]);
 	});
 
 	// === SPELL SLOT UPDATES ===
@@ -496,6 +432,7 @@ function registerSocketEvents() {
 
 		showToast(msg, delta >= 0 ? "success" : "warning");
 		appendActionLog(msg, "gold-event");
+		if (delta > 0) window.sfxManager?.play([{ file: "coin_pouch_jingle_mnf6yyehe52u.mp3", name: "Gold gain" }]);
 
 		// Sync currentState so renderState doesn't show stale gold
 		if (currentState?.players?.[player]) {

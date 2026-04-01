@@ -45,6 +45,8 @@ function testToasts() {
 
 /** === FANTASY TOAST STACKING === **/
 const _toastState = { container: null, toasts: [] }; // tracks active toast elements in order
+const _pendingToasts = []; // queued while UI lock overlay is showing
+let _uiLocked = false;    // true while the "Resolving Action" overlay is visible
 
 function _reflowToasts() {
 	const GAP = 10;
@@ -58,6 +60,13 @@ function _reflowToasts() {
 }
 
 function showToast(message, type = "info", duration = 4000) {
+	// While the "Resolving Action" overlay is visible, queue toasts so the
+	// player can actually see them once the overlay disappears.
+	if (_uiLocked) {
+		_pendingToasts.push({ message, type, duration });
+		return;
+	}
+
 	// Get or create container
 	if (!_toastState.container || !_toastState.container.isConnected) {
 		const container = document.createElement("div");
@@ -812,6 +821,7 @@ function updateRestVoteModal(state, open) {
 })();
 
 function lockUI(actorName) {
+	_uiLocked = true;
 	document.getElementById("uiLockMessage").textContent = `Waiting to resolve ${actorName}'s action...`;
 	uiLock.classList.remove("hidden");
 	els.actionInput.disabled = true;
@@ -823,6 +833,14 @@ function lockUI(actorName) {
 
 function unlockUI() {
 	uiLock.classList.add("hidden");
+	_uiLocked = false;
+
+	// Flush any toasts that arrived while the overlay was up
+	while (_pendingToasts.length) {
+		const { message, type, duration } = _pendingToasts.shift();
+		showToast(message, type, duration);
+	}
+
 	// Restore turn-based lock rather than blindly enabling for everyone
 	setActionInputForTurn(currentTurnPlayer);
 	// Dice stay disabled — only enabled when the DM explicitly requests a roll
@@ -1261,6 +1279,8 @@ function enterLobbyMode(code, midGameJoin = false) {
 function enterGameMode() {
 	show(els.game);
 	document.querySelectorAll(".die").forEach(btn => (btn.disabled = true));
+	// Always show the music widget once we're in-game
+	window.musicManager?.showWidget();
 }
 
 function appendActionLog(text, className = "") {
