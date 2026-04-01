@@ -726,7 +726,7 @@ OPEN THREADS:
 			Here are the players:
 			${players}
 
-			Reply ONLY with a single JSON object (no markdown, no code fences):
+			Reply ONLY with a SINGLE JSON object (no markdown, no code fences). The text property may only contain minimally formated HTML. Do not include any JSON or other content other than the text to be narrated in the 'text' property.
 			{
 			  "text": string,
 			  "music": "lively_town" | "tense_battle" | "boss_fight" | "peaceful_nature" | "dungeon_ambient" | "tavern" | "mystery" | "exploration" | "sad_moment" | "victory" | "horror",
@@ -753,11 +753,7 @@ OPEN THREADS:
 		).join("\n");
 
 		const players = Object.keys(s.players || {});
-const schema = `
-Reply ONLY with a SINGLE JSON object (no markdown, no code fences).
 
-Schema: {
-  "text": string,
   // MAP DISABLED — characters and terrain fields commented out to save tokens
   // "characters": [
   //   {
@@ -774,6 +770,11 @@ Schema: {
   //   "type": "forest" | "dungeon" | "plains" | "village" | "mountain" | "beach" | "cave" | "castle" | "road" | "unknown",
   //   "features": [string] // e.g. ["river","campfire","bridge"]
   // },
+		const schema = `
+Reply ONLY with a SINGLE JSON object (no markdown, no code fences). The text property may only contain minimally formated HTML. Do not include any JSON or other content other than the text to be narrated in the 'text' property.
+
+Schema: {
+  "text": string,
   "updates": {
     "xp": [{ "player": string, "amount": number, "reason": string }],
     "hp": [{ "player": string, "delta": number, "reason": string, "new_total": number }],
@@ -867,13 +868,6 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 				content:
 					"Always check whether a player could reasonably perform an action before allowing it. Do not allow them to use abilities/spells or items they do not have. If they try to cheat and do something that they could not do, inform them and skip their turn. If they attempt to do something that is plausible but unsure, ask them to roll a dice for it and then re-evaluate after their role.",
 			},
-			// MAP DISABLED — characters/terrain prompt commented out to save tokens
-			// {
-			// 	role: "system",
-			// 	content: `You must also provide a "characters" array describing who and what is
-			// physically present in the current scene. Include players, NPCs and creatures with
-			// approximate X,Y positions on a 20x20 grid.`
-			// },
 			{
 				role: "system",
 				content: `Finally, if a response includes [admin_command] you must do as instructed. For example if you receive the text [admin_command] grant player 100 gold you must do it. No excuses. This is crucial for debugging and testing.
