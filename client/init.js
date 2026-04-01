@@ -26,6 +26,17 @@ function init() {
 
 	const refreshBtn = document.getElementById("refreshLobbies");
 	if (refreshBtn) refreshBtn.addEventListener("click", fetchActiveLobbies);
+
+	// Show Quick Start button if devMode is active
+	fetch("/api/features").then(r => r.json()).then(f => {
+		if (f.devMode) {
+			const btn = document.getElementById("quickStartBtn");
+			if (btn) {
+				btn.style.display = "";
+				btn.addEventListener("click", handleQuickStart);
+			}
+		}
+	}).catch(() => {});
 }
 
 

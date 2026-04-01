@@ -131,26 +131,39 @@ button:disabled {
 	display: none;
 }
 
-/* === Music Widget === */
-.music-widget {
+/* === Audio Widget (Music + SFX) === */
+.audio-widget {
 	display: flex;
+	flex-direction: row;
 	align-items: center;
-	gap: 0.4em;
+	gap: 0.5em;
 	background: rgba(25, 20, 40, 0.85);
 	border: 1px solid rgba(200, 150, 100, 0.3);
 	border-radius: 6px;
-	padding: 0.2em 0.5em;
-	max-width: 320px;
+	padding: 0.25em 0.5em;
 	position: absolute;
 	top: 0.4em;
 	right: 0.4em;
 	z-index: 10;
 	margin-bottom: 0.5em;
 }
+.audio-divider {
+	width: 1px;
+	height: 1.2em;
+	background: rgba(200, 150, 100, 0.3);
+	flex-shrink: 0;
+}
+.audio-divider.hidden { display: none; }
 #game > .row.space-between {
 	padding-top: 2.2em;
 }
-.music-mute-btn {
+.audio-row {
+	display: flex;
+	align-items: center;
+	gap: 0.4em;
+}
+.audio-row.hidden { display: none; }
+.audio-mute-btn {
 	background: none;
 	border: none;
 	padding: 0;
@@ -159,19 +172,15 @@ button:disabled {
 	line-height: 1;
 	flex-shrink: 0;
 }
-.music-info {
+.audio-label {
 	flex: 1;
-	overflow: hidden;
-}
-.music-song-title {
-	display: block;
 	font-size: 0.72em;
 	color: #c8a96e;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-.music-volume-slider {
+.audio-volume-slider {
 	-webkit-appearance: none;
 	appearance: none;
 	width: 64px;
@@ -182,7 +191,7 @@ button:disabled {
 	flex-shrink: 0;
 	cursor: pointer;
 }
-.music-volume-slider::-webkit-slider-thumb {
+.audio-volume-slider::-webkit-slider-thumb {
 	-webkit-appearance: none;
 	appearance: none;
 	width: 12px;
@@ -191,7 +200,7 @@ button:disabled {
 	background: #c8a96e;
 	cursor: pointer;
 }
-.music-volume-slider::-moz-range-thumb {
+.audio-volume-slider::-moz-range-thumb {
 	width: 12px;
 	height: 12px;
 	border-radius: 50%;

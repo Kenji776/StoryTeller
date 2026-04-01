@@ -3,513 +3,744 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<title>D&D AI DM — Admin Panel</title>
+		<title>StoryTeller — Admin Panel</title>
 		<link rel="stylesheet" href="/style.css" />
 		<style>
-			.grid.two {
+			/* ── Admin Layout ── */
+			body { background: #0d0b15; }
+
+			.admin-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 1rem 1.5rem;
+				border-bottom: 1px solid rgba(234, 203, 131, 0.15);
+				margin-bottom: 1.5rem;
+			}
+			.admin-header h1 {
+				font-family: 'Cinzel Decorative', serif;
+				font-size: 1.4rem;
+				color: #eacb83;
+				margin: 0;
+			}
+			.header-right {
+				display: flex;
+				align-items: center;
+				gap: 0.75rem;
+			}
+
+			/* ── Status Badge ── */
+			.status-badge {
+				font-size: 0.78rem;
+				padding: 0.3em 0.8em;
+				border-radius: 999px;
+				border: 1px solid #555;
+				background: rgba(30, 30, 50, 0.8);
+				color: #aaa;
+				white-space: nowrap;
+			}
+			.status-badge.connected { border-color: #2ecc71; color: #2ecc71; }
+			.status-badge.error     { border-color: #e74c3c; color: #e74c3c; }
+
+			/* ── Panels ── */
+			.admin-panel {
+				background: linear-gradient(145deg, rgba(20,18,30,0.95), rgba(15,13,22,0.98));
+				border: 1px solid rgba(234, 203, 131, 0.12);
+				border-radius: 10px;
+				padding: 1.25rem 1.5rem;
+				margin-bottom: 1.25rem;
+			}
+			.admin-panel h2 {
+				font-family: 'Cinzel', serif;
+				font-size: 1.1rem;
+				color: #eacb83;
+				margin: 0 0 1rem;
+				padding-bottom: 0.5rem;
+				border-bottom: 1px solid rgba(234, 203, 131, 0.1);
+			}
+
+			/* ── Lobby Cards ── */
+			.lobby-grid {
 				display: grid;
-				grid-template-columns: 2fr 1fr;
-				gap: 1rem;
+				grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+				gap: 0.75rem;
 			}
-			textarea {
-				width: 100%;
-				height: 80px;
+			.lobby-card {
+				background: rgba(30, 28, 45, 0.9);
+				border: 1px solid rgba(255, 255, 255, 0.06);
+				border-radius: 8px;
+				padding: 0.85rem 1rem;
+				display: flex;
+				flex-direction: column;
+				gap: 0.4rem;
+				transition: border-color 0.2s;
 			}
-			table {
-				width: 100%;
-				border-collapse: collapse;
+			.lobby-card:hover {
+				border-color: rgba(234, 203, 131, 0.3);
 			}
-			th,
-			td {
-				border: 1px solid #444;
-				padding: 4px 8px;
-				text-align: left;
+			.lobby-card.active {
+				border-color: #eacb83;
+				box-shadow: 0 0 12px rgba(234, 203, 131, 0.15);
 			}
-			.log {
-				background: #111;
-				padding: 1rem;
-				height: 300px;
-				overflow-y: auto;
-				white-space: pre-wrap;
+			.lobby-card-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
 			}
-			/* === Admin Panel Tabs === */
-			.tab-menu {
-				margin-bottom: 0.5em;
-				gap: 0.5em;
+			.lobby-card-title {
+				font-family: 'Cinzel', serif;
+				font-size: 1rem;
+				color: #ffd166;
 			}
-			.tab-btn {
-				padding: 0.5em 1em;
+			.lobby-card-code {
+				font-family: monospace;
+				font-size: 0.82rem;
+				color: #888;
+				background: rgba(0,0,0,0.3);
+				padding: 0.15em 0.5em;
+				border-radius: 4px;
+			}
+			.lobby-card-meta {
+				display: flex;
+				gap: 0.75rem;
+				font-size: 0.8rem;
+				color: #999;
+			}
+			.lobby-card-meta span { display: flex; align-items: center; gap: 0.25rem; }
+			.lobby-card-actions {
+				display: flex;
+				gap: 0.5rem;
+				margin-top: 0.4rem;
+			}
+
+			/* ── Buttons ── */
+			.btn {
+				padding: 0.4em 0.9em;
+				border-radius: 6px;
 				border: 1px solid #555;
 				background: #1a1a2a;
-				color: #fff;
-				border-radius: 6px;
+				color: #ddd;
 				cursor: pointer;
+				font-size: 0.82rem;
+				transition: all 0.15s;
 			}
+			.btn:hover { background: #2a2a3a; border-color: #777; }
+			.btn-primary {
+				background: linear-gradient(135deg, #2a2040, #3a2855);
+				border-color: rgba(234, 203, 131, 0.3);
+				color: #eacb83;
+			}
+			.btn-primary:hover { border-color: #eacb83; background: #3a2855; }
+			.btn-danger {
+				background: rgba(80, 0, 0, 0.6);
+				border-color: rgba(200, 50, 50, 0.4);
+				color: #f88;
+			}
+			.btn-danger:hover { background: rgba(120, 0, 0, 0.6); border-color: #c33; }
+			.btn-sm { padding: 0.25em 0.6em; font-size: 0.78rem; }
+			.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+			/* ── Tabs ── */
+			.tab-bar {
+				display: flex;
+				gap: 0.25rem;
+				border-bottom: 1px solid rgba(255,255,255,0.08);
+				margin-bottom: 1rem;
+				overflow-x: auto;
+			}
+			.tab-btn {
+				padding: 0.55em 1.1em;
+				border: 1px solid transparent;
+				border-bottom: none;
+				background: transparent;
+				color: #888;
+				border-radius: 6px 6px 0 0;
+				cursor: pointer;
+				font-size: 0.85rem;
+				white-space: nowrap;
+				transition: all 0.15s;
+			}
+			.tab-btn:hover { color: #ccc; background: rgba(255,255,255,0.03); }
 			.tab-btn.active {
-				background: #2d2d4a;
-				border-color: #888;
-				box-shadow: 0 0 8px rgba(180, 180, 255, 0.4);
+				color: #eacb83;
+				background: rgba(234, 203, 131, 0.08);
+				border-color: rgba(234, 203, 131, 0.2);
 			}
-			.tab {
-				display: none;
+			.tab-pane { display: none; }
+			.tab-pane.active { display: block; }
+
+			/* ── Tables ── */
+			.data-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 0.88rem;
 			}
-			.tab.active {
-				display: block;
-			}
-			details summary {
-				cursor: pointer;
-				font-weight: bold;
-				margin-top: 0.75em;
-			}
-			details > div {
-				padding: 0.5em 1em;
-				background: rgba(255, 255, 255, 0.03);
-				border-radius: 6px;
-				margin-top: 0.25em;
-			}
-			.compact-table th,
-			.compact-table td {
-				padding: 3px 6px;
-				font-size: 0.9em;
-			}
-			.compact-table thead {
+			.data-table th {
+				text-align: left;
+				padding: 0.5rem 0.6rem;
+				color: #eacb83;
+				font-weight: 600;
+				font-size: 0.78rem;
+				text-transform: uppercase;
+				letter-spacing: 0.04em;
+				border-bottom: 1px solid rgba(234, 203, 131, 0.15);
 				position: sticky;
 				top: 0;
-				background: #222;
+				background: rgba(20, 18, 30, 0.98);
 				z-index: 1;
 			}
-			#playerSelect {
-				min-width: 160px;
-				padding: 0.3em;
+			.data-table td {
+				padding: 0.45rem 0.6rem;
+				border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+				color: #ccc;
+			}
+			.data-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+			/* ── Form Controls ── */
+			.form-row {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				flex-wrap: wrap;
+				margin-bottom: 0.6rem;
+			}
+			.form-row label {
+				font-size: 0.82rem;
+				color: #aaa;
+				min-width: 80px;
+			}
+			.admin-input, .admin-select, .admin-textarea {
+				background: rgba(0, 0, 0, 0.35);
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				border-radius: 5px;
+				color: #ddd;
+				padding: 0.4em 0.6em;
+				font-size: 0.88rem;
+			}
+			.admin-input:focus, .admin-select:focus, .admin-textarea:focus {
+				outline: none;
+				border-color: rgba(234, 203, 131, 0.4);
+				box-shadow: 0 0 8px rgba(234, 203, 131, 0.1);
+			}
+			.admin-input  { flex: 1; min-width: 120px; }
+			.admin-select { min-width: 140px; }
+			.admin-textarea {
+				width: 100%;
+				min-height: 80px;
+				resize: vertical;
+				font-family: inherit;
+			}
+
+			/* ── Event Groups (collapsible) ── */
+			.event-group {
+				border: 1px solid rgba(255, 255, 255, 0.06);
+				border-radius: 8px;
+				margin-bottom: 0.5rem;
+				overflow: hidden;
+			}
+			.event-group summary {
+				cursor: pointer;
+				padding: 0.6rem 0.8rem;
+				font-weight: 600;
+				font-size: 0.9rem;
+				color: #ccc;
+				background: rgba(255, 255, 255, 0.02);
+				list-style: none;
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+			.event-group summary::-webkit-details-marker { display: none; }
+			.event-group summary::before {
+				content: "\25B6";
+				font-size: 0.65rem;
+				transition: transform 0.2s;
+				color: #888;
+			}
+			.event-group[open] summary::before { transform: rotate(90deg); }
+			.event-group > div {
+				padding: 0.7rem 0.8rem;
+				background: rgba(0, 0, 0, 0.15);
+			}
+
+			/* ── Event Feed ── */
+			.event-feed {
+				background: rgba(0, 0, 0, 0.3);
+				border: 1px solid rgba(255, 255, 255, 0.06);
+				border-radius: 8px;
+				height: 500px;
+				overflow-y: auto;
+				padding: 0.75rem;
+				font-family: 'Courier New', monospace;
+				font-size: 0.82rem;
+				line-height: 1.5;
+				scroll-behavior: smooth;
+			}
+			.event-entry {
+				padding: 0.3em 0;
+				border-bottom: 1px solid rgba(255,255,255,0.03);
+				display: flex;
+				gap: 0.5rem;
+			}
+			.event-time {
+				color: #555;
+				white-space: nowrap;
+				flex-shrink: 0;
+			}
+			.event-type {
+				font-weight: bold;
+				min-width: 90px;
+				flex-shrink: 0;
+			}
+			.event-msg { color: #bbb; word-break: break-word; }
+			.event-xp    .event-type { color: #f1c40f; }
+			.event-hp    .event-type { color: #e74c3c; }
+			.event-gold  .event-type { color: #f39c12; }
+			.event-turn  .event-type { color: #3498db; }
+			.event-phase .event-type { color: #9b59b6; }
+			.event-dm    .event-type { color: #1abc9c; }
+			.event-death .event-type { color: #c0392b; }
+			.event-join  .event-type { color: #2ecc71; }
+			.event-music .event-type { color: #e67e22; }
+			.event-roll  .event-type { color: #00bcd4; }
+			.event-cond  .event-type { color: #8e44ad; }
+			.event-inv   .event-type { color: #d4ac0d; }
+			.event-sys   .event-type { color: #7f8c8d; }
+			.event-sfx   .event-type { color: #e91e63; }
+
+			/* ── Lobby Info Display ── */
+			.info-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+				gap: 0.75rem;
+			}
+			.info-card {
+				background: rgba(0, 0, 0, 0.2);
+				border: 1px solid rgba(255, 255, 255, 0.06);
+				border-radius: 8px;
+				padding: 0.75rem;
+			}
+			.info-card-label {
+				font-size: 0.72rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				color: #888;
+				margin-bottom: 0.3rem;
+			}
+			.info-card-value {
+				font-size: 1rem;
+				color: #eacb83;
+				font-weight: 600;
+			}
+
+			/* ── Character File Tool ── */
+			.char-file-zone {
+				border: 2px dashed rgba(234, 203, 131, 0.15);
+				border-radius: 10px;
+				padding: 2rem;
+				text-align: center;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+			.char-file-zone:hover {
+				border-color: rgba(234, 203, 131, 0.4);
+				background: rgba(234, 203, 131, 0.03);
+			}
+			.char-file-zone p { color: #888; margin: 0.5rem 0 0; font-size: 0.85rem; }
+
+			/* ── Misc ── */
+			.hint { color: #777; font-size: 0.8rem; margin: 0.3rem 0; }
+			.hidden { display: none !important; }
+			.two-col {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 1rem;
+			}
+			@media (max-width: 800px) {
+				.two-col { grid-template-columns: 1fr; }
+				.lobby-grid { grid-template-columns: 1fr; }
+			}
+			.sig-valid   { background: #0a3a1a; color: #66ffaa; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; }
+			.sig-invalid { background: #5a1a00; color: #ffaa66; padding: 3px 8px; border-radius: 4px; font-size: 0.8rem; }
+			.player-detail { color: #999; font-size: 0.78rem; }
+			.condition-badge {
+				display: inline-block;
+				padding: 0.15em 0.45em;
 				border-radius: 4px;
-				border: 1px solid #555;
-				background: #111;
-				color: #fff;
+				font-size: 0.75rem;
+				background: rgba(142, 68, 173, 0.25);
+				color: #bb8fce;
+				margin: 0.1rem;
 			}
-			button.danger {
-				background: #500;
-				color: #fff;
-				border: 1px solid #a00;
+			.filter-bar {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				margin-bottom: 0.75rem;
 			}
-			button.danger:hover {
-				background: #700;
+			.event-feed-empty {
+				color: #555;
+				text-align: center;
+				padding: 3rem 1rem;
+				font-style: italic;
+			}
+			.section-desc {
+				color: #777;
+				font-size: 0.82rem;
+				margin: -0.5rem 0 1rem;
 			}
 		</style>
 	</head>
 	<body>
 		<script>
-			// Redirect to login if not authenticated
+			// Redirect to login if not authenticated; store authType for feature gating
+			window.__adminAuth = { type: null };
 			fetch("/api/admin/session").then(r => r.json()).then(d => {
-				if (!d.authenticated) window.location.href = "/admin/login.html";
+				if (!d.authenticated) return window.location.href = "/admin/login.html";
+				window.__adminAuth.type = d.authType || "admin";
 			}).catch(() => { window.location.href = "/admin/login.html"; });
 		</script>
-		<div class="container">
-			<header class="row space-between">
-				<h1>D&D AI DM — Admin Panel</h1>
-				<div class="row" style="gap:0.75em;">
-					<div id="statusBadge" class="badge">Disconnected</div>
-					<button id="logoutBtn" class="secondary" style="font-size:0.8em;padding:0.4em 0.8em;">Logout</button>
+
+		<div class="container" style="max-width:1200px;margin:0 auto;padding:0 1rem 2rem;">
+
+			<!-- ═══ HEADER ═══ -->
+			<div class="admin-header">
+				<h1>StoryTeller Admin</h1>
+				<div class="header-right">
+					<span id="statusBadge" class="status-badge">Disconnected</span>
+					<button id="logoutBtn" class="btn btn-sm">Logout</button>
 				</div>
-			</header>
+			</div>
 
-			<section class="panel">
-				<h2>Manage Lobbies</h2>
-				<div id="lobbyManagerList" style="display:flex;flex-direction:column;gap:0.5em;">
-					<em style="color:#aaa;">Loading...</em>
+			<!-- ═══ LOBBY BROWSER ═══ -->
+			<div id="lobbyBrowserPanel" class="admin-panel">
+				<h2>Active Adventures</h2>
+				<p class="section-desc">Click Connect to manage a lobby. All admin features appear below once connected.</p>
+				<div id="lobbyGrid" class="lobby-grid">
+					<p style="color:#666;font-style:italic;">Loading lobbies...</p>
 				</div>
-			</section>
+			</div>
 
-			<section class="panel">
-				<h2>Connect to Lobby</h2>
-				<div class="row">
-					<input id="adminJoinCode" placeholder="Enter lobby code (e.g., B9K3FD)" />
-					<button id="connectLobby" class="primary">Connect</button>
-				</div>
-			</section>
+			<!-- ═══ CONNECTED LOBBY SECTION ═══ -->
+			<div id="lobbySection" class="hidden">
 
-			<section id="adminControls" class="panel hidden">
-				<h2>Lobby Control Center</h2>
-
-				<!-- TAB MENU -->
-				<div class="tab-menu row wrap">
-					<button class="tab-btn active" data-tab="playersTab">👥 Players</button>
-					<button class="tab-btn" data-tab="eventsTab">⚡ Player Events</button>
-					<button class="tab-btn" data-tab="gameTab">🎲 Game Control</button>
-					<button class="tab-btn" data-tab="dmTab">📜 DM Tools</button>
-				<button class="tab-btn" data-tab="charFileTab">🔐 Char File</button>
+				<!-- Lobby Info Bar -->
+				<div class="admin-panel">
+					<h2 id="lobbyTitle">Lobby Details</h2>
+					<div id="lobbyInfoGrid" class="info-grid"></div>
 				</div>
 
-				<!-- TAB CONTENTS -->
-				<div id="playersTab" class="tab active">
-					<h3>Players</h3>
-					<table id="playersTable" class="compact-table">
-						<thead>
-							<tr>
-								<th>Name</th>
-								<th>Class</th>
-								<th>Level</th>
-								<th>XP</th>
-								<th>HP</th>
-								<th>Gold</th>
-								<th>Actions</th>
-							</tr>
-						</thead>
-						<tbody></tbody>
-					</table>
-				</div>
-
-				<div id="eventsTab" class="tab hidden">
-					<h3>Player Events</h3>
-
-					<!-- Compact player selector -->
-					<div class="row wrap">
-						<label>Target Player:</label>
-						<select id="playerSelect">
-							<option value="">— Choose Player —</option>
-						</select>
+				<!-- Main Tab Area -->
+				<div class="admin-panel" style="padding-bottom:0.5rem;">
+					<div class="tab-bar">
+						<button class="tab-btn active" data-tab="playersPane">Players</button>
+						<button class="tab-btn" data-tab="eventsPane">Player Events</button>
+						<button class="tab-btn" data-tab="dmPane">DM Tools</button>
+						<button class="tab-btn" data-tab="feedPane">Event Feed</button>
+						<button class="tab-btn" data-tab="rawPane">Raw Lobby JSON</button>
 					</div>
 
-					<!-- Event sub-panels -->
-					<details>
-						<summary>⭐ XP / Level</summary>
-						<div class="row wrap">
-							<input id="xpAmount" type="number" placeholder="XP amount" />
-							<input id="xpReason" placeholder="Reason" />
-							<button id="addXP" class="secondary">Add XP</button>
+					<!-- ── Players Tab ── -->
+					<div id="playersPane" class="tab-pane active" style="padding-bottom:1rem;">
+						<div style="max-height:400px;overflow-y:auto;">
+							<table class="data-table" id="playersTable">
+								<thead>
+									<tr>
+										<th>Name</th>
+										<th>Race</th>
+										<th>Class</th>
+										<th>Level</th>
+										<th>XP</th>
+										<th>HP</th>
+										<th>Gold</th>
+										<th>Conditions</th>
+										<th style="text-align:right;">Actions</th>
+									</tr>
+								</thead>
+								<tbody></tbody>
+							</table>
 						</div>
-					</details>
-
-					<details>
-						<summary>❤️ HP Change</summary>
-						<div class="row wrap">
-							<input id="hpDelta" type="number" placeholder="+/- HP" />
-							<input id="hpReason" placeholder="Reason" />
-							<button id="addHP" class="secondary">Apply HP</button>
-						</div>
-					</details>
-
-					<details>
-						<summary>💰 Gold Adjustment</summary>
-						<div class="row wrap">
-							<input id="goldDelta" type="number" placeholder="+/- Gold" />
-							<input id="goldReason" placeholder="Reason" />
-							<button id="addGold" class="secondary">Apply Gold</button>
-						</div>
-					</details>
-
-					<details>
-						<summary>🔮 Spell Slots / Uses</summary>
-						<div class="row wrap">
-							<input id="slotDelta" type="number" placeholder="+/- slots used (neg = restore)" />
-							<button id="applySlots" class="secondary">Apply Slots</button>
-						</div>
-					</details>
-
-					<details>
-						<summary>🎒 Inventory Change</summary>
-						<div class="row wrap">
-							<input id="invItem" placeholder="Item name" />
-							<input id="invChange" type="number" placeholder="+/- qty" />
-							<input id="invReason" placeholder="Reason" />
-							<button id="invApply" class="secondary">Apply Inventory</button>
-						</div>
-					</details>
-
-					<details>
-						<summary>🎲 Test Roll Required</summary>
-						<div>
-							<div class="row wrap" style="margin-bottom:0.5em;gap:0.5em;">
-								<label>Sides:</label>
-								<select id="rollSides" style="background:#111;color:#fff;border:1px solid #555;border-radius:4px;padding:3px 6px;">
-									<option value="4">d4</option>
-									<option value="6">d6</option>
-									<option value="8">d8</option>
-									<option value="10">d10</option>
-									<option value="12">d12</option>
-									<option value="20" selected>d20</option>
-								</select>
-								<label>Flat mod:</label>
-								<input id="rollMods" type="number" value="0" style="width:60px;" />
-							</div>
-							<div class="row wrap" style="margin-bottom:0.5em;">
-								<label>Stats:</label>
-								<select id="rollStats" multiple size="3" style="flex:1;background:#111;color:#fff;border:1px solid #555;border-radius:4px;padding:2px;">
-									<option value="str">STR</option>
-									<option value="dex">DEX</option>
-									<option value="con">CON</option>
-									<option value="int">INT</option>
-									<option value="wis">WIS</option>
-									<option value="cha">CHA</option>
-								</select>
-							</div>
-							<p class="hint" style="margin:0 0 0.4em;font-size:0.8em;">Hold Ctrl/Cmd to select multiple stats. Sends roll:required to the selected player.</p>
-							<button id="sendRollRequired" class="secondary">Send Roll Required</button>
-						</div>
-					</details>
-
-				<details>
-						<summary>🌀 Conditions</summary>
-						<div>
-							<div class="row wrap" style="margin-bottom:0.5em;">
-								<label style="min-width:80px;">Add:</label>
-								<select id="condAddSelect" multiple size="5" style="flex:1;background:#111;color:#fff;border:1px solid #555;border-radius:4px;padding:2px;">
-									<option value="blinded">🙈 blinded</option>
-									<option value="burning">🔥 burning</option>
-									<option value="charmed">💞 charmed</option>
-									<option value="deafened">🔇 deafened</option>
-									<option value="exhausted">😩 exhausted</option>
-									<option value="frightened">😱 frightened</option>
-									<option value="grappled">🤼 grappled</option>
-									<option value="incapacitated">💫 incapacitated</option>
-									<option value="invisible">👻 invisible</option>
-									<option value="paralyzed">⚡ paralyzed</option>
-									<option value="petrified">🗿 petrified</option>
-									<option value="poisoned">🤢 poisoned</option>
-									<option value="prone">🛌 prone</option>
-									<option value="restrained">🕸️ restrained</option>
-									<option value="stunned">💥 stunned</option>
-									<option value="unconscious">💤 unconscious</option>
-								</select>
-							</div>
-							<div class="row wrap" style="margin-bottom:0.5em;">
-								<label style="min-width:80px;">Remove:</label>
-								<select id="condRemoveSelect" multiple size="5" style="flex:1;background:#111;color:#fff;border:1px solid #555;border-radius:4px;padding:2px;">
-									<option value="blinded">🙈 blinded</option>
-									<option value="burning">🔥 burning</option>
-									<option value="charmed">💞 charmed</option>
-									<option value="deafened">🔇 deafened</option>
-									<option value="exhausted">😩 exhausted</option>
-									<option value="frightened">😱 frightened</option>
-									<option value="grappled">🤼 grappled</option>
-									<option value="incapacitated">💫 incapacitated</option>
-									<option value="invisible">👻 invisible</option>
-									<option value="paralyzed">⚡ paralyzed</option>
-									<option value="petrified">🗿 petrified</option>
-									<option value="poisoned">🤢 poisoned</option>
-									<option value="prone">🛌 prone</option>
-									<option value="restrained">🕸️ restrained</option>
-									<option value="stunned">💥 stunned</option>
-									<option value="unconscious">💤 unconscious</option>
-								</select>
-							</div>
-							<p class="hint" style="margin:0 0 0.4em;font-size:0.8em;">Hold Ctrl/Cmd to select multiple. Add and Remove are applied simultaneously.</p>
-							<button id="applyConditions" class="secondary">Apply Conditions</button>
-						</div>
-					</details>
-
-					<details>
-						<summary>💀 Kill Player (Test Death Modal)</summary>
-						<div class="row wrap">
-							<p style="margin:0;">Force a player's HP to 0 and trigger the death sequence.</p>
-							<button id="killPlayer" class="danger">Kill Player</button>
-						</div>
-					</details>
-				</div>
-
-				<div id="gameTab" class="tab hidden">
-					<h3>Phases / Turns</h3>
-					<div class="row wrap">
-						<button id="phaseCharacter" class="secondary">→ Character Creation</button>
-						<button id="phaseReady" class="secondary">→ Ready Check</button>
-						<button id="phaseRunning" class="secondary">→ Running</button>
-						<button id="nextTurn" class="secondary">Next Turn</button>
-					</div>
-				</div>
-
-				<div id="dmTab" class="tab hidden">
-					<h3>Dungeon Master Tools</h3>
-					<textarea id="dmMessage" placeholder="Write a narration or event message..."></textarea>
-					<button id="sendDM" class="primary">Send as DM</button>
-
-					<h3>🎵 Music Control</h3>
-					<div class="row wrap" style="gap:0.5em;align-items:center;">
-						<select id="musicMoodSelect" style="flex:1;min-width:180px;">
-							<option value="lively_town">🏘️ Lively Town</option>
-							<option value="tense_battle">⚔️ Tense Battle</option>
-							<option value="boss_fight">💀 Boss Fight</option>
-							<option value="peaceful_nature">🌿 Peaceful Nature</option>
-							<option value="dungeon_ambient">🕯️ Dungeon Ambient</option>
-							<option value="tavern">🍺 Tavern</option>
-							<option value="mystery">🔍 Mystery</option>
-							<option value="exploration">🗺️ Exploration</option>
-							<option value="sad_moment">😢 Sad Moment</option>
-							<option value="victory">🏆 Victory</option>
-							<option value="horror">👻 Horror</option>
-						</select>
-						<button id="sendMusicChange" class="primary">▶ Play Mood</button>
-						<button id="sendMusicStop" class="secondary">⏹ Stop</button>
-					</div>
-					<p class="hint" style="margin-top:0.4em;">Current mood: <strong id="currentMoodLabel">—</strong></p>
-
-					<h3>Lobby Info</h3>
-					<div id="lobbyInfo" class="log"></div>
-				</div>
-			<!-- CHAR FILE TAB -->
-			<div id="charFileTab" class="tab hidden">
-				<h3>Character Sheet File Tool</h3>
-				<p class="hint" style="margin-top:0;">Load a <code>.stchar</code> export to decrypt, inspect, edit, and re-sign it.</p>
-
-				<div class="row" style="margin-bottom:1em;gap:1em;align-items:center;">
-					<button id="loadCharFileBtn" class="secondary">📂 Load .stchar File</button>
-					<input type="file" id="charFileInput" accept=".stchar" style="display:none;" />
-					<span id="charFileStatus" class="hint" style="font-size:0.85em;">No file loaded</span>
-				</div>
-
-				<div id="charFileEditor" style="display:none;">
-					<div class="row space-between" style="margin-bottom:0.4em;align-items:center;">
-						<strong id="charFileNameDisplay" style="font-size:1.1em;color:#ffd166;"></strong>
-						<span id="charFileSigStatus" style="font-size:0.8em;padding:3px 8px;border-radius:4px;"></span>
+						<p class="hint" style="margin-top:0.5rem;">Click a player row to select them for Player Events.</p>
 					</div>
 
-					<p class="hint" style="margin:0 0 0.4em;font-size:0.8em;">
-						Edit any field below. The JSON must stay valid. Click <em>Re-sign</em> to generate a new tamper-proof export.
-					</p>
+					<!-- ── Player Events Tab ── -->
+					<div id="eventsPane" class="tab-pane" style="padding-bottom:1rem;">
+						<div class="form-row" style="margin-bottom:1rem;">
+							<label>Target Player:</label>
+							<select id="playerSelect" class="admin-select">
+								<option value="">-- Choose Player --</option>
+							</select>
+						</div>
 
-					<textarea id="charFileJson" style="height:420px;font-family:monospace;font-size:0.82em;line-height:1.45;resize:vertical;"></textarea>
+						<details class="event-group">
+							<summary>XP / Level</summary>
+							<div>
+								<div class="form-row">
+									<input id="xpAmount" type="number" class="admin-input" placeholder="XP amount" style="max-width:120px;" />
+									<input id="xpReason" class="admin-input" placeholder="Reason" />
+									<button id="addXP" class="btn btn-primary">Add XP</button>
+								</div>
+							</div>
+						</details>
 
-					<div class="row" style="margin-top:0.6em;gap:0.75em;align-items:center;">
-						<button id="charFileResign" class="primary">🔏 Re-sign &amp; Download</button>
-						<button id="charFilePretty" class="secondary">✨ Format JSON</button>
-						<span id="charFileError" style="color:#f88;font-size:0.85em;"></span>
+						<details class="event-group">
+							<summary>HP Change</summary>
+							<div>
+								<div class="form-row">
+									<input id="hpDelta" type="number" class="admin-input" placeholder="+/- HP" style="max-width:120px;" />
+									<input id="hpReason" class="admin-input" placeholder="Reason" />
+									<button id="addHP" class="btn btn-primary">Apply HP</button>
+								</div>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary>Gold Adjustment</summary>
+							<div>
+								<div class="form-row">
+									<input id="goldDelta" type="number" class="admin-input" placeholder="+/- Gold" style="max-width:120px;" />
+									<input id="goldReason" class="admin-input" placeholder="Reason" />
+									<button id="addGold" class="btn btn-primary">Apply Gold</button>
+								</div>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary>Spell Slots</summary>
+							<div>
+								<div class="form-row">
+									<input id="slotDelta" type="number" class="admin-input" placeholder="+/- slots used (neg = restore)" style="max-width:220px;" />
+									<button id="applySlots" class="btn btn-primary">Apply</button>
+								</div>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary>Inventory</summary>
+							<div>
+								<div class="form-row">
+									<input id="invItem" class="admin-input" placeholder="Item name" />
+									<input id="invChange" type="number" class="admin-input" placeholder="+/- qty" style="max-width:100px;" />
+									<input id="invReason" class="admin-input" placeholder="Reason" />
+									<button id="invApply" class="btn btn-primary">Apply</button>
+								</div>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary>Roll Required</summary>
+							<div>
+								<div class="form-row">
+									<label>Die:</label>
+									<select id="rollSides" class="admin-select" style="min-width:80px;">
+										<option value="4">d4</option>
+										<option value="6">d6</option>
+										<option value="8">d8</option>
+										<option value="10">d10</option>
+										<option value="12">d12</option>
+										<option value="20" selected>d20</option>
+									</select>
+									<label>Modifier:</label>
+									<input id="rollMods" type="number" value="0" class="admin-input" style="max-width:70px;" />
+								</div>
+								<div class="form-row">
+									<label>Stats:</label>
+									<select id="rollStats" multiple size="3" class="admin-select" style="flex:1;">
+										<option value="str">STR</option>
+										<option value="dex">DEX</option>
+										<option value="con">CON</option>
+										<option value="int">INT</option>
+										<option value="wis">WIS</option>
+										<option value="cha">CHA</option>
+									</select>
+								</div>
+								<p class="hint">Hold Ctrl/Cmd to select multiple stats.</p>
+								<button id="sendRollRequired" class="btn btn-primary">Send Roll</button>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary>Conditions</summary>
+							<div>
+								<div class="two-col">
+									<div>
+										<label style="font-size:0.8rem;color:#aaa;">Add:</label>
+										<select id="condAddSelect" multiple size="5" class="admin-select" style="width:100%;">
+											<option value="blinded">blinded</option>
+											<option value="burning">burning</option>
+											<option value="charmed">charmed</option>
+											<option value="deafened">deafened</option>
+											<option value="exhausted">exhausted</option>
+											<option value="frightened">frightened</option>
+											<option value="grappled">grappled</option>
+											<option value="incapacitated">incapacitated</option>
+											<option value="invisible">invisible</option>
+											<option value="paralyzed">paralyzed</option>
+											<option value="petrified">petrified</option>
+											<option value="poisoned">poisoned</option>
+											<option value="prone">prone</option>
+											<option value="restrained">restrained</option>
+											<option value="stunned">stunned</option>
+											<option value="unconscious">unconscious</option>
+										</select>
+									</div>
+									<div>
+										<label style="font-size:0.8rem;color:#aaa;">Remove:</label>
+										<select id="condRemoveSelect" multiple size="5" class="admin-select" style="width:100%;">
+											<option value="blinded">blinded</option>
+											<option value="burning">burning</option>
+											<option value="charmed">charmed</option>
+											<option value="deafened">deafened</option>
+											<option value="exhausted">exhausted</option>
+											<option value="frightened">frightened</option>
+											<option value="grappled">grappled</option>
+											<option value="incapacitated">incapacitated</option>
+											<option value="invisible">invisible</option>
+											<option value="paralyzed">paralyzed</option>
+											<option value="petrified">petrified</option>
+											<option value="poisoned">poisoned</option>
+											<option value="prone">prone</option>
+											<option value="restrained">restrained</option>
+											<option value="stunned">stunned</option>
+											<option value="unconscious">unconscious</option>
+										</select>
+									</div>
+								</div>
+								<p class="hint">Hold Ctrl/Cmd to select multiple.</p>
+								<button id="applyConditions" class="btn btn-primary" style="margin-top:0.4rem;">Apply Conditions</button>
+							</div>
+						</details>
+
+						<details class="event-group">
+							<summary style="color:#f88;">Kill Player</summary>
+							<div>
+								<p class="hint" style="margin:0 0 0.5rem;">Force a player's HP to 0 and trigger the death sequence.</p>
+								<button id="killPlayer" class="btn btn-danger">Kill Player</button>
+							</div>
+						</details>
+					</div>
+
+					<!-- ── DM Tools Tab ── -->
+					<div id="dmPane" class="tab-pane" style="padding-bottom:1rem;">
+						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:0 0 0.6rem;">Narration</h3>
+						<textarea id="dmMessage" class="admin-textarea" placeholder="Write a narration or event message..."></textarea>
+						<div class="form-row" style="margin-top:0.5rem;">
+							<button id="sendDM" class="btn btn-primary">Send as DM</button>
+						</div>
+
+						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:1.25rem 0 0.6rem;">Music Control</h3>
+						<div class="form-row">
+							<select id="musicMoodSelect" class="admin-select" style="flex:1;">
+								<option value="lively_town">Lively Town</option>
+								<option value="tense_battle">Tense Battle</option>
+								<option value="boss_fight">Boss Fight</option>
+								<option value="peaceful_nature">Peaceful Nature</option>
+								<option value="dungeon_ambient">Dungeon Ambient</option>
+								<option value="tavern">Tavern</option>
+								<option value="mystery">Mystery</option>
+								<option value="exploration">Exploration</option>
+								<option value="sad_moment">Sad Moment</option>
+								<option value="victory">Victory</option>
+								<option value="horror">Horror</option>
+							</select>
+							<button id="sendMusicChange" class="btn btn-primary">Play</button>
+							<button id="sendMusicStop" class="btn">Stop</button>
+							<span class="hint">Now: <strong id="currentMoodLabel">--</strong></span>
+						</div>
+
+						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:1.25rem 0 0.6rem;">Sound Effects</h3>
+						<div class="form-row">
+							<input id="sfxDescription" class="admin-input" placeholder='Describe a sound (e.g. "sword clash", "dragon roar")' />
+							<button id="testSfx" class="btn btn-primary">Test SFX</button>
+						</div>
+						<div id="sfxResult" class="hidden" style="margin-top:0.5rem;">
+							<div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+								<span id="sfxResultBadge" style="font-size:0.82rem;padding:3px 8px;border-radius:4px;"></span>
+								<strong id="sfxResultName" style="color:#ffd166;"></strong>
+								<span id="sfxResultFile" style="color:#666;font-size:0.78rem;"></span>
+							</div>
+							<audio id="sfxResultAudio" controls style="margin-top:0.4rem;width:100%;height:32px;"></audio>
+						</div>
+						<p class="hint">Tests the SFX pipeline. Generates via ElevenLabs if no library match.</p>
+
+						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:1.25rem 0 0.6rem;">Phase & Turn Control</h3>
+						<div class="form-row">
+							<button id="phaseCharacter" class="btn">Character Creation</button>
+							<button id="phaseReady" class="btn">Ready Check</button>
+							<button id="phaseRunning" class="btn">Running</button>
+							<button id="nextTurn" class="btn btn-primary">Next Turn</button>
+						</div>
+					</div>
+
+					<!-- ── Event Feed Tab ── -->
+					<div id="feedPane" class="tab-pane" style="padding-bottom:1rem;">
+						<div class="filter-bar">
+							<label style="font-size:0.8rem;color:#aaa;">Filter:</label>
+							<select id="feedFilter" class="admin-select" style="min-width:120px;">
+								<option value="all">All Events</option>
+								<option value="xp">XP / Level</option>
+								<option value="hp">HP</option>
+								<option value="gold">Gold</option>
+								<option value="turn">Turns</option>
+								<option value="dm">Narration</option>
+								<option value="death">Deaths</option>
+								<option value="roll">Rolls</option>
+								<option value="cond">Conditions</option>
+								<option value="inv">Inventory</option>
+								<option value="music">Music</option>
+								<option value="sfx">SFX</option>
+								<option value="sys">System</option>
+							</select>
+							<button id="clearFeed" class="btn btn-sm">Clear</button>
+							<label style="margin-left:auto;font-size:0.8rem;color:#aaa;">
+								<input type="checkbox" id="feedAutoScroll" checked /> Auto-scroll
+							</label>
+						</div>
+						<div id="eventFeed" class="event-feed">
+							<div class="event-feed-empty">Connect to a lobby to see live events.</div>
+						</div>
+					</div>
+					<!-- ── Raw Lobby JSON Tab ── -->
+					<div id="rawPane" class="tab-pane" style="padding-bottom:1rem;">
+						<div class="form-row">
+							<button id="refreshRawJson" class="btn btn-sm">Refresh</button>
+							<button id="copyRawJson" class="btn btn-sm">Copy to Clipboard</button>
+						</div>
+						<pre id="rawJsonDisplay" style="background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.75rem;max-height:600px;overflow:auto;font-family:'Courier New',monospace;font-size:0.8rem;color:#bbb;white-space:pre-wrap;word-break:break-word;margin-top:0.5rem;">Connect to a lobby to view its state.</pre>
 					</div>
 				</div>
 			</div>
 
-			</section>
+			<!-- ═══ CHARACTER FILE TOOL (admin-only, no lobby required) ═══ -->
+			<div id="charFileSection" class="admin-panel hidden">
+				<h2>Character File Tool</h2>
+				<p class="section-desc">Load a <code>.stchar</code> export to decrypt, inspect, edit, and re-sign. Admin-only feature.</p>
+
+				<div id="charDropZone" class="char-file-zone">
+					<strong style="color:#eacb83;font-size:1rem;">Drop .stchar file here</strong>
+					<p>or click to browse</p>
+					<input type="file" id="charFileInput" accept=".stchar" style="display:none;" />
+				</div>
+				<span id="charFileStatus" class="hint" style="display:block;margin-top:0.5rem;"></span>
+
+				<div id="charFileEditor" class="hidden" style="margin-top:1rem;">
+					<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+						<strong id="charFileNameDisplay" style="font-size:1.05rem;color:#ffd166;"></strong>
+						<span id="charFileSigStatus"></span>
+					</div>
+					<p class="hint">Edit any field below. The JSON must stay valid. Click Re-sign to generate a new export.</p>
+					<textarea id="charFileJson" class="admin-textarea" style="height:420px;font-family:'Courier New',monospace;font-size:0.82rem;line-height:1.45;resize:vertical;"></textarea>
+					<div class="form-row" style="margin-top:0.6rem;">
+						<button id="charFileResign" class="btn btn-primary">Re-sign & Download</button>
+						<button id="charFilePretty" class="btn">Format JSON</button>
+						<span id="charFileError" style="color:#f88;font-size:0.82rem;"></span>
+					</div>
+				</div>
+			</div>
 
 		</div>
 
 		<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous"></script>
 		<script src="/admin/admin.js"></script>
-		<script>
-		// =============================================
-		// 🔐 CHAR FILE TOOL (admin.html inline)
-		// =============================================
-		(function () {
-			const loadBtn    = document.getElementById("loadCharFileBtn");
-			const fileInput  = document.getElementById("charFileInput");
-			const statusEl   = document.getElementById("charFileStatus");
-			const editorEl   = document.getElementById("charFileEditor");
-			const nameEl     = document.getElementById("charFileNameDisplay");
-			const sigEl      = document.getElementById("charFileSigStatus");
-			const jsonEl     = document.getElementById("charFileJson");
-			const resignBtn  = document.getElementById("charFileResign");
-			const prettyBtn  = document.getElementById("charFilePretty");
-			const errorEl    = document.getElementById("charFileError");
-
-			let currentFileName = "character";
-
-			loadBtn.addEventListener("click", () => fileInput.click());
-
-			fileInput.addEventListener("change", async (e) => {
-				const file = e.target.files[0];
-				if (!file) return;
-				e.target.value = "";
-				currentFileName = file.name.replace(/\.stchar$/i, "");
-				statusEl.textContent = `Loading ${file.name}…`;
-				errorEl.textContent  = "";
-
-				let parsed;
-				try {
-					parsed = JSON.parse(await file.text());
-				} catch {
-					statusEl.textContent = "❌ Could not parse file — not valid JSON.";
-					return;
-				}
-
-				// Send to server to verify signature and get plain character data
-				try {
-					const res  = await fetch("/api/character/import", {
-						method:  "POST",
-						headers: { "Content-Type": "application/json" },
-						body:    JSON.stringify({ data: parsed.data, sig: parsed.sig }),
-					});
-					const json = await res.json();
-
-					if (!res.ok) {
-						// Show data anyway (unsigned/tampered) with a warning
-						sigEl.textContent   = "⚠️ Signature invalid or tampered";
-						sigEl.style.background = "#5a1a00";
-						sigEl.style.color      = "#ffaa66";
-
-						// Try to at least show the raw base64 data
-						try {
-							const raw = JSON.parse(atob(parsed.data));
-							nameEl.textContent  = raw.name || "Unknown";
-							jsonEl.value = JSON.stringify(raw, null, 2);
-						} catch {
-							jsonEl.value = "// Could not decode data field";
-						}
-					} else {
-						sigEl.textContent   = "✅ Signature valid";
-						sigEl.style.background = "#0a3a1a";
-						sigEl.style.color      = "#66ffaa";
-
-						nameEl.textContent = json.character.name || "Unknown";
-						// Show the editable payload (name + sheet — omit exportedAt metadata)
-						const editable = { name: json.character.name, sheet: json.character.sheet };
-						jsonEl.value = JSON.stringify(editable, null, 2);
-					}
-
-					editorEl.style.display = "block";
-					statusEl.textContent   = `Loaded: ${file.name}`;
-				} catch (err) {
-					statusEl.textContent = "❌ Server error: " + err.message;
-				}
-			});
-
-			prettyBtn.addEventListener("click", () => {
-				errorEl.textContent = "";
-				try {
-					const obj = JSON.parse(jsonEl.value);
-					jsonEl.value = JSON.stringify(obj, null, 2);
-				} catch (err) {
-					errorEl.textContent = "Invalid JSON: " + err.message;
-				}
-			});
-
-			resignBtn.addEventListener("click", async () => {
-				errorEl.textContent = "";
-				let payload;
-				try {
-					payload = JSON.parse(jsonEl.value);
-				} catch (err) {
-					errorEl.textContent = "Invalid JSON — fix errors before re-signing.";
-					return;
-				}
-
-				const { name, sheet } = payload;
-				if (!name || !sheet) {
-					errorEl.textContent = 'JSON must have top-level "name" and "sheet" keys.';
-					return;
-				}
-
-				try {
-					const res = await fetch("/api/character/export", {
-						method:  "POST",
-						headers: { "Content-Type": "application/json" },
-						body:    JSON.stringify({ name, sheet }),
-					});
-					if (!res.ok) throw new Error((await res.json()).error || "Export failed");
-
-					const exportData = await res.json();
-					const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-					const url  = URL.createObjectURL(blob);
-					const a    = document.createElement("a");
-					a.href     = url;
-					a.download = `${(name || currentFileName).replace(/\s+/g, "_")}.stchar`;
-					a.click();
-					URL.revokeObjectURL(url);
-
-					sigEl.textContent      = "✅ Re-signed & downloaded";
-					sigEl.style.background = "#0a3a1a";
-					sigEl.style.color      = "#66ffaa";
-					errorEl.textContent    = "";
-				} catch (err) {
-					errorEl.textContent = "Re-sign failed: " + err.message;
-				}
-			});
-		})();
-		</script>
 	</body>
 </html>

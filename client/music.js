@@ -188,19 +188,22 @@ class MusicManager {
 	}
 
 	_updateWidget() {
-		const widget    = document.getElementById("musicWidget");
+		const row       = document.getElementById("musicRow");
+		const divider   = document.getElementById("audioDivider");
 		const muteBtn   = document.getElementById("musicMuteBtn");
 		const titleEl   = document.getElementById("musicSongTitle");
 		const slider    = document.getElementById("musicVolumeSlider");
 
-		if (!widget) return;
+		if (!row) return;
 
 		if (!this.currentMood) {
-			widget.classList.add("hidden");
+			row.classList.add("hidden");
+			if (divider) divider.classList.add("hidden");
 			return;
 		}
 
-		widget.classList.remove("hidden");
+		row.classList.remove("hidden");
+		if (divider) divider.classList.remove("hidden");
 
 		if (titleEl) titleEl.textContent = this.currentTitle || (MOOD_LABELS[this.currentMood] || this.currentMood.replace(/_/g, " "));
 		if (muteBtn) muteBtn.textContent = this.muted ? "🔇" : "🎵";

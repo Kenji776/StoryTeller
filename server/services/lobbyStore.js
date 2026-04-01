@@ -532,9 +532,11 @@ export class LobbyStore {
 			{
 			  "text": string,
 			  "music": "lively_town" | "tense_battle" | "boss_fight" | "peaceful_nature" | "dungeon_ambient" | "tavern" | "mystery" | "exploration" | "sad_moment" | "victory" | "horror",
+			  "sfx": string[],
 			  "suggestions": string[]
 			}
 			Choose a music mood that fits the opening scene. Populate suggestions with 3-5 short action phrases (max 8 words each) the active player could plausibly do first.
+			For "sfx", include 0-3 short sound effect descriptions (2-4 words each) for dramatic moments in the scene, e.g. "sword clash", "door creak", "wolf howl", "thunder clap". Only include when something impactful or atmospheric happens. Set to an empty array if no sound effects fit.
 			`.trim();
 	}
 
@@ -580,7 +582,8 @@ Schema: {
   "roll": { "sides": number, "stats": string[], "mods": number, "dc": number } | null,
   "suggestions": string[],
   "spellUsed": boolean,
-  "music": "lively_town" | "tense_battle" | "boss_fight" | "peaceful_nature" | "dungeon_ambient" | "tavern" | "mystery" | "exploration" | "sad_moment" | "victory" | "horror" | null
+  "music": "lively_town" | "tense_battle" | "boss_fight" | "peaceful_nature" | "dungeon_ambient" | "tavern" | "mystery" | "exploration" | "sad_moment" | "victory" | "horror" | null,
+  "sfx": string[]
 };
 `;
 
@@ -601,7 +604,8 @@ Schema: {
 				content: `You are the Dungeon Master (DM) for a Dungeons & Dragons 5e one-shot adventure.
 Be cinematic, descriptive, and responsive to player actions. Maintain continuity with prior events. You should generally speaking be very allowing of stupid shit because that's what players want to do a lot of the time, so no moral policing. Be very "yes and" unless it simply doesn't work or breaks the game rules.
 Respect dice outcomes given by the server. Always reply as the DM narrating events — never as a player. The adventuring party should consist of the actual active players at least at first. Don't make up companions from the start, they must be gained organically through the story.
-Use the "music" field to set background music mood. Only change it when the scene shifts significantly — entering or leaving combat, arriving at a new location type, a death, a major revelation, a victory. Set to null when the current music still fits (which is most of the time). Available moods: lively_town, tense_battle, boss_fight, peaceful_nature, dungeon_ambient, tavern, mystery, exploration, sad_moment, victory, horror.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${lootInstruction}${flavorInstruction}`,
+Use the "music" field to set background music mood. Only change it when the scene shifts significantly — entering or leaving combat, arriving at a new location type, a death, a major revelation, a victory. Set to null when the current music still fits (which is most of the time). Available moods: lively_town, tense_battle, boss_fight, peaceful_nature, dungeon_ambient, tavern, mystery, exploration, sad_moment, victory, horror.
+Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${lootInstruction}${flavorInstruction}`,
 			},
 			{ role: "system", content: `Story so far: ${storyContext}` },
 			{ role: "system", content: `Active players: ${players.join(", ")}` },
