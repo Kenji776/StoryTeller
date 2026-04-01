@@ -13,7 +13,7 @@ A multiplayer, browser-based D&D experience powered by AI. Create or join a lobb
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/StoryTeller.git
+git clone https://github.com/Kenji776/StoryTeller.git
 cd StoryTeller
 ```
 
@@ -93,7 +93,9 @@ All configuration lives in `server/.env` (copy from `server/.env.example`):
 | `ELEVEN_VOICE_ID` | No | Default ElevenLabs voice ID |
 | `DEV_MODE` | No | Set `TRUE` to skip TTS and image generation (saves API calls) |
 | `ADMIN_PASSWORD` | No | Password for the admin panel (see [Admin Panel](#admin-panel)) |
-| `MUSIC_REPO` | No | GitHub `owner/repo` to auto-download music on first run |
+| `LLM_TIMEOUT_MS` | No | LLM response timeout in milliseconds (default: `60000`) |
+| `HISTORY_SUMMARIZE_THRESHOLD` | No | Number of unsummarized messages before auto-summarization triggers (default: `20`) |
+| `MAX_SUMMARY_LENGTH` | No | Max character length for the recent arc summary before it gets promoted to ancient history (default: `60000`) |
 
 No API key? A local stub DM narrates so you can test without any external services.
 
@@ -108,15 +110,18 @@ Two LLM providers are supported:
 
 The provider and model can be selected per-lobby in the game options. The AI DM narrates the story, resolves actions, manages combat, and responds to player choices in real time.
 
-### Lobby Browser
+### Adventure Board
 
-The landing page shows all active games with live status:
+The landing page shows all games (active and completed) in a tabbed, searchable list:
 
-- Adventure name, phase, and player count
-- Per-player online/offline indicators and class/race/level details
-- Host player marked with a crown icon
+- Adventure name, world setting, tone, and player count at a glance
+- Per-player online/offline indicators with host crown icon
+- Search by adventure name
+- Scrollable list (400px) with tabs: Starting, Active, Hibernating, Finished
+- **Read Story** button on non-password-protected games lets anyone read the full story log, summary, and pinned moments
 - Join running or hibernating games by reclaiming a disconnected character or creating a new one
 - Password-protected lobbies display a lock icon
+- **Quick Start** button randomizes all game options and character, shows a summary modal, and jumps straight into a solo game
 
 ### Lobbies
 
@@ -130,7 +135,8 @@ The landing page shows all active games with live status:
 The lobby host can configure the game before starting:
 
 - **World Setting** — Standard Fantasy, Dark Ages, Steampunk, Pirate Age, Sci-fi
-- **Campaign Tone & Theme** — loaded from flavor presets
+- **Campaign Tone** — Heroic, Dark & Gritty, Horror, Comedy, Mystery, Political Intrigue, Survival, Swashbuckling, Tragic, Mythic
+- **Campaign Theme** — Redemption, Corruption, Ancient Evil, Heist, War, Exploration, Chosen Destiny, Freeform/Sandbox, Exodus, Tournament
 - **Difficulty** — Casual, Standard, Hardcore, Merciless
 - **Brutality Level** — slider from 0 (Kid Safe) to 10 (Ultimate Brutality)
 - **Loot Generosity** — Sparse, Fair, Generous
@@ -205,6 +211,47 @@ Mood-based background music plays automatically during the game:
 
 To add your own music, drop `.mp3` files into `client/music/` and add entries to `client/config/library.json` with appropriate tags.
 
+On first startup, if the `client/music/` directory is empty, the server will prompt you to download a standard music pack from the GitHub releases.
+
+### Sound Effects (SFX)
+
+Contextual sound effects triggered by the AI DM during gameplay:
+
+- The DM includes SFX descriptions in its response (e.g. "sword clash", "dragon roar")
+- The server matches descriptions against a local SFX library (`client/sfx/`)
+- If no match exists and ElevenLabs is configured, effects can be generated on the fly
+- On first startup, if the `client/sfx/` directory is empty, the server will prompt you to download a standard SFX pack from the GitHub releases
+
+### Story History & Summarization
+
+The game maintains a permanent, append-only history log. Nothing is ever deleted — the full story is always available for reading. To keep the LLM context lean, a tiered summarization system runs in the background:
+
+- **Full History** — every DM narration and player action, stored permanently
+- **Recent Arc** (`storyContext`) — a detailed, structured ~800-word summary of recent events, updated every `HISTORY_SUMMARIZE_THRESHOLD` messages (default: 20)
+- **Campaign Backstory** (`ancientHistory`) — a heavily compressed ~300-word overview of older events, populated when the recent arc exceeds `MAX_SUMMARY_LENGTH` (default: 60,000 chars)
+
+On each turn, the LLM receives: the campaign backstory (if any) + the recent arc summary + the last 10 verbatim messages + the new player action. This keeps total input around ~7-8K tokens regardless of campaign length.
+
+Summarization runs asynchronously after each turn and uses a structured format (current goal, setting, key characters, party status, story beats, open threads) to maximize information density. A `_summarizing` flag and snapshot-based bookmarking ensure race safety when turns arrive during summarization.
+
+### Pinned Moments
+
+Players can pin important story moments during gameplay to protect them from summary drift:
+
+- Every story log entry has a pin button (appears on hover)
+- Pinned moments are explicitly fed to the LLM during summarization and on every turn: *"Player-pinned important moments — do NOT forget or contradict these"*
+- Pins survive all compression tiers, including promotion to ancient history
+- Maximum 12 pins per campaign — players are warned as they approach the limit
+- Pinned moments are visible in the Story Reader modal under a dedicated "Pinned" tab
+
+### Story Reader
+
+A modal accessible from both the Adventure Board and the in-game toolbar:
+
+- **Full Story** tab — the complete, unabridged history log with pinned moments marked
+- **Summary** tab — the campaign backstory and recent arc side by side
+- **Pinned** tab — all player-pinned moments with who pinned them
+
 ### Voice Narration (TTS)
 
 Optional text-to-speech narration powered by ElevenLabs:
@@ -250,6 +297,8 @@ A password-protected admin panel for managing all games.
 - **Game Control** — change game phase (character creation, ready check, running), advance turns
 - **DM Tools** — send narration messages as the DM
 - **Music Control** — change the music mood or stop playback
+- **SFX Testing** — test the SFX pipeline with custom descriptions
+- **AI Model Switching** — change the LLM provider and model mid-game (useful if one provider stops responding)
 - **Character File Tool** — load, inspect, edit, and re-sign `.stchar` character exports
 
 ## Project Structure
@@ -268,9 +317,11 @@ client/                 # Browser client (vanilla JS, no build step)
     raceNames.json      # Name pools by race and gender
     campaignFlavors.json # Campaign tone and theme presets
     classProgression.json # Class ability unlocks per level
+    sfx-library.json    # SFX file-to-description mapping
     library.json        # Music song list with mood tags
     voices_cache.json   # Cached ElevenLabs voice list (auto-generated, gitignored)
-  music/                # Music files (.mp3)
+  music/                # Music files (.mp3, auto-downloaded on first run)
+  sfx/                  # Sound effect files (.mp3, auto-downloaded on first run)
   index.html            # Main game client
   app.js                # Client entry point and UI rendering
   charBuilder.js        # Character creation logic
@@ -292,6 +343,7 @@ server/
     gameUpdates.js      # Broadcast helpers for game events
     dice.js             # Dice rolling
     classProgression.js # Class ability progression data
+    sfxService.js       # Sound effect matching and generation
     mapService.js       # Map system (experimental)
     utils.js            # Shared utilities
   data/
@@ -305,6 +357,6 @@ server/
 
 - No API key? A local stub DM narrates so you can test the full flow.
 - Lobby data persists under `server/data/lobbies/`. Character signing keys persist at `server/data/charkey.pem`.
-- Music files (`.mp3`) are gitignored — add your own or set `MUSIC_REPO` to auto-download from a GitHub release.
+- Music and SFX files (`.mp3`) are gitignored — on first startup the server will prompt you to download standard packs from GitHub releases, or you can add your own.
 - The admin panel is only accessible when `ADMIN_PASSWORD` is set in `.env`. The host DM tools work independently of the admin password.
 - Docker files are included but gitignored — use `docker compose up -d` if you prefer containers.
