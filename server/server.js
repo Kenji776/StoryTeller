@@ -237,7 +237,7 @@ const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
 const ELEVEN_VOICE_ID = process.env.ELEVEN_VOICE_ID || "dAcds2QMcvmv86jQMC3Y";
 const REJECTED_REQUEST_STATUS = 204; //this is the http status code that is sent if the server gets a request but decides to skip it, usually due to being in devmode
 const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60000;
-const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 20;
+const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 2;
 const MAX_SUMMARY_LENGTH = Number(process.env.MAX_SUMMARY_LENGTH) || 60000;
 const VOICE_CACHE_FILE = path.join(__dirname, "..", "client", "config", "voices_cache.json");
 
@@ -577,6 +577,11 @@ async function handleTimerExpiry(lobbyId, playerName) {
 	io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 	io.to(room(lobbyId)).emit("ui:unlock");
 	scheduleTimerAfterNarration(lobbyId);
+
+	// Keep story summary current after timer-expiry turns too
+	if (store.needsSummarization(lobbyId, HISTORY_SUMMARIZE_THRESHOLD)) {
+		store.autoSummarize(lobbyId, getLLMResponse, llmOpts(lobbyId), 10, MAX_SUMMARY_LENGTH).catch(() => {});
+	}
 }
 
 async function handleRestResolved(lobbyId, result, type, proposer) {
@@ -881,18 +886,26 @@ io.on("connection", (socket) => {
 			delete lobby.players[charName].disconnected;
 		}
 
-		// Restore running phase if lobby was hibernating
-		if (lobby.phase === "hibernating") {
+		// Ensure the game is running now that a player is back
+		if (lobby.phase !== "running") {
+			log(`▶️ Lobby ${lobbyId} phase "${lobby.phase}" → "running" (player rejoined)`);
 			lobby.phase = "running";
 			store.persist(lobbyId);
-			log(`▶️ Lobby ${lobbyId} restored from hibernating`);
 		}
 
 		// Re-insert into turn order (player was removed on disconnect)
 		const dex = Number(lobby.players[charName]?.stats?.dex) || 8;
 		store.insertIntoInitiative(lobbyId, charName, dex);
-		const { current, order } = store.turnInfo(lobbyId);
+		// Resolve active turn — skip any disconnected players so the
+		// rejoining player can become the active player immediately.
+		const { current, order } = resolveActiveTurn(lobbyId);
 		io.to(room(lobbyId)).emit("turn:update", { current, order });
+
+		// Give the rejoining player 2 minutes to re-read the story before
+		// the turn timer starts counting down.
+		if (current) {
+			startTurnTimer(lobbyId, 2 * 60 * 1000);
+		}
 
 		// Check if this rejoining player is the host (by characterId match)
 		const isRejoiningHost = !!(lobby.hostCharacterId && characterId && lobby.hostCharacterId === characterId);
@@ -922,11 +935,11 @@ io.on("connection", (socket) => {
 			if (!lobby) return socket.emit("toast", { type: "error", message: "Lobby data missing." });
 			if (lobby.phase !== "running" && lobby.phase !== "hibernating") return socket.emit("toast", { type: "error", message: "Game is not currently running." });
 
-			// Wake a hibernating lobby
-			if (lobby.phase === "hibernating") {
+			// Ensure the game is running now that a player is joining
+			if (lobby.phase !== "running") {
+				log(`▶️ Lobby ${lobbyId} phase "${lobby.phase}" → "running" (new player joined)`);
 				lobby.phase = "running";
 				store.persist(lobbyId);
-				log(`▶️ Lobby ${lobbyId} restored from hibernating by new player`);
 			}
 
 			const cleanName = (name || "").trim();

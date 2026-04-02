@@ -640,6 +640,8 @@ function registerSocketEvents() {
 
 	socket.on("timer:start", ({ player, endsAt, durationMs }) => {
 		startTimerDisplay(player, endsAt, durationMs);
+		// Audible cue that the turn timer has begun
+		window.sfxManager?.play([{ file: "war_horn_blast_mnf6xmv0exwj.mp3", name: "Turn timer started" }]);
 	});
 
 	socket.on("timer:cancel", () => {
