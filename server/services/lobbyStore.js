@@ -404,7 +404,15 @@ export class LobbyStore {
 	validateAction(lobbyId, sid, text) {
 		const s = this.index[lobbyId];
 		if (!s) return { ok: false, reason: "Lobby missing" };
-		if (s.phase !== "running") return { ok: false, reason: "Game not running" };
+		// A player submitting an action is the definitive signal the game
+		// should be running.  Wake it from hibernating/paused/etc.
+		if (s.phase !== "running") {
+			const terminal = ["completed", "wiped"];
+			if (terminal.includes(s.phase)) return { ok: false, reason: "Game is over" };
+			console.log(`▶️ Lobby ${lobbyId} phase "${s.phase}" → "running" (action submitted)`);
+			s.phase = "running";
+			this.persist(lobbyId);
+		}
 		const actor = this.playerBySid(lobbyId, sid);
 		if (!actor) return { ok: false, reason: "Unknown player" };
 		if (actor.sheet?.dead) {
@@ -733,7 +741,7 @@ OPEN THREADS:
 			  "sfx": string[],
 			  "suggestions": string[]
 			}
-			Choose a music mood that fits the opening scene. Populate suggestions with 3-5 short action phrases (max 8 words each) the active player could plausibly do first.
+			Choose a music mood that fits the opening scene. Populate suggestions with 3-5 short action phrases (max 8 words each) the active player could plausibly do first. Suggestions should always be in the first person prose, always "I" not "you" or "your". Suggestioos should align with the characters alignment.
 			For "sfx", include 0-3 short sound effect descriptions (2-4 words each) for dramatic moments in the scene, e.g. "sword clash", "door creak", "wolf howl", "thunder clap". Only include when something impactful or atmospheric happens. Set to an empty array if no sound effects fit.
 			`.trim();
 	}
@@ -853,7 +861,7 @@ Condition	Effect
 💤	unconscious - Incapacitated, can't move or speak, unaware. Drops held items. Attacks have advantage; hits within 5 ft. are critical hits.
 
 Do not skip updates just because the action fails — always include the logical consequence.
-Always populate the "suggestions" array with 3–5 short action phrases (max 8 words each) that the active player could plausibly do next given the current scene. These are shown as quick-action hints in the UI. Make them specific to what is happening, not generic.
+Always populate the "suggestions" array with 3–5 short action phrases (max 8 words each) that the active player could plausibly do next given the current scene. These are shown as quick-action hints in the UI. Make them specific to what is happening, not generic. Suggestions should always be in the first person prose, always "I" not "you" or "your". Suggestioos should align with the characters alignment and mixed with the players previous actions.
 
 EQUIPPABLE ITEMS: When you give a player a weapon, armor, or trinket (ring, amulet, cloak, etc.) via the "inventory" update, you MUST include the "attributes" object with:
 - Weapons: { "item_type": "weapon", "damage": "1d8", "damage_type": "slashing", "range": "melee" }
@@ -862,7 +870,11 @@ EQUIPPABLE ITEMS: When you give a player a weapon, armor, or trinket (ring, amul
 - Consumables: { "item_type": "consumable", ...any properties }
 The player can then choose to equip weapons, armor, and trinkets from their inventory. Always include realistic D&D stats when giving equipment.`,
 			},
-			{ role: "system", content: "FORMAT: Output minified JSON only. Do not include commentary, markdown, or code fences. The 'text' property of your response may contain basic formatted HTML using structural and formatting tags. CRITICAL: Any dialogue or quoted speech inside the 'text' HTML must use single quotes (e.g. <em>'Hello there'</em>) — never double quotes, as double quotes break JSON string encoding." },
+			{
+				role: "system",
+				content:
+					"FORMAT: Output minified JSON only. Do not include commentary, markdown, or code fences. The 'text' property of your response may contain basic formatted HTML using structural and formatting tags. CRITICAL: Any dialogue or quoted speech inside the 'text' HTML must use single quotes (e.g. <em>'Hello there'</em>) — never double quotes, as double quotes break JSON string encoding.",
+			},
 			{
 				role: "system",
 				content:
