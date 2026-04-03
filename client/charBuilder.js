@@ -1,8 +1,16 @@
 let hasSavedSheet = false;
 
 // === Character Creation Enhancements ===
-const basePoints = 27;
-const costTable = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
+// Flat cost: each attribute point above 8 costs 1 budget point.
+// Budget scales linearly from 10 (level 1) to 125 (level 25).
+let basePoints = 10;
+const BASE_POINTS_LV1  = 10;
+const MAX_POINTS_LV25  = 125;
+const MAX_LEVEL        = 25;
+const costTable = {
+	8:0, 9:1, 10:2, 11:3, 12:4, 13:5, 14:6, 15:7,
+	16:8, 17:9, 18:10, 19:11, 20:12, 21:13, 22:14, 23:15, 24:16, 25:17,
+};
 const attrs = ["str", "dex", "con", "int", "wis", "cha"];
 
 const sheetInputs = ["name", "race", "cls", "alignment", "background", "deity", "gender", "age", "height", "weight", "hp", "str", "dex", "con", "int", "wis", "cha", "abilities", "inventory", "desc"];
@@ -489,7 +497,7 @@ async function randomizeCharacter() {
 	attrs.forEach((a) => (vals[a] = 8));
 	while (remaining > 0) {
 		const stat = attrs[Math.floor(Math.random() * attrs.length)];
-		if (vals[stat] < 15) {
+		if (vals[stat] < 25) {
 			const nextCost = costTable[vals[stat] + 1] - costTable[vals[stat]];
 			if (remaining - nextCost >= 0) {
 				vals[stat]++;
@@ -549,6 +557,40 @@ function calcPoints() {
 	return spent;
 }
 
+/**
+ * Recalculate the HP field based on current level and CON.
+ * Base HP = 10. Each level above 1 adds 1d6 + CON mod (minimum 1 per level).
+ * Rolls are cached per level so they stay stable while the user tweaks CON,
+ * but re-roll when the starting level changes.
+ */
+const _hpRolls = []; // cached 1d6 rolls, one per level above 1
+let _hpRollLevel = 0;
+
+function recalcHP() {
+	const hpInput = document.getElementById("hp");
+	const levelInput = document.getElementById("level");
+	if (!hpInput || !levelInput) return;
+	const level = Number(levelInput.value) || 1;
+	const con = Number(document.getElementById("con")?.value) || 10;
+	const conMod = Math.floor((con - 10) / 2);
+
+	// Generate or extend cached rolls when level changes
+	const levelsAbove1 = Math.max(0, level - 1);
+	if (level !== _hpRollLevel) {
+		_hpRolls.length = 0;
+		for (let i = 0; i < levelsAbove1; i++) {
+			_hpRolls.push(Math.floor(Math.random() * 6) + 1);
+		}
+		_hpRollLevel = level;
+	}
+
+	let hp = 10; // base HP at level 1
+	for (let i = 0; i < levelsAbove1; i++) {
+		hp += Math.max(1, _hpRolls[i] + conMod);
+	}
+	hpInput.value = hp;
+}
+
 function updatePointsDisplay() {
 	const spent = calcPoints();
 	const rem = basePoints - spent;
@@ -562,7 +604,53 @@ function updatePointsDisplay() {
 	if (els.saveSheet) {
 		els.saveSheet.disabled = rem < 0 || (typeof ready !== "undefined" && ready);
 	}
+
+	// Keep HP in sync whenever stats change
+	recalcHP();
+
 	return rem >= 0;
+}
+
+/**
+ * Recalculate the point budget for the current starting level.
+ * If the budget shrank (level decreased), reduce attribute sliders evenly
+ * until spending fits within the new budget.
+ */
+function recalcPointBudget() {
+	const level = Number(document.getElementById("level")?.value) || 1;
+	basePoints = Math.round(BASE_POINTS_LV1 + (MAX_POINTS_LV25 - BASE_POINTS_LV1) * (level - 1) / (MAX_LEVEL - 1));
+
+	// Update the heading to show the new budget
+	const budgetSpan = document.getElementById("totalPointsBudget");
+	if (budgetSpan) budgetSpan.textContent = basePoints;
+
+	// If current spending exceeds the new budget, reduce sliders evenly
+	let spent = calcPoints();
+	while (spent > basePoints) {
+		let reduced = false;
+		const sorted = [...attrs].sort((a, b) => {
+			const va = Number((document.getElementById(a) || document.getElementById(a + "_slider"))?.value) || 8;
+			const vb = Number((document.getElementById(b) || document.getElementById(b + "_slider"))?.value) || 8;
+			return vb - va;
+		});
+		for (const id of sorted) {
+			const num = document.getElementById(id);
+			const slider = document.getElementById(id + "_slider");
+			const span = document.querySelector(`#${id}_slider ~ .attr-value`);
+			const v = Number(num?.value) || 8;
+			if (v > 8) {
+				const newVal = v - 1;
+				if (num) num.value = newVal;
+				if (slider) slider.value = newVal;
+				if (span) span.textContent = newVal;
+				reduced = true;
+				break;
+			}
+		}
+		if (!reduced) break;
+		spent = calcPoints();
+	}
+	updatePointsDisplay();
 }
 
 // Watch attribute changes
@@ -575,14 +663,14 @@ if (attrs) {
 		// because "1" is typed before "12" and we must not snap it to 8 mid-keystroke.
 		input.addEventListener("input", updatePointsDisplay);
 
-		// Clamp to 8–15 and enforce budget only when the user commits the value
+		// Clamp to 8–25 and enforce budget only when the user commits the value
 		// (tabbing away, pressing Enter, or clicking away).
 		input.addEventListener("change", () => {
 			let v = parseInt(input.value, 10);
 			if (isNaN(v) || v < 8) v = 8;
-			if (v > 15) v = 15;
+			if (v > 25) v = 25;
 			input.value = v;
-			// If this change pushed us over budget, pull it back until we're within 27 pts
+			// If this change pushed us over budget, pull it back until we fit
 			while (calcPoints() > basePoints && v > 8) {
 				v--;
 				input.value = v;

@@ -62,7 +62,6 @@ export function broadcastHPUpdates(io, store, lobbyId, updates) {
 				message: `${key} has fallen in battle!`,
 			});
 			io.to(lobbyId).emit("turn:update", { current, order });
-			io.to(lobbyId).emit("ui:unlock");
 		}
 	}
 }

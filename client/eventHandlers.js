@@ -62,7 +62,7 @@ function clearPendingRoll() {
 
 // === Play Preview ===
 async function handlePlayPreview() {
-	const id = voiceSelect.value;
+	const id = els.voiceSelect.value;
 	if (!id) return alert("Select a voice first!");
 
 	const audio = new Audio(`/api/voice-preview/${id}`);
@@ -730,8 +730,11 @@ async function handleImportCharacter(e) {
 		if (els.age)          els.age.value          = sheet.age        || "";
 		if (els.height)       els.height.value       = sheet.height     || "";
 		if (els.weight)       els.weight.value       = sheet.weight     || "";
-		if (els.level)        els.level.value        = Number(sheet.level) || 1;
-		if (els.hp)           els.hp.value           = Number(sheet.stats?.max_hp || sheet.stats?.hp) || 10;
+		// Level is controlled by lobby startingLevel — don't overwrite from imported sheet
+		// HP is derived from level + CON — recalculate after stats are loaded
+		if (els.level && window.currentState?.startingLevel) {
+			els.level.value = window.currentState.startingLevel;
+		}
 		if (els.desc)         els.desc.value         = sheet.description || "";
 		if (els.voiceSelect)  els.voiceSelect.value  = sheet.voice_id   || "";
 
@@ -748,7 +751,7 @@ async function handleImportCharacter(e) {
 		const mods     = (typeof raceMods !== "undefined" && raceMods[sheet.race]?.mod) || {};
 		const statKeys = ["str", "dex", "con", "int", "wis", "cha"];
 		for (const stat of statKeys) {
-			const base   = Math.max(8, Math.min(15, (sheet.stats?.[stat] || 10) - (mods[stat] || 0)));
+			const base   = Math.max(8, Math.min(25, (sheet.stats?.[stat] || 10) - (mods[stat] || 0)));
 			const slider = document.getElementById(`${stat}_slider`);
 			const input  = document.getElementById(stat);
 			if (slider) slider.value = base;
@@ -775,7 +778,7 @@ async function handleImportCharacter(e) {
 // =====================================================
 // 🪄 ATTACH SAFE EVENT BINDINGS
 // =====================================================
-safeAddEvent(voicePlay, "click", handlePlayPreview);
+safeAddEvent(els.voicePlay, "click", handlePlayPreview);
 safeAddEvent(els.saveSheet, "click", handleValidateSave);
 safeAddEvent(els.createLobby, "click", handleCreateLobby);
 safeAddEvent(els.joinLobby, "click", () => handleJoinLobby());

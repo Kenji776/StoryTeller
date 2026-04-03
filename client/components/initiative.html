@@ -127,6 +127,66 @@
 			flex-shrink: 0;
 		}
 
+		/* === Enemy Section === */
+		.enemy-section {
+			margin-top: 0.5rem;
+			border-top: 1px solid #2a1e40;
+			padding-top: 0.5rem;
+		}
+		.enemy-header {
+			display: flex;
+			align-items: center;
+			gap: 0.4rem;
+			font-size: 0.78em;
+			color: #a05050;
+			margin-bottom: 0.35rem;
+			letter-spacing: 0.04em;
+		}
+		.enemy-header small {
+			color: #6a4a4a;
+			font-style: italic;
+		}
+		.enemy-entry {
+			display: flex;
+			align-items: center;
+			gap: 0.65rem;
+			background: #1a0d0d;
+			border: 1px solid #3a1e1e;
+			border-radius: 6px;
+			padding: 0.4rem 0.75rem;
+			margin-bottom: 0.3rem;
+		}
+		.enemy-entry.dead {
+			opacity: 0.4;
+			text-decoration: line-through;
+		}
+		.enemy-entry.fled {
+			opacity: 0.5;
+			font-style: italic;
+		}
+		.enemy-name {
+			flex: 1;
+			font-size: 0.88em;
+			color: #e0a0a0;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.enemy-condition {
+			font-size: 0.7em;
+			padding: 0.1em 0.5em;
+			border-radius: 3px;
+			flex-shrink: 0;
+			font-weight: bold;
+			letter-spacing: 0.03em;
+		}
+		.enemy-condition.healthy    { background: #1a301a; color: #60c060; border: 1px solid #2a5a2a; }
+		.enemy-condition.injured    { background: #302a1a; color: #c0a040; border: 1px solid #5a4a2a; }
+		.enemy-condition.wounded    { background: #301a1a; color: #c06040; border: 1px solid #5a2a2a; }
+		.enemy-condition.near-death { background: #300d0d; color: #e04040; border: 1px solid #5a1a1a; }
+		.enemy-condition.dead       { background: #1a1a1a; color: #808080; border: 1px solid #3a3a3a; }
+		.enemy-condition.fled       { background: #1a1a2a; color: #8080c0; border: 1px solid #3a3a5a; }
+
 		#statusBar {
 			font-size: 0.75em;
 			color: #5a4a7a;
@@ -149,6 +209,8 @@
 <div id="tracker" class="tracker">
 	<span style="color:#5a4a7a;font-size:0.85em">Waiting for game data…</span>
 </div>
+
+<div id="enemyTracker"></div>
 
 <div id="statusBar">Connecting…</div>
 
@@ -213,6 +275,45 @@ function render(order, current) {
 		currentPlayer ? `Turn ${pos} of ${currentOrder.length}` : "—";
 }
 
+function renderEnemies(enemies) {
+	const container = document.getElementById("enemyTracker");
+	container.innerHTML = "";
+
+	const active = (enemies || []).filter(e => e.status !== "dead" && e.status !== "fled");
+	const inactive = (enemies || []).filter(e => e.status === "dead" || e.status === "fled");
+	const all = [...active, ...inactive];
+
+	if (!all.length) return;
+
+	const section = document.createElement("div");
+	section.className = "enemy-section";
+
+	const header = document.createElement("div");
+	header.className = "enemy-header";
+	header.innerHTML = `🩸 Enemies <small>(DM acts between each player turn)</small>`;
+	section.appendChild(header);
+
+	for (const e of all) {
+		const row = document.createElement("div");
+		row.className = "enemy-entry" + (e.status === "dead" ? " dead" : "") + (e.status === "fled" ? " fled" : "");
+
+		const name = document.createElement("span");
+		name.className = "enemy-name";
+		name.textContent = e.name;
+
+		const cond = document.createElement("span");
+		const condClass = e.condition.toLowerCase().replace(/\s+/g, "-");
+		cond.className = `enemy-condition ${condClass}`;
+		cond.textContent = e.condition;
+
+		row.appendChild(name);
+		row.appendChild(cond);
+		section.appendChild(row);
+	}
+
+	container.appendChild(section);
+}
+
 const socket = io();
 
 socket.on("connect", () => {
@@ -232,6 +333,7 @@ socket.on("state:update", (state) => {
 	const order   = state.initiative || [];
 	const current = order[state.turnIndex] || null;
 	render(order, current);
+	renderEnemies(state.enemies || []);
 	document.getElementById("statusBar").textContent =
 		`${order.length} player${order.length !== 1 ? "s" : ""} in initiative`;
 });

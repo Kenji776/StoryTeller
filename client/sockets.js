@@ -53,6 +53,7 @@ function registerSocketEvents() {
 		if (state.party && state.party.length) {
 			drawPartyComponent("partyContainer", state.party);
 		}
+		drawEnemyRoster("enemyRoster", state.enemies || []);
 
 		// Always render base info
 		renderState(state);
@@ -129,16 +130,30 @@ function registerSocketEvents() {
 		appendActionLog(`🚪 <strong>${player}</strong> disconnected.`, "system");
 	});
 
+	// Track whether the local player is dead so game:over can upgrade the modal
+	let _myPlayerDead = false;
+
 	socket.on("player:death", ({ player, message }) => {
 		appendLog(`💀 ${message}`);
 
-		// If it's me, lock out action input
-		if (me.name === player) {
-			showDeathModal();
+		// Stop any in-progress narration so the death event lands cleanly
+		if (typeof stopNarration === "function") stopNarration();
 
+		if (me.name === player) {
+			_myPlayerDead = true;
 			document.getElementById("actionInput").disabled = true;
 			document.getElementById("actionButton").disabled = true;
 			appendLog("☠️ You are dead and can no longer act.");
+
+			// Show individual death modal immediately — if a TPK game:over follows,
+			// showDeathModal("wipe") will seamlessly upgrade it in place.
+			showDeathModal("death");
+			const storyLog = document.getElementById("storyLog");
+			if (storyLog) {
+				const entries = storyLog.querySelectorAll(".dm-narration");
+				const recent = Array.from(entries).slice(-3);
+				recent.forEach(el => appendDeathNarration(el.innerHTML));
+			}
 		}
 	});
 
@@ -156,6 +171,7 @@ function registerSocketEvents() {
 
 	socket.on("action:rejected", ({ reason }) => {
 		appendLog(`[REJECTED] ${reason}\n`);
+		window.UISounds?.deny();
 	});
 
 	socket.on("toast", ({ type, message }) => {
@@ -189,9 +205,25 @@ function registerSocketEvents() {
 				if (typeof parsed.text === "string") narrationContent = parsed.text;
 			} catch {}
 		}
-		appendLog("DM: " + narrationContent + "\n\n");
+		// Wrap each word in a <span> so the audio highlight system can target them
+		const wrapped = typeof wrapNarrationWords === "function"
+			? wrapNarrationWords(narrationContent)
+			: narrationContent;
+		appendLog("DM: " + wrapped + "\n\n");
+
+		// Store the just-appended div so tts.js can find it for highlighting
+		const storyLog = document.getElementById("storyLog");
+		if (storyLog) window._activeNarrationDiv = storyLog.lastElementChild;
+
 		if (!(content && content.trim().length > 0) || status === 204) {
 			showNarratorIndicator(false);
+		}
+	});
+
+	// Word-level alignment data for synchronized narration highlighting
+	socket.on("narration:alignment", ({ streamId, words }) => {
+		if (typeof setAlignmentData === "function") {
+			setAlignmentData(streamId, words);
 		}
 	});
 
@@ -349,7 +381,7 @@ function registerSocketEvents() {
 
 		appendActionLog(`🎖️ <strong>${player}</strong> gains ${amount} XP — ${reason}`, "xp-event");
 
-		const thresholds = [0, 300, 900, 2700, 6500];
+		const thresholds = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000,400000,450000,500000,560000,620000];
 		const level = Number(els.level.value || 1);
 		const next = thresholds[level] || 99999;
 		const prev = thresholds[level - 1] || 0;
@@ -423,6 +455,7 @@ function registerSocketEvents() {
 
 			// Dismiss death modal if player has been revived
 			if (hp > 0) {
+				_myPlayerDead = false;
 				hideDeathModal();
 			}
 		} else {
@@ -596,7 +629,12 @@ function registerSocketEvents() {
 
 		console.log('Updating inventory container with data from LLM Event');
 		console.log(p.inventory);
-		drawInventoryComponent("gameInventoryContainer", p.inventory, false);
+		const eqMap = {
+				weapon:  p.weapon?.name  || "",
+				armor:   p.armor?.name   || "",
+				trinket: p.trinket?.name || "",
+			};
+		drawInventoryComponent("gameInventoryContainer", p.inventory, false, eqMap);
 	});
 
 	socket.on("join:inProgress", ({ lobbyCode, availableChars, hibernating }) => {
@@ -627,7 +665,18 @@ function registerSocketEvents() {
 	socket.on("game:over", ({ reason }) => {
 		if (reason === "wiped") {
 			appendLog("☠️ <strong>The entire party has been slain. The adventure ends in darkness...</strong>");
-			showToast("The party has been wiped out. Game over.", "error");
+
+			// Epilogue narration is already in the DOM — the server sends narration
+			// before game:over and awaits TTS in between, so no delay needed.
+			// If the death modal is already showing (individual death), this
+			// seamlessly upgrades it to the wipe modal in place.
+			showDeathModal("wipe", { returnToLobby: true });
+			const storyLog = document.getElementById("storyLog");
+			if (storyLog) {
+				const entries = storyLog.querySelectorAll(".dm-narration");
+				const recent = Array.from(entries).slice(-5);
+				recent.forEach(el => appendDeathNarration(el.innerHTML));
+			}
 		} else if (reason === "completed") {
 			appendLog("🏆 <strong>Victory! The campaign has been completed. Your legend will be remembered.</strong>");
 			showToast("Campaign completed! The adventure is over.", "success");
@@ -649,7 +698,7 @@ function registerSocketEvents() {
 	});
 
 	// Listen for lock/unlock signals
-	socket.on("ui:lock", ({ actor }) => lockUI(actor));
+	socket.on("ui:lock", ({ actor, message }) => lockUI(actor, message));
 	socket.on("ui:unlock", () => unlockUI());
 
 	// Subscribe to live lobby list updates (for landing page)

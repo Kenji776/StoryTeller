@@ -1,0 +1,401 @@
+{
+	"_instructions": "UI sound effects for the game interface. Each effect has a 'name' (friendly display name), 'file' (filename once generated), 'tags' array, and 'usage' describing where in the UI it should be used. Run generate-ui-sfx.js to generate the audio files.",
+	"effects": [
+		{
+			"name": "Gold Coin Drop",
+			"file": "gold_coin_drop_mnigf6ekkr64.mp3",
+			"tags": [
+				"click",
+				"button",
+				"coin",
+				"generic",
+				"feedback"
+			],
+			"usage": "Generic button click — default for most buttons",
+			"prompt": "A single small gold coin landing on a wooden tavern table with a bright metallic clink, close and clear, very short",
+			"_generated": {
+				"prompt": "A single small gold coin landing on a wooden tavern table with a bright metallic clink, close and clear, very short",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:19:38.910Z"
+			}
+		},
+		{
+			"name": "Parchment Unfurl",
+			"file": "parchment_unfurl_mnigf9fgvx1u.mp3",
+			"tags": [
+				"menu",
+				"open",
+				"panel",
+				"parchment",
+				"navigation"
+			],
+			"usage": "Opening a menu, panel, or modal",
+			"prompt": "A parchment scroll being quickly unfurled and unrolled on a table, papery and crisp, short duration",
+			"_generated": {
+				"prompt": "A parchment scroll being quickly unfurled and unrolled on a table, papery and crisp, short duration",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:19:42.376Z"
+			}
+		},
+		{
+			"name": "Parchment Roll Up",
+			"file": "parchment_roll_up_mnigfc3f39sd.mp3",
+			"tags": [
+				"menu",
+				"close",
+				"panel",
+				"parchment",
+				"navigation"
+			],
+			"usage": "Closing a menu, panel, or modal",
+			"prompt": "A parchment scroll being quickly rolled back up and tucked away, soft papery sound, short duration",
+			"_generated": {
+				"prompt": "A parchment scroll being quickly rolled back up and tucked away, soft papery sound, short duration",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:19:45.826Z"
+			}
+		},
+		{
+			"name": "Gem Socket",
+			"file": "gem_socket_mnigferkxpwa.mp3",
+			"tags": [
+				"confirm",
+				"select",
+				"gem",
+				"magical",
+				"feedback"
+			],
+			"usage": "Confirming a selection — class picked, race chosen, settings saved",
+			"prompt": "A gemstone clicking firmly into a stone socket with a brief magical resonance, crystalline and satisfying, very short",
+			"_generated": {
+				"prompt": "A gemstone clicking firmly into a stone socket with a brief magical resonance, crystalline and satisfying, very short",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:19:49.212Z"
+			}
+		},
+		{
+			"name": "Page Turn",
+			"file": "page_turn_mnigfhdq5v29.mp3",
+			"tags": [
+				"tab",
+				"switch",
+				"page",
+				"navigation",
+				"subtle"
+			],
+			"usage": "Switching tabs or minor navigation between sections",
+			"prompt": "A single crisp page turn in an old leather-bound book, gentle and quick",
+			"_generated": {
+				"prompt": "A single crisp page turn in an old leather-bound book, gentle and quick",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:19:52.949Z"
+			}
+		},
+		{
+			"name": "Magical Shimmer",
+			"file": "magical_shimmer_mnigfk978zve.mp3",
+			"tags": [
+				"hover",
+				"sparkle",
+				"magic",
+				"subtle",
+				"feedback"
+			],
+			"usage": "Button hover or focus state",
+			"prompt": "A very brief and subtle magical sparkle shimmer, like tiny fairy dust particles catching light, delicate and airy",
+			"_generated": {
+				"prompt": "A very brief and subtle magical sparkle shimmer, like tiny fairy dust particles catching light, delicate and airy",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:19:56.618Z"
+			}
+		},
+		{
+			"name": "Epic Adventure Fanfare",
+			"file": "epic_adventure_fanfare_mnih4opv1w90.mp3",
+			"tags": [
+				"start",
+				"epic",
+				"fanfare",
+				"exciting",
+				"action"
+			],
+			"usage": "Start Game button — the big exciting action",
+			"prompt": "A dramatic short fantasy fanfare with brass trumpets and a deep booming drum hit, triumphant and heroic like the start of an epic quest, cinematic and powerful",
+			"_generated": {
+				"prompt": "A dramatic short fantasy fanfare with brass trumpets and a deep booming drum hit, triumphant and heroic like the start of an epic quest, cinematic and powerful",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:39:28.858Z"
+			}
+		},
+		{
+			"name": "Tavern Crowd Cheer",
+			"file": "tavern_crowd_cheer_mnigfptol08a.mp3",
+			"tags": [
+				"victory",
+				"cheer",
+				"crowd",
+				"celebration",
+				"reward"
+			],
+			"usage": "Level up, victory screen, or major achievement",
+			"prompt": "A rowdy medieval tavern crowd erupting in cheers and tankard clinking, joyful and celebratory, fantasy pub atmosphere",
+			"_generated": {
+				"prompt": "A rowdy medieval tavern crowd erupting in cheers and tankard clinking, joyful and celebratory, fantasy pub atmosphere",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:03.546Z"
+			}
+		},
+		{
+			"name": "Treasure Coin Cascade",
+			"file": "treasure_coin_cascade_mnigfsfvvs8t.mp3",
+			"tags": [
+				"reward",
+				"coins",
+				"treasure",
+				"achievement",
+				"loot"
+			],
+			"usage": "Earning rewards, achievements, or gold",
+			"prompt": "A cascade of gold and silver coins pouring out of a treasure chest onto a stone floor, metallic jingling and clattering",
+			"_generated": {
+				"prompt": "A cascade of gold and silver coins pouring out of a treasure chest onto a stone floor, metallic jingling and clattering",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:06.965Z"
+			}
+		},
+		{
+			"name": "Sword Unsheathe",
+			"file": "sword_unsheathe_mnigfv2t6nay.mp3",
+			"tags": [
+				"action",
+				"sword",
+				"weapon",
+				"exciting",
+				"combat"
+			],
+			"usage": "Exciting action buttons — attack, engage, enter combat",
+			"prompt": "A sharp sword being quickly drawn from a leather scabbard, clean metallic ring, decisive and swift",
+			"_generated": {
+				"prompt": "A sharp sword being quickly drawn from a leather scabbard, clean metallic ring, decisive and swift",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:10.472Z"
+			}
+		},
+		{
+			"name": "Shield Block Thud",
+			"file": "shield_block_thud_mnigfxs14n0l.mp3",
+			"tags": [
+				"error",
+				"deny",
+				"block",
+				"shield",
+				"feedback"
+			],
+			"usage": "Error state, denied action, or invalid input",
+			"prompt": "A dull heavy impact of a weapon hitting a thick wooden shield, muffled thud with slight wood creak, blocked and denied feeling",
+			"_generated": {
+				"prompt": "A dull heavy impact of a weapon hitting a thick wooden shield, muffled thud with slight wood creak, blocked and denied feeling",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:13.908Z"
+			}
+		},
+		{
+			"name": "Chain Links Slide",
+			"file": "chain_links_slide_mnigg0fxwjdt.mp3",
+			"tags": [
+				"slider",
+				"drag",
+				"chain",
+				"metal",
+				"interaction"
+			],
+			"usage": "Slider adjustment — volume, difficulty, or any range input",
+			"prompt": "Short metallic chain links sliding and clinking against each other on a stone surface, brief and mechanical",
+			"_generated": {
+				"prompt": "Short metallic chain links sliding and clinking against each other on a stone surface, brief and mechanical",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:17.419Z"
+			}
+		},
+		{
+			"name": "Small Bell Chime",
+			"file": "small_bell_chime_mnigg34zajgl.mp3",
+			"tags": [
+				"notification",
+				"alert",
+				"bell",
+				"chime",
+				"attention"
+			],
+			"usage": "Notifications, alerts, or new information appearing",
+			"prompt": "A single clear small brass bell being struck once, bright chime with gentle decay, like a shopkeeper's counter bell in a fantasy shop",
+			"_generated": {
+				"prompt": "A single clear small brass bell being struck once, bright chime with gentle decay, like a shopkeeper's counter bell in a fantasy shop",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:20.790Z"
+			}
+		},
+		{
+			"name": "Dice Tumble",
+			"file": "dice_tumble_mnigg5r0ra40.mp3",
+			"tags": [
+				"random",
+				"dice",
+				"selection",
+				"change",
+				"interaction"
+			],
+			"usage": "Random selection, changing options, or dice-related actions",
+			"prompt": "A handful of wooden and bone dice tumbling and rolling across a wooden tavern table, rattling to a stop, tabletop RPG feeling",
+			"_generated": {
+				"prompt": "A handful of wooden and bone dice tumbling and rolling across a wooden tavern table, rattling to a stop, tabletop RPG feeling",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:24.232Z"
+			}
+		},
+		{
+			"name": "Quill Scratch",
+			"file": "quill_scratch_mnigg8e7d5pu.mp3",
+			"tags": [
+				"input",
+				"text",
+				"writing",
+				"quill",
+				"subtle"
+			],
+			"usage": "Text input focus, typing confirmation, or name entry",
+			"prompt": "A quick scratchy stroke of a feather quill pen writing on parchment paper, inky and crisp, very short",
+			"_generated": {
+				"prompt": "A quick scratchy stroke of a feather quill pen writing on parchment paper, inky and crisp, very short",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T05:20:27.646Z"
+			}
+		},
+		{
+			"name": "Crystal Activate",
+			"file": "crystal_activate_mnihxzemqgr1.mp3",
+			"tags": [
+				"mic",
+				"voice",
+				"activate",
+				"crystal",
+				"magical"
+			],
+			"usage": "Microphone / voice input button — activating speech",
+			"prompt": "A magical crystal orb activating with a brief resonant hum and shimmer, like touching a glowing artifact that comes to life, mystical and responsive",
+			"_generated": {
+				"prompt": "A magical crystal orb activating with a brief resonant hum and shimmer, like touching a glowing artifact that comes to life, mystical and responsive",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T06:02:15.993Z"
+			}
+		},
+		{
+			"name": "Book Slam Shut",
+			"file": "book_slam_shut_mnihy2hjfmqf.mp3",
+			"tags": [
+				"stop",
+				"cancel",
+				"abrupt",
+				"book",
+				"silence"
+			],
+			"usage": "Stop Narration button — abruptly ending playback",
+			"prompt": "A heavy leather-bound book being slammed shut on a wooden table, authoritative and abrupt with a brief dusty thud, final and decisive",
+			"_generated": {
+				"prompt": "A heavy leather-bound book being slammed shut on a wooden table, authoritative and abrupt with a brief dusty thud, final and decisive",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T06:02:19.374Z"
+			}
+		},
+		{
+			"name": "Cards Shuffle",
+			"file": "cards_shuffle_mnihy53gvugl.mp3",
+			"tags": [
+				"refresh",
+				"shuffle",
+				"reload",
+				"cards",
+				"update"
+			],
+			"usage": "Refresh button — reloading a list or fetching new data",
+			"prompt": "A quick riffle shuffle of a deck of playing cards or tarot cards, papery and snappy, like a dealer refreshing the deck at a fantasy card table",
+			"_generated": {
+				"prompt": "A quick riffle shuffle of a deck of playing cards or tarot cards, papery and snappy, like a dealer refreshing the deck at a fantasy card table",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T06:02:22.736Z"
+			}
+		},
+		{
+			"name": "Map Pin",
+			"file": "map_pin_mnihy7oxi43g.mp3",
+			"tags": [
+				"pin",
+				"mark",
+				"tack",
+				"save",
+				"bookmark"
+			],
+			"usage": "Pin / bookmark buttons — saving or marking a moment",
+			"prompt": "A sharp metal pin or tack being pushed firmly into a cork board or parchment map, a brief pointed click with a satisfying stick, precise and tactile",
+			"_generated": {
+				"prompt": "A sharp metal pin or tack being pushed firmly into a cork board or parchment map, a brief pointed click with a satisfying stick, precise and tactile",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T06:02:26.261Z"
+			}
+		},
+		{
+			"name": "Music Box Open",
+			"file": "music_box_open_mnihyaer5ssw.mp3",
+			"tags": [
+				"preview",
+				"audio",
+				"play",
+				"sample",
+				"musical"
+			],
+			"usage": "Voice / audio preview buttons — playing a sound sample",
+			"prompt": "A small ornate music box lid clicking open with a brief tinkling melody starting, just the first two notes, delicate and curious",
+			"_generated": {
+				"prompt": "A small ornate music box lid clicking open with a brief tinkling melody starting, just the first two notes, delicate and curious",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T06:02:29.710Z"
+			}
+		},
+		{
+			"name": "Stone Tile Click",
+			"file": "stone_tile_click_mnihyd2qq6jz.mp3",
+			"tags": [
+				"chip",
+				"toggle",
+				"option",
+				"stone",
+				"select"
+			],
+			"usage": "Difficulty / loot chips — selecting a setting or option tile",
+			"prompt": "A flat stone tile being placed down onto a stone game board with a solid satisfying click, like a rune tile or domino piece being played, weighted and deliberate",
+			"_generated": {
+				"prompt": "A flat stone tile being placed down onto a stone game board with a solid satisfying click, like a rune tile or domino piece being played, weighted and deliberate",
+				"durationSec": 1.5,
+				"generatedAt": "2026-04-03T06:02:36.054Z"
+			}
+		},
+		{
+			"name": "Fate Anvil Strike",
+			"file": "fate_anvil_strike.mp3",
+			"tags": [
+				"setting",
+				"world",
+				"fate",
+				"heavy",
+				"impactful"
+			],
+			"usage": "Campaign setting / world selection tiles — a heavy, earth-shaking impact",
+			"prompt": "A single thunderous hammer strike on a massive mythical anvil deep in a stone forge, with a deep bass shockwave that rumbles like distant thunder and a brief metallic ring that fades into silence, weighty and fate-defining, like a god forging destiny",
+			"_generated": {
+				"prompt": "A single thunderous hammer strike on a massive mythical anvil deep in a stone forge, with a deep bass shockwave that rumbles like distant thunder and a brief metallic ring that fades into silence, weighty and fate-defining, like a god forging destiny",
+				"durationSec": 2,
+				"generatedAt": "2026-04-03T07:05:11.568Z"
+			}
+		}
+	]
+}

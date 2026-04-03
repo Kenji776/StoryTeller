@@ -107,7 +107,7 @@ function _detectEquipSlot(item) {
 	return null;
 }
 
-async function drawInventoryComponent(containerId, items = [], canAdd = false) {
+async function drawInventoryComponent(containerId, items = [], canAdd = false, equipped = {}) {
 	const container = document.getElementById(containerId);
 	if (!container) return console.warn(`drawInventoryComponent: #${containerId} not found`);
 
@@ -137,7 +137,12 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false) {
 		let equipBtn = "";
 		if (slot) {
 			const slotLabel = slot === "weapon" ? "⚔️" : slot === "armor" ? "🛡️" : "💍";
-			equipBtn = `<button class="equip-btn chip" data-item="${item.name.replace(/"/g, "&quot;")}" data-slot="${slot}" title="Equip as ${slot}">${slotLabel} Equip</button>`;
+			const isEquipped = equipped[slot] && equipped[slot].toLowerCase() === item.name.toLowerCase();
+			if (isEquipped) {
+				equipBtn = `<button class="equip-btn chip equipped-indicator" data-item="${item.name.replace(/"/g, "&quot;")}" data-slot="${slot}" data-action="unequip" data-sound="Sword Unsheathe" data-sound-hover="Magical Shimmer" title="Unequip from ${slot}">${slotLabel} Unequip</button>`;
+			} else {
+				equipBtn = `<button class="equip-btn chip" data-item="${item.name.replace(/"/g, "&quot;")}" data-slot="${slot}" data-sound="Sword Unsheathe" data-sound-hover="Magical Shimmer" title="Equip as ${slot}">${slotLabel} Equip</button>`;
+			}
 		}
 
 		// Show attributes summary for equippable items
@@ -157,14 +162,15 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false) {
 		console.log(`🎒 Inventory item: "${item.name}" | slot=${slot || "none"} | attributes=`, item.attributes);
 	}
 
-	// Wire up equip buttons
-	container.querySelectorAll(".equip-btn").forEach(btn => {
+	// Wire up equip / unequip buttons
+	container.querySelectorAll("button.equip-btn").forEach(btn => {
 		btn.addEventListener("click", () => {
 			const itemName = btn.dataset.item;
 			const slot = btn.dataset.slot;
-			console.log(`⚔️ Equip clicked: "${itemName}" → ${slot}`);
+			const action = btn.dataset.action === "unequip" ? "item:unequip" : "item:equip";
+			console.log(`⚔️ ${action} clicked: "${itemName}" → ${slot}`);
 			if (typeof socket !== "undefined" && socket) {
-				socket.emit("item:equip", { lobbyId, itemName, slot });
+				socket.emit(action, { lobbyId, itemName, slot });
 			}
 		});
 	});
@@ -187,7 +193,7 @@ async function drawAbilitiesComponent(containerId, abilities = [], canAdd = fals
 	const container = document.getElementById(containerId);
 	if (!container) return console.warn(`drawAbilitiesComponent: #${containerId} not found`);
 
-	const sorted = [...abilities].sort((a, b) => a.name.localeCompare(b.name));
+	const sorted = [...abilities].sort((a, b) => (a.level || 1) - (b.level || 1) || a.name.localeCompare(b.name));
 	const template = await getTemplate("/components/abilities.html");
 
 	container.innerHTML = `
@@ -206,12 +212,12 @@ async function drawAbilitiesComponent(containerId, abilities = [], canAdd = fals
 		if (headerRow) {
 			const th = document.createElement("th");
 			th.textContent = "Action";
-			th.style.width = "60px";
+			th.className = "col-action";
 			headerRow.appendChild(th);
 		}
 	}
 
-	const totalCols = canUse ? 4 : 3;
+	const totalCols = canUse ? 5 : 4;
 	const tbody = container.querySelector("#abilityRows");
 	if (!sorted.length) {
 		tbody.innerHTML = `<tr><td colspan="${totalCols}" class="hint">No abilities</td></tr>`;
@@ -232,10 +238,11 @@ async function drawAbilitiesComponent(containerId, abilities = [], canAdd = fals
 
 		const row = document.createElement("tr");
 		row.innerHTML = `
-			<td><strong>${ability.name}</strong></td>
-			<td>${ability.description || ""}</td>
-			<td class="smalltext">${detailsHTML}</td>
-			${canUse ? `<td><button class="use-ability-btn secondary" style="padding:2px 8px;font-size:0.8em;" data-verb="${verb}" data-noun="${noun}" data-name="${ability.name.replace(/"/g, '&quot;')}">${isSpell ? "Cast" : "Use"}</button></td>` : ""}
+			<td class="col-lvl">${ability.level || 1}</td>
+			<td class="col-name"><strong>${ability.name}</strong></td>
+			<td class="col-desc">${ability.description || ""}</td>
+			<td class="col-details smalltext">${detailsHTML}</td>
+			${canUse ? `<td class="col-action"><button class="use-ability-btn secondary" style="padding:2px 8px;font-size:0.8em;" data-verb="${verb}" data-noun="${noun}" data-name="${ability.name.replace(/"/g, '&quot;')}">${isSpell ? "Cast" : "Use"}</button></td>` : ""}
 		`;
 		tbody.appendChild(row);
 	}
@@ -393,4 +400,43 @@ async function drawPartyComponent(containerId, members = [], canAdd = false, hos
 
 	const infoBtn = container.querySelector("#conditionsInfoBtn");
 	if (infoBtn) infoBtn.addEventListener("click", showConditionsInfoModal);
+}
+
+/** Draw a compact enemy roster showing vague health status. */
+function drawEnemyRoster(containerId, enemies = []) {
+	const container = document.getElementById(containerId);
+	if (!container) return;
+
+	const active = enemies.filter(e => e.status === "active");
+	const inactive = enemies.filter(e => e.status !== "active");
+
+	if (!active.length && !inactive.length) {
+		container.innerHTML = "";
+		return;
+	}
+
+	const condColors = {
+		"Healthy":    "#60c060",
+		"Injured":    "#c0a040",
+		"Wounded":    "#c06040",
+		"Near Death": "#e04040",
+		"Dead":       "#808080",
+		"Fled":       "#8080c0",
+	};
+
+	let html = `<div style="margin:0.5rem 0;padding:0.5rem 0.6rem;background:#1a0d0d;border:1px solid #3a1e1e;border-radius:6px;">
+		<div style="font-size:0.8em;color:#a05050;margin-bottom:0.3rem;font-weight:bold;">🩸 Enemies</div>`;
+
+	for (const e of [...active, ...inactive]) {
+		const color = condColors[e.condition] || "#aaa";
+		const strikethrough = e.status === "dead" ? "text-decoration:line-through;opacity:0.5;" : "";
+		const italic = e.status === "fled" ? "font-style:italic;opacity:0.6;" : "";
+		html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.15rem 0;${strikethrough}${italic}">
+			<span style="font-size:0.82em;color:#e0a0a0;">${e.name}</span>
+			<span style="font-size:0.7em;color:${color};font-weight:bold;">${e.condition}</span>
+		</div>`;
+	}
+
+	html += `</div>`;
+	container.innerHTML = html;
 }

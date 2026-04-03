@@ -19,6 +19,49 @@ function now() {
 	return Date.now();
 }
 
+// XP thresholds — index = level-1, value = XP required to reach that level.
+// Levels 1-20 follow D&D 5e; 21-25 extrapolate beyond the standard range.
+const XP_THRESHOLDS = [
+	0, 300, 900, 2700, 6500,           // 1-5
+	14000, 23000, 34000, 48000, 64000,  // 6-10
+	85000, 100000, 120000, 140000, 165000, // 11-15
+	195000, 225000, 265000, 305000, 355000, // 16-20
+	400000, 450000, 500000, 560000, 620000, // 21-25
+];
+
+// Human-readable power-tier label for each level, used in LLM prompts so the
+// AI understands the characters' relative strength in plain-English terms.
+const LEVEL_FLAVOR = {
+	1:  "ordinary commoner",
+	2:  "apprentice adventurer",
+	3:  "fledgling hero",
+	4:  "seasoned wanderer",
+	5:  "veteran adventurer",
+	6:  "rising champion",
+	7:  "renowned warrior",
+	8:  "regional legend",
+	9:  "elite hero",
+	10: "master of the craft",
+	11: "realm-shaker",
+	12: "archmage-tier",
+	13: "legendary figure",
+	14: "mythic champion",
+	15: "planar traveller",
+	16: "world-breaker",
+	17: "demi-legend",
+	18: "near-divine",
+	19: "titan-slayer",
+	20: "apex mortal",
+	21: "ascendant",
+	22: "demigod",
+	23: "avatar of power",
+	24: "elder god's equal",
+	25: "living deity",
+};
+function levelFlavorTag(lvl) {
+	return LEVEL_FLAVOR[lvl] || LEVEL_FLAVOR[Math.min(25, Math.max(1, lvl))] || "adventurer";
+}
+
 const defaults = {
 	name: "none",
 	class: "Adventurer",
@@ -109,6 +152,7 @@ export class LobbyStore {
 			pinnedMoments: [],
 			initiative: [],
 			turnIndex: 0,
+			enemies: {},
 			timerEnabled: true,
 			timerMinutes: 3,
 			maxMissedTurns: 5,
@@ -135,6 +179,7 @@ export class LobbyStore {
 			difficulty: "standard",
 			lootGenerosity: "fair",
 			campaignSetting: "standard",
+			startingLevel: 1,
 			llmProvider: getDefaultLLMSettings().provider,
 			llmModel:    getDefaultLLMSettings().model,
 		};
@@ -333,6 +378,14 @@ export class LobbyStore {
 		merged.level = Number(merged.level) || 1;
 		merged.xp    = Number(merged.xp)    || 0;
 		merged.gold  = Number(merged.gold)  || 0;
+
+		// If the class changed during character creation, clear the start-level
+		// init flag so initializeAtLevel() will re-run with the new class.
+		const classChanged = existing.class && existing.class !== merged.class;
+		if (classChanged && s.phase !== "running") {
+			delete existing._startLevelInit;
+		}
+
 		// Preserve max_hp across re-saves; initialize from hp on first save
 		if (merged.stats) {
 			merged.stats.max_hp = existing.stats?.max_hp ?? merged.stats.hp ?? 10;
@@ -358,11 +411,17 @@ export class LobbyStore {
 		if (existing.level  > merged.level)  merged.level  = existing.level;
 		if (existing.xp     > merged.xp)     merged.xp     = existing.xp;
 		if (existing.gold   > merged.gold)    merged.gold   = existing.gold;
-		if (existing.stats?.hp  != null)      merged.stats.hp  = existing.stats.hp;
+		if (existing.stats?.hp  != null && !classChanged)
+			merged.stats.hp  = existing.stats.hp;
 		if (Array.isArray(existing.conditions) && existing.conditions.length)
 			merged.conditions = existing.conditions;
-		if (Array.isArray(existing.abilities)  && existing.abilities.length > (merged.abilities?.length ?? 0))
+		if (Array.isArray(existing.abilities)  && existing.abilities.length > (merged.abilities?.length ?? 0) && !classChanged)
 			merged.abilities  = existing.abilities;
+
+		// Carry forward the init flag (unless cleared above for class change)
+		if (existing._startLevelInit && !classChanged) {
+			merged._startLevelInit = existing._startLevelInit;
+		}
 
 		s.players[name] = merged;
 		this.persist(lobbyId);
@@ -703,7 +762,8 @@ OPEN THREADS:
 				const wpn = p.weapon ? `${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "unarmed";
 			const arm = p.armor  ? `${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "unarmored (AC 10)";
 			const trn = p.trinket ? `${p.trinket.name}` : "none";
-			return `${p.name} [${p.class} L${p.level}; XP ${xp}; weapon ${wpn}; armor ${arm}; trinket ${trn}; stats ${stats}; inv ${inv}; abilities ${abil}]`;
+			const tier = levelFlavorTag(Number(p.level) || 1);
+			return `${p.name} [${p.class} L${p.level} (${tier}); XP ${xp}; weapon ${wpn}; armor ${arm}; trinket ${trn}; stats ${stats}; inv ${inv}; abilities ${abil}]`;
 			})
 			.join("\n");
 	}
@@ -789,7 +849,8 @@ Schema: {
     "inventory": [{ "player": string, "item": string, "change": number, "description": string, "change_type": "add" | "remove", "attributes": { "item_type"?: "weapon" | "armor" | "trinket" | "consumable", "damage"?: string, "damage_type"?: string, "range"?: string, "ac"?: number, "armor_type"?: string, ...any } }],
     "gold": [{ "player": string, "delta": number }],
     "conditions": [{ "player": string, "add": string[], "remove": string[] }],
-    "abilities": [{ "player": string, "change_type": "add" | "remove", "name": string, "description": string, "attributes": object }]
+    "abilities": [{ "player": string, "change_type": "add" | "remove", "name": string, "description": string, "attributes": object }],
+    "enemies": [{ "name": string, "hp": number, "max_hp": number, "ac": number, "str": number, "dex": number, "con": number, "int": number, "wis": number, "cha": number, "cr": string, "status": "active" | "dead" | "fled", "damage_taken": number | null, "reason": string | null }]
   },
   "prompt": string,
   "roll": { "sides": number, "stats": string[], "mods": number, "dc": number } | null,
@@ -811,6 +872,16 @@ Schema: {
 		const lootInstruction = `\nLoot: ${this._lootInstruction(s?.lootGenerosity ?? "fair")}`;
 		const settingInstruction = `\nWorld setting: ${this._settingInstruction(s?.campaignSetting ?? "standard")}`;
 
+		// Compute party level range for encounter scaling
+		const activePlayers = Object.values(s.players || {}).filter(p => !p.disconnected && !p.dead);
+		const levels = activePlayers.map(p => Number(p.level) || 1);
+		const partySize = levels.length || 1;
+		const avgLevel = Math.round(levels.reduce((a, b) => a + b, 0) / partySize);
+		const minLevel = Math.min(...(levels.length ? levels : [1]));
+		const maxLevel = Math.max(...(levels.length ? levels : [1]));
+		const levelRange = minLevel === maxLevel ? `${avgLevel}` : `${minLevel}–${maxLevel} (avg ${avgLevel})`;
+		const encounterInstruction = `\nEncounter scaling: The party is ${partySize} player(s) at level ${levelRange}. ALL enemies, traps, hazards, and DCs MUST be appropriate for this level using D&D 5e CR guidelines. Level 1–2 parties should face CR 1/8–1 creatures (goblins, wolves, bandits, skeletons) — never dragons, liches, or high-CR threats. Level 3–5 parties can handle CR 1–5 creatures. Level 6–10 parties can face CR 3–8+ creatures. Scale enemy HP, damage output, AC, and spell levels to the party's capabilities. A single encounter should be winnable but challenging — not an instant TPK. Adjust the NUMBER of enemies rather than using single overpowered foes when possible.`;
+
 		const base = [
 			{
 				role: "system",
@@ -818,12 +889,18 @@ Schema: {
 Be cinematic, descriptive, and responsive to player actions. Maintain continuity with prior events. You should generally speaking be very allowing of stupid shit because that's what players want to do a lot of the time, so no moral policing. Be very "yes and" unless it simply doesn't work or breaks the game rules.
 Respect dice outcomes given by the server. Always reply as the DM narrating events — never as a player. The adventuring party should consist of the actual active players at least at first. Don't make up companions from the start, they must be gained organically through the story.
 Use the "music" field to set background music mood. Only change it when the scene shifts significantly — entering or leaving combat, arriving at a new location type, a death, a major revelation, a victory. Set to null when the current music still fits (which is most of the time). Available moods: lively_town, tense_battle, boss_fight, peaceful_nature, dungeon_ambient, tavern, mystery, exploration, sad_moment, victory, horror.
-Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${lootInstruction}${flavorInstruction}`,
+Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${encounterInstruction}${lootInstruction}${flavorInstruction}`,
 			},
 			...(ancientHistory ? [{ role: "system", content: `Campaign backstory (older events, for reference):\n${ancientHistory}` }] : []),
 			{ role: "system", content: `Recent story arc:\n${storyContext}` },
 			...(pinnedText ? [{ role: "system", content: `Player-pinned important moments (do NOT forget or contradict these):\n${pinnedText}` }] : []),
-			{ role: "system", content: `Active players: ${players.join(", ")}` },
+			{ role: "system", content: `Active players: ${players.map(name => {
+				const p = s.players[name];
+				if (p?.dead) return `${name} (☠️ DEAD)`;
+				const hp = Number(p?.stats?.hp ?? 0);
+				const maxHp = Number(p?.stats?.max_hp ?? p?.stats?.hp ?? 10);
+				return `${name} (HP: ${hp}/${maxHp})`;
+			}).join(", ")}` },
 			...(s.currentMusic
 				? [{ role: "system", content: `Currently playing music mood: "${s.currentMusic}". Only change this if the scene genuinely calls for a different mood — set "music" to null to keep the current music.` }]
 				: [{ role: "system", content: `No music is playing yet. Set the "music" field to the mood that best fits the current scene.` }]),
@@ -834,6 +911,7 @@ Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) 
 If a player takes or avoids damage, consumes or gains an item, or uses a spell or ability, you must reflect it in "updates".
 Examples:
 - If a player burns their hand or steps into fire → add an "hp" update with a negative delta and reason.
+- DEATH: If an hp update would reduce a player to 0 HP or below, set "new_total" to 0. This means the character DIES. You MUST narrate their death dramatically — describe how they fall, their final moments, and the impact on the party. From that point forward in this response and all future responses, that character is GONE. Do not give them actions, dialogue, or any narrative presence as a living character.
 - If a player drinks or throws a potion → add an "inventory" update reducing that item count.
 - If a player receives gold or treasure → add a "gold" update.
 - If they get poisoned, stunned, or similar → add a "conditions" update. Use lowercase canonical condition names: blinded, burning, charmed, deafened, exhausted, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious. Always remove a condition when it logically ends (e.g. remove "burning" after it's extinguished).
@@ -862,6 +940,17 @@ Condition	Effect
 
 Do not skip updates just because the action fails — always include the logical consequence.
 Always populate the "suggestions" array with 3–5 short action phrases (max 8 words each) that the active player could plausibly do next given the current scene. These are shown as quick-action hints in the UI. Make them specific to what is happening, not generic. Suggestions should always be in the first person prose, always "I" not "you" or "your". Suggestioos should align with the characters alignment and mixed with the players previous actions.
+
+ENEMY TRACKING: When you introduce ANY hostile creature, NPC combatant, or monster, you MUST include an "enemies" array entry in "updates" with their full stat block. Use D&D 5e-appropriate stats for the creature's CR. Required fields:
+- "name": unique identifier (e.g. "Goblin 1", "Dire Wolf", "Bandit Captain")
+- "hp" and "max_hp": current and maximum hit points
+- "ac": armor class
+- "str", "dex", "con", "int", "wis", "cha": ability scores
+- "cr": challenge rating as a string (e.g. "1/4", "1", "5")
+- "status": "active" (alive and fighting), "dead" (killed), or "fled" (escaped)
+- "damage_taken": amount of damage dealt THIS turn (null if none)
+- "reason": brief description of what happened to them this turn (null if nothing)
+Every turn that involves combat, include ALL currently active enemies in the "enemies" array — even those not affected this turn — so the server can maintain an accurate roster. When an enemy takes damage, reduce their "hp" by the damage amount. When an enemy reaches 0 hp, set "status" to "dead". Track enemy HP across turns — the current enemy state will be provided to you each turn.
 
 EQUIPPABLE ITEMS: When you give a player a weapon, armor, or trinket (ring, amulet, cloak, etc.) via the "inventory" update, you MUST include the "attributes" object with:
 - Weapons: { "item_type": "weapon", "damage": "1d8", "damage_type": "slashing", "range": "melee" }
@@ -900,7 +989,7 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 			});
 		}
 
-		// Spell slot context — give the LLM current slot status, weapon, and each player's spell list
+		// Spell slot context — give the LLM current slot status, weapon, HP, and each player's spell list
 		const spellLines = Object.values(s.players || {}).map(p => {
 			const max = Number(p.level) || 1;
 			const used = Number(p.spellSlotsUsed) || 0;
@@ -911,12 +1000,30 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 			const wpnStr = p.weapon ? `weapon: ${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "weapon: unarmed";
 			const armStr = p.armor  ? `armor: ${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "armor: unarmored (AC 10)";
 			const trnStr = p.trinket ? `trinket: ${p.trinket.name}${p.trinket.description ? ` (${p.trinket.description})` : ""}` : "trinket: none";
-			return `  - ${p.name} (${p.class || "?"} Lv ${max}): ${wpnStr} | ${armStr} | ${trnStr} | abilities/spells known: [${spellStr}] | slots: ${remaining}/${max}${warning}`;
+			const currentHp = Number(p.stats?.hp ?? 0);
+			const maxHp = Number(p.stats?.max_hp ?? p.stats?.hp ?? 10);
+			const hpStr = p.dead ? "HP: 0 — ☠️ DEAD" : `HP: ${currentHp}/${maxHp}`;
+			const hpWarning = !p.dead && currentHp > 0 && currentHp <= Math.floor(maxHp * 0.25) ? " ⚠️ CRITICALLY LOW HP" : "";
+			const tier = levelFlavorTag(max);
+			return `  - ${p.name} (${p.class || "?"} Lv ${max}, ${tier}): ${hpStr}${hpWarning} | ${wpnStr} | ${armStr} | ${trnStr} | abilities/spells known: [${spellStr}] | slots: ${remaining}/${max}${warning}`;
 		}).join("\n");
+
+		// Collect dead player names for explicit death instructions
+		const deadPlayers = Object.values(s.players || {}).filter(p => p.dead).map(p => p.name);
+
 		base.push({
 			role: "system",
-			content: `SPELL SLOT / ABILITY USE STATUS (authoritative — do not guess or override):\n${spellLines}\n\nRules:\n- A player can only cast a spell or activate an ability if it is in their known list AND they have slots remaining.\n- Slots are shared between spells and abilities. Each use costs one slot.\n- If the ability/spell is not in their list, or remaining slots = 0, the action FAILS. You MUST reject it — narrate the consequence (embarrassing misfire, wild surge, nothing happens, ability fizzles, etc.) and set "spellUsed": false.\n- If a spell or ability is successfully used, set "spellUsed": true. The server will deduct the slot.\n- Always set "spellUsed": false when no spell or ability was used this turn.\n- IMPORTANT: You must NEVER allow a player to use a spell or ability when remaining slots = 0. This is a hard rule.`,
+			content: `PLAYER STATUS & SPELL SLOTS (authoritative — do not guess or override):\n${spellLines}\n\nRules:\n- A player can only cast a spell or activate an ability if it is in their known list AND they have slots remaining.\n- Slots are shared between spells and abilities. Each use costs one slot.\n- If the ability/spell is not in their list, or remaining slots = 0, the action FAILS. You MUST reject it — narrate the consequence (embarrassing misfire, wild surge, nothing happens, ability fizzles, etc.) and set "spellUsed": false.\n- If a spell or ability is successfully used, set "spellUsed": true. The server will deduct the slot.\n- Always set "spellUsed": false when no spell or ability was used this turn.\n- IMPORTANT: You must NEVER allow a player to use a spell or ability when remaining slots = 0. This is a hard rule.\n- HP values shown above are AUTHORITATIVE. When you deal damage via an "hp" update, calculate the new_total based on these values. If an hp update would bring a player to 0 or below, their HP becomes 0 and they DIE.${deadPlayers.length ? `\n\n☠️ DEAD PLAYERS: ${deadPlayers.join(", ")}\nThese players are DEAD. Do NOT include them in narration as active participants. Do not give them dialogue, actions, or agency. They are gone. Other players may reference or mourn them, but the dead characters do not act, speak, or respond. Do not generate any updates (hp, inventory, conditions, etc.) for dead players.` : ""}`,
 		});
+
+		// Enemy roster — feed current enemy state so the LLM can track HP across turns
+		const enemyRoster = this.enemyRoster(lobbyId);
+		if (enemyRoster) {
+			base.push({
+				role: "system",
+				content: `ACTIVE ENEMIES (authoritative — track HP across turns):\n${enemyRoster}\n\nRules:\n- These are the enemies currently in play. Their HP values are AUTHORITATIVE.\n- When an enemy takes damage, reduce their HP accordingly in the "enemies" update. When HP reaches 0, set "status" to "dead".\n- When introducing NEW enemies, include full stat blocks in the "enemies" update.\n- Every combat turn, include ALL active enemies in the "enemies" array — even those unaffected this turn — so the server keeps an accurate roster.\n- Dead enemies should still be listed with "status": "dead" until combat ends.\n- Do not resurrect dead enemies unless the narrative explicitly calls for it (e.g. necromancy).`,
+			});
+		}
 
 		// Recent unsummarized history for continuity — everything after summarizedUpTo
 		// (older events are captured in storyContext via auto-summarization)
@@ -927,6 +1034,71 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 		base.push({ role: "user", name: safeName, content: String(action) });
 
 		return base;
+	}
+
+	// ==== TPK (Total Party Kill) Epilogue Prompt ====
+	composeWipeEpilogue(lobbyId) {
+		const s = this.index[lobbyId];
+		if (!s) return [{ role: "system", content: "Error: Lobby not found." }];
+
+		const ancientHistory = s.ancientHistory || "";
+
+		// Build a summary of each fallen character with class/race/level
+		const fallenSummary = Object.values(s.players || {}).map(p => {
+			const cls = p.class || "Adventurer";
+			const lvl = Number(p.level) || 1;
+			const race = p.race || "Unknown";
+			const tier = levelFlavorTag(lvl);
+			return `  - ${p.name} (${race} ${cls}, Level ${lvl} — ${tier})`;
+		}).join("\n");
+
+		// Compile recent history as a readable narrative recap (NOT raw chat messages).
+		// Raw role:"assistant"/role:"user" messages confuse the LLM into continuing
+		// the game conversation instead of writing an epilogue.
+		const fromIdx = s.summarizedUpTo || 0;
+		const rawHistory = (s.history || []).slice(fromIdx);
+		const recapLines = rawHistory.map(msg => {
+			if (msg.role === "user") {
+				const who = msg.name || "A player";
+				return `${who}: "${msg.content}"`;
+			}
+			// Strip HTML tags for the recap — just keep the text
+			const plain = (msg.content || "").replace(/<[^>]+>/g, "").trim();
+			return plain ? `DM: ${plain}` : null;
+		}).filter(Boolean);
+
+		// Use the summarized story context as the primary narrative, falling back
+		// to the first DM message (the opening scene) if no summary exists yet.
+		const storySummary = s._hasSummary && s.storyContext
+			? s.storyContext
+			: (rawHistory.find(m => m.role === "assistant")?.content || "").replace(/<[^>]+>/g, "").trim();
+
+		return [
+			{
+				role: "system",
+				content: `You are the Dungeon Master. The entire adventuring party has just been killed — a Total Party Kill. You must now narrate the EPILOGUE. This is NOT a continuation of the adventure. Do NOT narrate new combat, new actions, new spells, or new events. The story is OVER.
+
+Your task is to deliver a dramatic, bittersweet epilogue that:
+1. Describes the immediate aftermath of the final death — the silence that follows, the scene around the fallen.
+2. Reflects on each fallen hero individually: who they were, what they were trying to accomplish, and how they met their end. Base this ONLY on the history provided below — do not invent events that did not happen.
+3. Describes what happens to the world now that the party has failed. What darkness spreads? What evil goes unchecked? What people suffer because these heroes fell?
+4. Ends with a final, evocative closing line — something that would feel at home as the last line of a dark fantasy novel.
+
+Be cinematic, melancholic, and respectful of each character's journey. This is the final narration the players will ever hear — make it memorable.
+
+CRITICAL: Do NOT continue the game. Do NOT narrate new combat or actions. Only reflect on what has already happened and describe the world's fate.`,
+			},
+			...(ancientHistory ? [{ role: "system", content: `Campaign backstory:\n${ancientHistory}` }] : []),
+			...(storySummary ? [{ role: "system", content: `The story so far:\n${storySummary}` }] : []),
+			...(recapLines.length ? [{ role: "system", content: `Recent events (what just happened):\n${recapLines.join("\n")}` }] : []),
+			{ role: "system", content: `The fallen party:\n${fallenSummary}` },
+			{
+				role: "system",
+				content: `FORMAT: Output minified JSON only with this schema: { "text": string, "music": string | null, "sfx": string[] }
+The "text" field may contain basic HTML formatting. Set "music" to "sad_moment". Include 1-2 atmospheric SFX like "wind howling", "distant thunder", etc.`,
+			},
+			{ role: "user", content: "The last hero has fallen. The adventure is over. Narrate the epilogue — do not continue the game." },
+		];
 	}
 
 	// ==== Public state for clients ====
@@ -972,11 +1144,23 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 			difficulty:      s.difficulty      || "standard",
 			lootGenerosity:  s.lootGenerosity  || "fair",
 			campaignSetting: s.campaignSetting || "standard",
+			startingLevel:   s.startingLevel   ?? 1,
 			llmProvider: s.llmProvider || null,
 			llmModel:    s.llmModel    || null,
 			chat: s.chat?.slice(-50) || [],
 			party,
 			currentMusic: s.currentMusic || null,
+			enemies: Object.values(s.enemies || {}).map(e => {
+				const pct = e.max_hp > 0 ? e.hp / e.max_hp : 0;
+				let condition;
+				if (e.status === "dead") condition = "Dead";
+				else if (e.status === "fled") condition = "Fled";
+				else if (pct > 0.75) condition = "Healthy";
+				else if (pct > 0.40) condition = "Injured";
+				else if (pct > 0.15) condition = "Wounded";
+				else condition = "Near Death";
+				return { name: e.name, cr: e.cr, status: e.status, condition };
+			}),
 		};
 	}
 
@@ -1047,8 +1231,72 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 	setCampaignSetting(lobbyId, value) {
 		const s = this.index[lobbyId];
 		if (!s) return;
-		const valid = ["standard", "dark_ages", "steampunk", "pirate", "scifi"];
+		const valid = ["standard", "dark_ages", "steampunk", "pirate", "scifi", "ancient_egypt", "ancient_rome", "warring_states_japan", "prehistory", "renaissance"];
 		s.campaignSetting = valid.includes(value) ? value : "standard";
+		this.persist(lobbyId);
+	}
+
+	setStartingLevel(lobbyId, level) {
+		const s = this.index[lobbyId];
+		if (!s) return;
+		s.startingLevel = Math.min(25, Math.max(1, Number(level) || 1));
+		this.persist(lobbyId);
+	}
+
+	/**
+	 * Initialize a player to the lobby's starting level.
+	 * Grants HP, attribute points, abilities, spell slots, and XP for all
+	 * levels above 1. Uses a `_startLevelInit` flag for idempotency so it
+	 * works regardless of what level the client sends in the sheet.
+	 */
+	initializeAtLevel(lobbyId, playerName, getAbilityForLevel) {
+		const s = this.index[lobbyId];
+		if (!s) return;
+		const startLvl = Number(s.startingLevel) || 1;
+		if (startLvl <= 1) return; // nothing to do
+
+		const p = s.players[playerName];
+		if (!p) return;
+
+		// Already initialized for this starting level — skip
+		if (p._startLevelInit >= startLvl) return;
+
+		p.stats = p.stats || { hp: 10, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
+		const con = Number(p.stats.con) || 10;
+		const conMod = Math.floor((con - 10) / 2);
+
+		// Always start from level 2 (level 1 is the base) so we grant
+		// everything regardless of what level the client sent.
+		// NOTE: Attribute points are NOT granted here — the client's point-buy
+		// budget already scales with level (+2 per level above 1).
+		let totalHpGained = 0;
+
+		for (let lvl = 2; lvl <= startLvl; lvl++) {
+			// HP: 1d6 + CON mod (min 1)
+			const hpRoll = Math.floor(Math.random() * 6) + 1;
+			const hpGained = Math.max(1, hpRoll + conMod);
+			totalHpGained += hpGained;
+
+			// Class ability
+			if (getAbilityForLevel) {
+				const ability = getAbilityForLevel(p.class, lvl);
+				if (ability) {
+					p.abilities = Array.isArray(p.abilities) ? p.abilities : [];
+					if (!p.abilities.some(a => a.name === ability.name)) {
+						p.abilities.push({ ...ability, level: lvl });
+					}
+				}
+			}
+		}
+
+		// Apply accumulated changes — HP starts from base 10
+		p.level = startLvl;
+		p.stats.hp = 10 + totalHpGained;
+		p.stats.max_hp = 10 + totalHpGained;
+		p.spellSlotsUsed = 0;
+		p.xp = XP_THRESHOLDS[startLvl - 1] || 0;
+		p._startLevelInit = startLvl;
+
 		this.persist(lobbyId);
 	}
 
@@ -1074,8 +1322,13 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 			case "dark_ages":  return "Setting: Dark Ages / Low Fantasy. A harsh, historical-feeling world where magic is scarce and feared. Technology is primitive, superstition runs rampant, and the land is brutal. Avoid high-fantasy tropes like gleaming cities or benevolent kings.";
 			case "steampunk":  return "Setting: Steampunk / Magitech. Clockwork machinery and arcane technology coexist. Cities hum with steam-powered devices and arcane factories. Magic is partly industrialised; gadgets and constructs are common.";
 			case "pirate":     return "Setting: Pirate Age. Ocean voyages, island ports, and naval battles dominate. Treasure maps, privateers, sea monsters, and rival factions abound. Flavour locations and NPCs with nautical and colonial themes.";
-			case "scifi":      return "Setting: Sci-fi Fantasy. Ancient technology left by a vanished civilisation blurs magic and science. Ruins hold laser-edged traps and arcane computers. Spaceships and swords coexist in a world that defies simple categorisation.";
-			default:           return "Setting: Standard high fantasy. A world of kingdoms, dungeons, ancient magic, and classic races. Elves, dwarves, and humans coexist. Classic fantasy tropes and locations are fair game.";
+			case "scifi":                return "Setting: Sci-fi Fantasy. Ancient technology left by a vanished civilisation blurs magic and science. Ruins hold laser-edged traps and arcane computers. Spaceships and swords coexist in a world that defies simple categorisation.";
+			case "ancient_egypt":        return "Setting: Ancient Egypt. A mythic Nile-valley civilisation ruled by pharaoh-sorcerers and jealous animal-headed gods. Adventures centre on sand-buried tomb complexes, cursed relics, temple politics, and divine rivalries. Use Egyptian names, titles (vizier, high priestess, nomarch), and flavour (papyrus scrolls, canopic jars, scarab wards). Magic draws on hieroglyphic runes and divine patronage rather than arcane study.";
+			case "ancient_rome":         return "Setting: Ancient Rome. A vast militaristic empire of legions, senators, and living gods. Adventures feature gladiatorial arenas, political conspiracy, frontier campaigns against barbarian hordes, and the meddling of Olympian deities. Use Latin-flavoured names and titles (centurion, tribune, consul). Infrastructure like roads, aqueducts, and colosseums should feature prominently. Magic manifests as augury, divine favour, and forbidden mystery cults.";
+			case "warring_states_japan":  return "Setting: Sengoku-era Japan. Feudal provinces torn apart by rival daimyo clans. Samurai live and die by bushido, shinobi operate in shadow, wandering ronin sell their blades, and yokai haunt the wild places between castles. Use Japanese names, titles (shogun, daimyo, ashigaru), and cultural elements (tea ceremony, shrine offerings, honour duels). Magic is rooted in onmyodo spirit arts, kami blessings, and cursed blades.";
+			case "prehistory":           return "Setting: Prehistory. A primeval world before metal, writing, or cities. Small tribal bands navigate vast wilderness filled with megafauna, rival clans, and primal spirits. Technology is limited to stone, bone, and hide. Magic is shamanic — spirit journeys, cave paintings that come alive, totemic bonds with great beasts. There are no kingdoms, shops, or coins; survival, territory, and oral tradition drive every conflict.";
+			case "renaissance":          return "Setting: Renaissance Europe. Flourishing city-states ruled by ambitious merchant princes and the church. Art, science, and intrigue intertwine — Leonardo-style inventor-mages, Medici-style patron families, duelling academies, secret alchemical societies, and an ever-watchful Inquisition. Use Italian-flavoured names and titles (doge, condottiero, cardinal). Magic is practised as heretical natural philosophy, hidden behind artistic or scientific fronts to avoid persecution.";
+			default:                     return "Setting: Standard high fantasy. A world of kingdoms, dungeons, ancient magic, and classic races. Elves, dwarves, and humans coexist. Classic fantasy tropes and locations are fair game.";
 		}
 	}
 
@@ -1253,9 +1506,8 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 		const key = this.findPlayerKey(lobbyId, playerName);
 		if (!l || !key) return false;
 		const p = l.players[key];
-		const thresholds = [0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000];
 		const nextLevel = (Number(p.level) || 1) + 1;
-		const nextXP = thresholds[nextLevel - 1];
+		const nextXP = XP_THRESHOLDS[nextLevel - 1];
 		if (nextXP && p.xp >= nextXP) return true;
 		return false;
 	}
@@ -1293,6 +1545,62 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 		}
 		this.persist(lobbyId);
 	}
+	// ==== Enemy Tracking ====
+	/**
+	 * Update the enemy roster from LLM response data.
+	 * Each entry can introduce a new enemy, update HP/status, or mark one dead/fled.
+	 */
+	updateEnemies(lobbyId, enemyUpdates) {
+		const s = this.index[lobbyId];
+		if (!s || !Array.isArray(enemyUpdates)) return;
+		s.enemies = s.enemies || {};
+		for (const e of enemyUpdates) {
+			if (!e?.name) continue;
+			const key = e.name;
+			if (!s.enemies[key]) {
+				// New enemy — store full stat block
+				s.enemies[key] = {
+					name: key,
+					hp: Number(e.hp) || 10,
+					max_hp: Number(e.max_hp || e.hp) || 10,
+					ac: Number(e.ac) || 10,
+					str: Number(e.str) || 10,
+					dex: Number(e.dex) || 10,
+					con: Number(e.con) || 10,
+					int: Number(e.int) || 10,
+					wis: Number(e.wis) || 10,
+					cha: Number(e.cha) || 10,
+					cr: String(e.cr ?? "0"),
+					status: "active",
+				};
+			} else {
+				// Existing enemy — update HP and status
+				if (e.hp != null) s.enemies[key].hp = Math.max(0, Number(e.hp));
+				if (e.status) s.enemies[key].status = e.status;
+			}
+			// If HP hits 0, force dead status
+			if (s.enemies[key].hp <= 0) {
+				s.enemies[key].status = "dead";
+				s.enemies[key].hp = 0;
+			}
+		}
+		this.persist(lobbyId);
+	}
+
+	/** Get formatted enemy roster for the LLM prompt. */
+	enemyRoster(lobbyId) {
+		const s = this.index[lobbyId];
+		if (!s?.enemies) return "";
+		const entries = Object.values(s.enemies);
+		if (!entries.length) return "";
+		const lines = entries.map(e => {
+			if (e.status === "dead") return `  - ${e.name} [CR ${e.cr}] — ☠️ DEAD`;
+			if (e.status === "fled") return `  - ${e.name} [CR ${e.cr}] — FLED`;
+			return `  - ${e.name} [CR ${e.cr}]: HP ${e.hp}/${e.max_hp}, AC ${e.ac} | STR ${e.str} DEX ${e.dex} CON ${e.con} INT ${e.int} WIS ${e.wis} CHA ${e.cha}`;
+		}).join("\n");
+		return lines;
+	}
+
 	applySpellSlotChange(lobbyId, playerName, delta) {
 		const l = this.index[lobbyId];
 		const key = this.findPlayerKey(lobbyId, playerName);
@@ -1482,6 +1790,56 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 
 		this.persist(lobbyId);
 		return { equipped: newEquip, unequipped: oldEquip };
+	}
+
+	unequipItem(lobbyId, playerName, slot) {
+		const l = this.index[lobbyId];
+		const key = this.findPlayerKey(lobbyId, playerName);
+		if (!l || !key) return null;
+		const p = l.players[key];
+		if (!p) return null;
+
+		if (!["weapon", "armor", "trinket"].includes(slot)) return null;
+
+		const oldEquip = p[slot];
+		if (!oldEquip || !oldEquip.name) return null;
+
+		// Return equipped item to inventory
+		if (!Array.isArray(p.inventory)) p.inventory = [];
+		const existing = p.inventory.find(i =>
+			(typeof i === "string" ? i : i.name || "").toLowerCase() === oldEquip.name.toLowerCase()
+		);
+		if (existing && typeof existing === "object") {
+			existing.count = (existing.count || 1) + 1;
+		} else {
+			const attrs = {};
+			if (slot === "weapon") {
+				if (oldEquip.damage)     attrs.damage = oldEquip.damage;
+				if (oldEquip.damageType) attrs.damage_type = oldEquip.damageType;
+				if (oldEquip.range)      attrs.range = oldEquip.range;
+				attrs.item_type = "weapon";
+			} else if (slot === "armor") {
+				if (oldEquip.ac)       attrs.ac = oldEquip.ac;
+				if (oldEquip.type)     attrs.armor_type = oldEquip.type;
+				if (oldEquip.material) attrs.material = oldEquip.material;
+				attrs.item_type = "armor";
+			} else if (slot === "trinket") {
+				Object.assign(attrs, oldEquip.attributes || {});
+				attrs.item_type = "trinket";
+			}
+			p.inventory.push({
+				name: oldEquip.name,
+				count: 1,
+				description: oldEquip.description || oldEquip.note || "",
+				attributes: attrs,
+			});
+		}
+
+		// Clear the equipment slot
+		p[slot] = null;
+
+		this.persist(lobbyId);
+		return { unequipped: oldEquip };
 	}
 
 	// ==== Chat (single, non-duplicated implementation) ====

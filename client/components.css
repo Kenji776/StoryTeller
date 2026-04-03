@@ -11,8 +11,9 @@
 	font-size: 0.95em;
 	border: 1px solid #2c2c2c;
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-	max-height: 240px;
+	max-height: 300px;
 	overflow-y: auto;
+	overflow-x: hidden;
 	display: block;
 }
 
@@ -23,6 +24,21 @@
 	width: 100%;
 	table-layout: fixed;
 }
+
+/* === Abilities table: auto layout so columns shrink to fit === */
+.fancy-table.abilities-table thead,
+.fancy-table.abilities-table tbody {
+	table-layout: auto;
+}
+
+.fancy-table.abilities-table th,
+.fancy-table.abilities-table td {
+	padding: 6px 8px;
+}
+
+.abilities-table .col-lvl    { width: 1%; white-space: nowrap; text-align: center; }
+.abilities-table .col-name   { width: 1%; white-space: nowrap; }
+.abilities-table .col-action { width: 1%; white-space: nowrap; text-align: center; }
 
 .fancy-table th {
 	background: rgba(60, 60, 75, 0.9);
@@ -79,10 +95,11 @@
 	background: linear-gradient(180deg, #14141c, #0d0d14);
 	border: 1px solid #333;
 	border-radius: 10px;
-	padding: 0.75em 1em 1em;
+	padding: 0.75em 0.6em 1em;
 	margin: 1em 0;
 	color: #eee;
 	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+	overflow: hidden;
 }
 
 .component-header {

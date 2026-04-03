@@ -30,7 +30,7 @@ class SfxManager {
 		this._playing = true;
 
 		const fx    = this._queue.shift();
-		const audio = new Audio(`/sfx/${fx.file}`);
+		const audio = new Audio(`/sfx/game/${fx.file}`);
 		audio.volume = this.volume;
 
 		console.log(`🔊 Playing SFX: ${fx.name || fx.file}`);

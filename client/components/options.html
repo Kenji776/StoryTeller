@@ -335,7 +335,7 @@
 
 <div class="header-row">
 	<h3>⚙️ Game Options</h3>
-	<button class="randomize-btn" id="randomizeBtn">🎲 Randomize</button>
+	<button class="randomize-btn" id="randomizeBtn" data-sound="Dice Tumble" data-sound-hover="Magical Shimmer">🎲 Randomize</button>
 </div>
 
 <!-- ── STORY ─────────────────────────────────────────────── -->
@@ -363,10 +363,10 @@
 	<div class="section-title">Difficulty</div>
 	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Controls enemy strength, DC thresholds, and how punishing mistakes are.</p>
 	<div class="chip-group" id="difficultyChips">
-		<button class="chip" data-value="casual">🌸 Casual</button>
-		<button class="chip" data-value="standard">⚔️ Standard</button>
-		<button class="chip" data-value="hardcore">💀 Hardcore</button>
-		<button class="chip" data-value="merciless">☠️ Merciless</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="casual" data-sound="Stone Tile Click">🌸 Casual</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="standard" data-sound="Stone Tile Click">⚔️ Standard</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="hardcore" data-sound="Stone Tile Click">💀 Hardcore</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="merciless" data-sound="Stone Tile Click">☠️ Merciless</button>
 	</div>
 </div>
 
@@ -381,7 +381,7 @@
 			</div>
 			<span id="brutalityLabel">Standard</span>
 		</div>
-		<input type="range" id="brutalitySlider" min="0" max="10" step="1" value="5" />
+		<input type="range" id="brutalitySlider" data-sound="Chain Links Slide" min="0" max="10" step="1" value="5" />
 		<!--
 		<div class="brutality-labels">
 			<span>Kid Safe</span>
@@ -393,12 +393,27 @@
 </div>
 
 <div class="section">
+	<div class="section-title">Starting Level</div>
+	<div class="option-row" style="align-items:flex-start;flex-direction:column;gap:0.5rem;">
+		<div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+			<div class="option-label">
+				<span>Character Level</span>
+				<small>New characters begin at this level with scaled HP, stats, abilities, and spell slots</small>
+			</div>
+			<span id="startingLevelLabel">1</span>
+		</div>
+		<input type="range" id="startingLevelSlider" data-sound="Chain Links Slide" min="1" max="25" step="1" value="1" />
+		<small id="levelFlavorText" style="color:#8a7ab0;font-style:italic;margin-top:-0.25rem;">Ordinary commoner — untested and unproven</small>
+	</div>
+</div>
+
+<div class="section">
 	<div class="section-title">Loot Generosity</div>
 	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">How freely treasure, gold, and magic items are awarded.</p>
 	<div class="chip-group" id="lootChips">
-		<button class="chip" data-value="sparse">💰 Sparse</button>
-		<button class="chip" data-value="fair">💎 Fair</button>
-		<button class="chip" data-value="generous">🎁 Generous</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="sparse" data-sound="Stone Tile Click">💰 Sparse</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="fair" data-sound="Stone Tile Click">💎 Fair</button>
+		<button class="chip" data-sound-hover="Magical Shimmer" data-value="generous" data-sound="Stone Tile Click">🎁 Generous</button>
 	</div>
 </div>
 
@@ -413,8 +428,8 @@
 			<small>Voice used for all DM narration in this lobby</small>
 		</div>
 		<div class="option-control voice-row">
-			<select id="narratorVoiceSelect"><option value="">Loading…</option></select>
-			<button class="preview-btn" id="previewNarratorBtn" title="Preview selected voice">▶</button>
+			<select id="narratorVoiceSelect" data-sound="Page Turn"><option value="">Loading…</option></select>
+			<button class="preview-btn" id="previewNarratorBtn" data-sound="Music Box Open" data-sound-hover="Magical Shimmer" title="Preview selected voice">▶</button>
 		</div>
 	</div>
 </div>
@@ -430,7 +445,7 @@
 			<small>Players must act within the time limit</small>
 		</div>
 		<div class="option-control">
-			<input type="checkbox" id="timerEnabled" />
+			<input type="checkbox" id="timerEnabled" data-sound="Page Turn" />
 		</div>
 	</div>
 
@@ -473,15 +488,15 @@
 		</div>
 		<div class="option-control" style="gap:1rem;">
 			<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
-				<input type="radio" name="llmProvider" value="openai" id="providerOpenAI" style="accent-color:#7a50c8;cursor:pointer;" />
+				<input type="radio" name="llmProvider" value="openai" id="providerOpenAI" data-sound="Page Turn" style="accent-color:#7a50c8;cursor:pointer;" />
 				OpenAI
 			</label>
 			<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
-				<input type="radio" name="llmProvider" value="claude" id="providerClaude" style="accent-color:#7a50c8;cursor:pointer;" />
+				<input type="radio" name="llmProvider" value="claude" id="providerClaude" data-sound="Page Turn" style="accent-color:#7a50c8;cursor:pointer;" />
 				Claude
 			</label>
 			<label id="providerTestLabel" style="display:none;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
-				<input type="radio" name="llmProvider" value="test" id="providerTest" style="accent-color:#7a50c8;cursor:pointer;" />
+				<input type="radio" name="llmProvider" value="test" id="providerTest" data-sound="Page Turn" style="accent-color:#7a50c8;cursor:pointer;" />
 				Test Mode
 			</label>
 		</div>
@@ -495,12 +510,12 @@
 			<small>Specific model version to use</small>
 		</div>
 		<div class="option-control" style="flex:1;min-width:0;">
-			<select id="llmModelSelect" style="flex:1;min-width:0;"></select>
+			<select id="llmModelSelect" data-sound="Page Turn" style="flex:1;min-width:0;"></select>
 		</div>
 	</div>
 </div>
 
-<button class="save-close-btn" id="saveCloseBtn">Save &amp; Close</button>
+<button class="save-close-btn" id="saveCloseBtn" data-sound="Gem Socket" data-sound-hover="Magical Shimmer">Save &amp; Close</button>
 
 <div id="statusBar">Connecting…</div>
 
@@ -515,6 +530,8 @@ const elNarratorVoice  = document.getElementById("narratorVoiceSelect");
 const elLLMModel       = document.getElementById("llmModelSelect");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
+const elStartingLevel      = document.getElementById("startingLevelSlider");
+const elStartingLevelLabel = document.getElementById("startingLevelLabel");
 const statusBar        = document.getElementById("statusBar");
 
 const BRUTALITY_LABELS = ["Kid Safe", "Kid Safe", "Lighthearted", "Lighthearted", "Standard", "Standard", "Gritty", "Gritty", "Brutal", "Brutal", "Ultimate Brutality"];
@@ -646,6 +663,36 @@ const SETTINGS_DATA = [
 		emoji: "🚀",
 		description: "A vanished civilisation left behind alien technology. The line between magic and science has blurred — starships and swords coexist.",
 	},
+	{
+		id: "ancient_egypt",
+		label: "Ancient Egypt",
+		emoji: "🏺",
+		description: "The banks of a great river hide tomb-cities, jealous gods, and pharaoh-sorcerers. Sand-swept temples, curses, and divine politics shape every quest.",
+	},
+	{
+		id: "ancient_rome",
+		label: "Ancient Rome",
+		emoji: "🏛️",
+		description: "Legions march across a sprawling empire while senators scheme in marble halls. Gladiatorial arenas, imperial intrigue, and vengeful gods await.",
+	},
+	{
+		id: "warring_states_japan",
+		label: "Warring States Japan",
+		emoji: "⛩️",
+		description: "Rival clans clash across feudal provinces. Samurai honour, shinobi subterfuge, wandering ronin, and restless yokai define a land torn by war.",
+	},
+	{
+		id: "prehistory",
+		label: "Prehistory",
+		emoji: "🦴",
+		description: "Before civilisation, primal tribes navigate a world of megafauna, spirit magic, and uncharted wilderness. Survival is the only law.",
+	},
+	{
+		id: "renaissance",
+		label: "Renaissance Europe",
+		emoji: "🎭",
+		description: "Art, science, and intrigue flourish in city-states ruled by merchant princes. Duelling guilds, secret societies, alchemists, and the Inquisition lurk behind gilded facades.",
+	},
 ];
 
 function emitSettings() {
@@ -664,6 +711,7 @@ function emitSettings() {
 		campaignTone:    selectedTone,
 		campaignTheme:   selectedTheme,
 		brutalityLevel:  Number(elBrutality.value),
+		startingLevel:   Number(elStartingLevel.value),
 		difficulty:      selectedChip("difficultyChips"),
 		lootGenerosity:  selectedChip("lootChips"),
 		campaignSetting: selectedSetting?.id || "standard",
@@ -711,6 +759,11 @@ function applyState(state) {
 	elBrutality.value = bLevel;
 	elBrutalityLabel.textContent = BRUTALITY_LABELS[bLevel];
 
+	// Starting level
+	const sLevel = state.startingLevel ?? 1;
+	elStartingLevel.value = sLevel;
+	updateLevelFlavor();
+
 	// LLM provider + model
 	const provider = state.llmProvider || "claude";
 	const providerRadio = document.querySelector(`input[name='llmProvider'][value='${provider}']`);
@@ -731,6 +784,8 @@ function buildFlavorGrid(gridId, items, getter, setter) {
 		const card = document.createElement("div");
 		card.className = "flavor-card" + (getter()?.id === item.id ? " selected" : "");
 		card.dataset.id = item.id;
+		card.dataset.sound = "Fate Anvil Strike";
+		card.dataset.soundHover = "Magical Shimmer";
 		card.innerHTML = `
 			<span class="card-emoji">${item.emoji}</span>
 			<span class="card-label">${item.label}</span>
@@ -815,6 +870,41 @@ elBrutality.addEventListener("input", () => {
 	elBrutalityLabel.textContent = BRUTALITY_LABELS[Number(elBrutality.value)];
 });
 elBrutality.addEventListener("change", emitSettings);
+const levelFlavor = {
+	1:  "Ordinary commoner — untested and unproven",
+	2:  "Apprentice adventurer — a cut above the rabble",
+	3:  "Fledgling hero — starting to make a name",
+	4:  "Seasoned wanderer — competent and battle-tested",
+	5:  "Veteran adventurer — respected in the realm",
+	6:  "Rising champion — whispered about in taverns",
+	7:  "Renowned warrior — feared by lesser foes",
+	8:  "Regional legend — songs are sung of your deeds",
+	9:  "Elite hero — kingdoms seek your counsel",
+	10: "Master of the craft — few can match your prowess",
+	11: "Realm-shaker — your presence shifts the balance of power",
+	12: "Archmage-tier — casually bending reality",
+	13: "Legendary figure — your name echoes across continents",
+	14: "Mythic champion — standing toe-to-toe with ancient dragons",
+	15: "Planar traveller — walking between worlds",
+	16: "World-breaker — armies tremble at your approach",
+	17: "Demi-legend — toeing the line between mortal and myth",
+	18: "Near-divine — reality warps in your wake",
+	19: "Titan-slayer — only the gods remain above you",
+	20: "Apex mortal — the pinnacle of what flesh can achieve",
+	21: "Ascendant — you have surpassed mortal limits",
+	22: "Demigod — divine power courses through your veins",
+	23: "Avatar of power — reshaping the world with a thought",
+	24: "Elder god's equal — creation itself bows before you",
+	25: "Living deity — omnipotent, absolute, and eternal",
+};
+const elLevelFlavor = document.getElementById("levelFlavorText");
+function updateLevelFlavor() {
+	const lv = Number(elStartingLevel.value) || 1;
+	elStartingLevelLabel.textContent = lv;
+	if (elLevelFlavor) elLevelFlavor.textContent = levelFlavor[lv] || "";
+}
+elStartingLevel.addEventListener("input", updateLevelFlavor);
+elStartingLevel.addEventListener("change", emitSettings);
 document.querySelectorAll("input[name='llmProvider']").forEach(radio => {
 	radio.addEventListener("change", () => {
 		populateLLMModels(radio.value, null);
@@ -882,6 +972,41 @@ function randomizeOptions() {
 }
 
 document.getElementById("randomizeBtn").addEventListener("click", randomizeOptions);
+
+// ── UI Sound Effects (delegated to parent window) ──────────────────────────
+function playSound(name) {
+	window.opener?.UISounds?.play(name);
+}
+
+document.addEventListener("click", (e) => {
+	const soundEl = e.target.closest("[data-sound]");
+	if (soundEl) playSound(soundEl.dataset.sound);
+}, true);
+
+document.addEventListener("change", (e) => {
+	const soundEl = e.target.closest("[data-sound]");
+	if (soundEl) playSound(soundEl.dataset.sound);
+});
+
+document.addEventListener("input", (e) => {
+	if (e.target.type === "range") {
+		const soundEl = e.target.closest("[data-sound]");
+		if (soundEl) playSound(soundEl.dataset.sound);
+	}
+});
+
+let _lastHovered = null;
+document.addEventListener("mouseover", (e) => {
+	const soundEl = e.target.closest("[data-sound-hover]");
+	if (soundEl && soundEl !== _lastHovered) {
+		_lastHovered = soundEl;
+		playSound(soundEl.dataset.soundHover);
+	}
+});
+document.addEventListener("mouseout", (e) => {
+	const soundEl = e.target.closest("[data-sound-hover]");
+	if (soundEl === _lastHovered) _lastHovered = null;
+});
 
 // Boot: load features, flavors, and voices, then seed from main window state
 buildFlavorGrid("settingGrid", SETTINGS_DATA, () => selectedSetting, v => { selectedSetting = v; });
