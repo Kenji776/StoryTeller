@@ -9,6 +9,17 @@
 	<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative&family=Cormorant+Garamond:wght@400;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
   </head>
   <body>
+    <!-- Welcome splash — doubles as the user-gesture unlock for autoplay -->
+    <div id="welcomeModal" class="modal">
+      <div class="modal-content modal-narrow" style="text-align:center;min-height:auto;">
+        <h2 style="margin-bottom:0.6em;">⚔️ StoryTeller</h2>
+        <p style="font-size:0.95em;color:#ccc;margin-bottom:0.4em;">
+          This project is in active development.<br>Expect bugs, odd behavior, and the occasional dragon.
+        </p>
+        <button id="welcomeOkBtn" class="primary" style="margin-top:1em;padding:0.6em 2.5em;font-size:1em;">Enter the Tavern</button>
+      </div>
+    </div>
+
     <div class="container">
       <header class="row space-between">
         <h1>StoryTeller</h1>
@@ -18,22 +29,22 @@
       <!-- LANDING PAGE -->
       <section id="landing" class="panel">
         
-        <button id="helpBtn" class="secondary" style="flex-shrink:0; float:right">📖 How to Play</button>
+        <button id="helpBtn" class="secondary" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer" style="flex-shrink:0; float:right">📖 How to Play</button>
        
 		<p>Loosely based on classic D&amp;D, here you can play an AI powered narrative reminiscent of D&amp;D style gameplay. Expect a lot of weirdness and things that don't make sense but it should still be fun enough to be worth while for a bit.</p>
         <div class="lobby-grid">
           <h3 style="grid-area:head-l;">Create Lobby</h3>
           <h3 style="grid-area:head-r;">Join Lobby</h3>
 
-          <button id="createLobby" class="primary" style="grid-area:row1-l;">Create Custom Game</button>
+          <button id="createLobby" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer" style="grid-area:row1-l;">Create Custom Game</button>
           <input id="joinCode" placeholder="Enter code (e.g., B9K3FD)" style="grid-area:row1-r;" />
 
-          <button id="quickStartBtn" class="primary" style="grid-area:row2-l;display:none;background:#4a3;border-color:#4a3;">⚡ Quick Start (Test Mode)</button>
-          <button id="quickStartPublicBtn" class="primary" style="grid-area:row2-l;display:none;background:linear-gradient(90deg,#5a3a8a,#7a50c8);border-color:#9a70e8;">🎲 Quick Start</button>
-          <button id="joinLobby" style="grid-area:row2-r;">Join</button>
+          <button id="quickStartBtn" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer" style="grid-area:row2-l;display:none;background:#4a3;border-color:#4a3;">⚡ Quick Start (Test Mode)</button>
+          <button id="quickStartPublicBtn" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer" style="grid-area:row2-l;display:none;background:linear-gradient(90deg,#5a3a8a,#7a50c8);border-color:#9a70e8;">🎲 Quick Start</button>
+          <button id="joinLobby" data-sound="Tavern Crowd Cheer" data-sound-hover="Magical Shimmer" style="grid-area:row2-r;">Join</button>
 
           <label style="grid-area:row3-l;display:flex;align-items:center;gap:0.5em;cursor:pointer;">
-            <input type="checkbox" id="lobbyPrivate" />
+            <input type="checkbox" id="lobbyPrivate" data-sound="Page Turn" />
             <span>🔒 Password protect</span>
           </label>
 
@@ -46,7 +57,7 @@
             <h3 style="margin:0;">Adventure Board</h3>
             <div style="display:flex;align-items:center;gap:0.5em;">
               <input id="adventureSearch" type="text" placeholder="Search by name..." style="padding:0.3em 0.6em;font-size:0.85em;width:160px;" />
-              <button id="refreshLobbies" class="secondary" style="padding:0.3em 0.8em;font-size:0.85em;">↻ Refresh</button>
+              <button id="refreshLobbies" class="secondary" data-sound="Cards Shuffle" data-sound-hover="Magical Shimmer" style="padding:0.3em 0.8em;font-size:0.85em;">↻ Refresh</button>
             </div>
           </div>
           <div id="lobbyTabs" class="lobby-tabs"></div>
@@ -63,6 +74,7 @@
             <a href="https://cash.app/$Kenji776" target="_blank" rel="noopener" style="padding:0.35em 0.9em;border-radius:6px;background:#00c244;color:#fff;text-decoration:none;font-size:0.88em;">Cash App <span style="opacity:0.75;">$Kenji776</span></a>
             <a href="https://venmo.com/Kenji776" target="_blank" rel="noopener" style="padding:0.35em 0.9em;border-radius:6px;background:#3d95ce;color:#fff;text-decoration:none;font-size:0.88em;">Venmo <span style="opacity:0.75;">@Kenji776</span></a>
           </div>
+          <p id="appVersion" style="margin:0.75em 0 0;font-size:0.8em;color:#666;"></p>
         </footer>
       </section>
 
@@ -71,13 +83,13 @@
         <div class="row space-between">
           <h2>Lobby <span id="lobbyCode"></span></h2>
           <div class="row">
-			<button id="openChat" class="secondary chat-toggle">💬 Chat</button>
-			<button id="importCharBtn" class="secondary" title="Import a saved character file">📥 Import</button>
-			<button id="exportCharBtn" class="secondary" title="Export character to file">📤 Export</button>
-            <button id="randomizeChar" class="secondary">🎲 Randomize</button>
-            <button id="openOptionsBtn" class="secondary hidden">⚙️ Game Options</button>
-            <button id="phaseReady" class="secondary">Ready Check</button>
-            <button id="startGame" class="primary">Start Game</button>
+			<button id="openChat" class="secondary chat-toggle" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">💬 Chat</button>
+			<button id="importCharBtn" class="secondary" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer" title="Import a saved character file">📥 Import</button>
+			<button id="exportCharBtn" class="secondary" data-sound="Quill Scratch" data-sound-hover="Magical Shimmer" title="Export character to file">📤 Export</button>
+            <button id="randomizeChar" class="secondary" data-sound="Dice Tumble" data-sound-hover="Magical Shimmer">🎲 Randomize</button>
+            <button id="openOptionsBtn" class="secondary hidden" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">⚙️ Game Options</button>
+            <button id="phaseReady" class="secondary" data-sound="Gem Socket" data-sound-hover="Magical Shimmer">Ready Check</button>
+            <button id="startGame" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer">Start Game</button>
           </div>
           <input type="file" id="importCharInput" accept=".stchar" style="display:none;" />
         </div>
@@ -103,7 +115,7 @@
               <div class="grid two">
                 <div>
                   <label>Race</label>
-                  <select id="race">
+                  <select id="race" data-sound="Page Turn">
                     <option value="Human">Human</option>
                     <option value="Elf">Elf</option>
                     <option value="Dwarf">Dwarf</option>
@@ -116,7 +128,7 @@
                 </div>
                 <div>
                   <label>Class</label>
-                  <select id="cls">
+                  <select id="cls" data-sound="Page Turn">
                     <option value="Fighter">Fighter</option>
                     <option value="Rogue">Rogue</option>
                     <option value="Wizard">Wizard</option>
@@ -135,13 +147,13 @@
 			  <div class="grid two">
 				<div>
 					<label>Starting Weapon</label>
-					<select id="weaponSelect">
+					<select id="weaponSelect" data-sound="Sword Unsheathe">
 						<option value="">— Select a weapon —</option>
 					</select>
 				</div>
 				<div>
 					<label>Starting Armor</label>
-					<select id="armorSelect">
+					<select id="armorSelect" data-sound="Sword Unsheathe">
 						<option value="">— Select armor —</option>
 					</select>
 				</div>
@@ -149,7 +161,7 @@
 				<div class="grid two">
 				<div>
 					<label>Alignment</label>
-					<select id="alignment">
+					<select id="alignment" data-sound="Page Turn">
 					<option value="">— Select —</option>
 					<option>Lawful Good</option>
 					<option>Neutral Good</option>
@@ -164,7 +176,7 @@
 				</div>
 				<div>
 					<label>Background</label>
-					<select id="background">
+					<select id="background" data-sound="Page Turn">
 					<option value="">— Select —</option>
 					<option>Acolyte</option>
 					<option>Charlatan</option>
@@ -211,15 +223,15 @@
 				<div>								
 					<label>Voice</label>
 					<div id="voiceSelectContainer">
-						<select id="voiceSelect" style="width:250px;display:inline-block">
+						<select id="voiceSelect" data-sound="Page Turn" style="width:250px;display:inline-block">
 							<option value="">Loading voices...</option>
 						</select>
-						<button id="voicePlay" class="secondary">▶️ Preview</button>
+						<button id="voicePlay" class="secondary" data-sound="Music Box Open" data-sound-hover="Magical Shimmer">▶️ Preview</button>
 					</div>		
 				</div>
 
-              <h4>Attributes (Point Buy – 27 Points)</h4>
-              <div id="pointsRemaining">Points remaining: 27</div>
+              <h4>Attributes (Point Buy – <span id="totalPointsBudget">10</span> Points)</h4>
+              <div id="pointsRemaining">Points remaining: 10</div>
 
               <div class="grid three">
                 <div>
@@ -228,17 +240,17 @@
                 </div>
                 <div>
                   <label>HP</label>
-                  <input id="hp" type="number" placeholder="HP" />
+                  <input id="hp" type="number" value="10" readonly />
                 </div>
               </div>
 
               <div class="grid three">
-                <div><label>STR</label><input type="number" id="str" min="8" max="15" value="8" /></div>
-                <div><label>DEX</label><input type="number" id="dex" min="8" max="15" value="8" /></div>
-                <div><label>CON</label><input type="number" id="con" min="8" max="15" value="8" /></div>
-                <div><label>INT</label><input type="number" id="int" min="8" max="15" value="8" /></div>
-                <div><label>WIS</label><input type="number" id="wis" min="8" max="15" value="8" /></div>
-                <div><label>CHA</label><input type="number" id="cha" min="8" max="15" value="8" /></div>
+                <div><label>STR</label><input type="number" id="str" min="8" max="25" value="8" /></div>
+                <div><label>DEX</label><input type="number" id="dex" min="8" max="25" value="8" /></div>
+                <div><label>CON</label><input type="number" id="con" min="8" max="25" value="8" /></div>
+                <div><label>INT</label><input type="number" id="int" min="8" max="25" value="8" /></div>
+                <div><label>WIS</label><input type="number" id="wis" min="8" max="25" value="8" /></div>
+                <div><label>CHA</label><input type="number" id="cha" min="8" max="25" value="8" /></div>
               </div>
 
               <div id="charBuilderAbilitiesContainer"></div>
@@ -246,11 +258,11 @@
               <textarea id="desc" placeholder="Short backstory"></textarea>
 
               <div class="row">
-                <button id="saveSheet">Save Sheet</button>
-                <button id="toggleReady" class="secondary" disabled="disabled">I'm Ready</button>
+                <button id="saveSheet" data-sound="Gem Socket" data-sound-hover="Magical Shimmer">Save Sheet</button>
+                <button id="toggleReady" class="secondary" data-sound="Gem Socket" data-sound-hover="Magical Shimmer" disabled="disabled">I'm Ready</button>
               </div>
               <div class="row" style="margin-top:8px">
-                <button id="generateCharImage" class="secondary">🎨 Generate Character Image</button>
+                <button id="generateCharImage" class="secondary" data-sound="Magical Shimmer" data-sound-hover="Magical Shimmer">🎨 Generate Character Image</button>
               </div>
             </div>
           </div>
@@ -265,7 +277,13 @@
         </div>
       </section>
 
- 
+	<!-- Menu music widget — visible on landing & lobby screens -->
+	<div id="menuMusicWidget" class="audio-widget menu-music-widget hidden">
+		<button id="menuMusicMuteBtn" class="audio-mute-btn" title="Toggle music mute">🎵</button>
+		<span id="menuMusicLabel" class="audio-label">Menu Music</span>
+		<input id="menuMusicVolumeSlider" class="audio-volume-slider" type="range" min="0" max="100" value="35" title="Music volume" />
+	</div>
+
 	<!-- GAME PAGE -->
 	<section id="game" class="panel hidden" style="position:relative;">
 
@@ -291,12 +309,12 @@
 		</div>
 		<div id="turnBanner" class="badge">Turn: —</div>
 <!-- MAP DISABLED: 		<button id="openMapBtn" class="secondary">🗺️ Open Map</button> -->
-		<button id="openInitiativeBtn" class="secondary">⚔️ Initiative</button>
-		<button id="openChat" class="secondary chat-toggle" onclick="openChat()">💬 Chat</button>
-		<button id="readStoryGameBtn" class="secondary">📖 Read Story</button>
-		<button id="openPlayerOptionsBtn" class="secondary">⚙️ Options</button>
-		<button id="dmOptionsBtn" class="secondary hidden">🛡️ DM Controls</button>
-		<button id="endCampaignBtn" class="secondary hidden">🏆 End Campaign</button>
+		<button id="openInitiativeBtn" class="secondary" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">⚔️ Initiative</button>
+		<button id="openChat" class="secondary chat-toggle" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer" onclick="openChat()">💬 Chat</button>
+		<button id="readStoryGameBtn" class="secondary" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">📖 Read Story</button>
+		<button id="openPlayerOptionsBtn" class="secondary" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">⚙️ Options</button>
+		<button id="dmOptionsBtn" class="secondary hidden" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">🛡️ DM Controls</button>
+		<button id="endCampaignBtn" class="secondary hidden" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer">🏆 End Campaign</button>
 	</div>
 
 	<!-- Turn timer bar (hidden when no timer active) -->
@@ -320,17 +338,17 @@
 		<div class="action-input-area">
 			<textarea id="actionInput" placeholder="Describe your action..." rows="4"></textarea>
 			<div class="row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
-				<button id="micBtn" class="secondary" title="Speak your action 🎤">🎤</button>
-				<button id="sendAction" class="primary">⚔️ Take Action</button>
+				<button id="micBtn" class="secondary" data-sound="Crystal Activate" data-sound-hover="Magical Shimmer" title="Speak your action 🎤">🎤</button>
+				<button id="sendAction" class="primary" data-sound="Quill Scratch" data-sound-hover="Magical Shimmer">⚔️ Take Action</button>
 				<div class="row wrap" style="gap:4px;">
-					<button class="chip die" data-sides="4">d4</button>
-					<button class="chip die" data-sides="6">d6</button>
-					<button class="chip die" data-sides="8">d8</button>
-					<button class="chip die" data-sides="10">d10</button>
-					<button class="chip die" data-sides="12">d12</button>
-					<button class="chip die" data-sides="20">d20</button>
+					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="4" data-sound="Dice Tumble">d4</button>
+					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="6" data-sound="Dice Tumble">d6</button>
+					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="8" data-sound="Dice Tumble">d8</button>
+					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="10" data-sound="Dice Tumble">d10</button>
+					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="12" data-sound="Dice Tumble">d12</button>
+					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="20" data-sound="Dice Tumble">d20</button>
 				</div>
-				<select id="quickActionSelect" title="Pick a quick action to fill the text box">
+				<select id="quickActionSelect" data-sound="Page Turn" title="Pick a quick action to fill the text box">
 					<option value="" disabled selected>💡 Quick Actions</option>
 					<optgroup label="— Exploration —">
 						<option value="I carefully look around, examining my surroundings for anything useful or dangerous.">Look Around</option>
@@ -377,6 +395,7 @@
 		<!-- RIGHT COLUMN: CHARACTER PANEL -->
 		<div class="panel soft">
 		<div id="partyContainer"></div>
+		<div id="enemyRoster"></div>
 		<h3>Your Character</h3>
 
 		<!-- BASIC INFO -->
@@ -452,7 +471,7 @@
 	<!-- === Rest Vote Modal === -->
 	<div id="restVoteModal" class="modal" style="display:none;">
 		<div class="modal-content modal-narrow" style="text-align:center;">
-			<button class="modal-close" data-modal-close>✕</button>
+			<button class="modal-close" data-modal-close data-sound="Parchment Roll Up">✕</button>
 			<h2 id="restVoteTitle">⛺ Rest Vote</h2>
 			<p id="restVoteDesc" style="color:#aaa;font-size:0.9em;"></p>
 			<div class="rest-vote-counts">
@@ -463,8 +482,8 @@
 			<div id="restVoteNames" style="font-size:0.8em;color:#888;margin:0.5em 0;min-height:1.2em;"></div>
 			<div id="restVoteTimerDisplay" style="font-size:0.85em;color:#f0a500;margin-bottom:0.5em;"></div>
 			<div id="restVoteBtns" class="row" style="justify-content:center;gap:1em;margin-top:1em;">
-				<button id="voteYesBtn" class="primary">✅ Yes, rest</button>
-				<button id="voteNoBtn" class="danger">❌ No, keep going</button>
+				<button id="voteYesBtn" class="primary" data-sound="Gem Socket" data-sound-hover="Magical Shimmer">✅ Yes, rest</button>
+				<button id="voteNoBtn" class="danger" data-sound="Shield Block Thud" data-sound-hover="Magical Shimmer">❌ No, keep going</button>
 			</div>
 			<p id="restVoteResult" style="font-size:1.1em;font-weight:bold;display:none;margin-top:0.75em;"></p>
 		</div>
@@ -473,13 +492,13 @@
 	<!-- === Password Modal === -->
 	<div id="passwordModal" class="modal" style="display:none;">
 		<div class="modal-content modal-narrow">
-			<button class="modal-close" data-modal-close>✕</button>
+			<button class="modal-close" data-modal-close data-sound="Parchment Roll Up">✕</button>
 			<h2>🔒 Password Required</h2>
 			<p style="color:#aaa;font-size:0.9em;">This lobby is password protected. Enter the password to join.</p>
 			<input type="password" id="lobbyPasswordInput" placeholder="Enter password…" style="width:100%;margin-bottom:1em;" />
 			<div class="row" style="gap:0.75em;justify-content:center;">
-				<button id="cancelPasswordBtn" class="secondary">Cancel</button>
-				<button id="submitPasswordBtn" class="primary">Join</button>
+				<button id="cancelPasswordBtn" class="secondary" data-sound="Parchment Roll Up" data-sound-hover="Magical Shimmer">Cancel</button>
+				<button id="submitPasswordBtn" class="primary" data-sound="Tavern Crowd Cheer" data-sound-hover="Magical Shimmer">Join</button>
 			</div>
 		</div>
 	</div>
@@ -487,7 +506,7 @@
 	<!-- === How to Play Modal === -->
 	<div id="helpModal" class="modal" style="display:none;">
 		<div class="modal-content modal-full help-modal-content">
-			<button class="modal-close" data-modal-close>✕</button>
+			<button class="modal-close" data-modal-close data-sound="Parchment Roll Up">✕</button>
 			<h2 style="margin:0 0 0.75em;">📖 How to Play StoryTeller</h2>
 
 			<nav class="help-toc">
@@ -619,7 +638,7 @@
 	<!-- === DM Options Auth Modal === -->
 	<div id="dmAuthModal" class="modal" style="display:none;">
 		<div class="modal-content modal-narrow" style="text-align:center;">
-			<button class="modal-close" data-modal-close>✕</button>
+			<button class="modal-close" data-modal-close data-sound="Parchment Roll Up">✕</button>
 			<h2>🛡️ DM Authentication</h2>
 			<p style="color:#aaa;font-size:0.9em;margin-bottom:0.5em;">
 				To access the DM tools, upload your exported character file (<strong>.stchar</strong>) to verify you are the game host.
@@ -628,36 +647,38 @@
 				You can export your character from the <strong>Options</strong> menu in-game. Only the host's character file will be accepted.
 			</p>
 			<div id="dmAuthStatus" style="min-height:1.5em;margin-bottom:1em;font-size:0.9em;"></div>
-			<button id="dmAuthUploadBtn" class="primary" style="margin:0 auto;">📂 Upload .stchar File</button>
+			<button id="dmAuthUploadBtn" class="primary" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer" style="margin:0 auto;">📂 Upload .stchar File</button>
 			<input type="file" id="hostCharFileInput" accept=".stchar" style="display:none" />
 		</div>
 	</div>
 
-	<!-- === Player Death Modal === -->
+	<!-- === Player Death / Game Over Modal === -->
 	<div id="deathModal">
 		<div class="death-overlay"></div>
 		<div class="death-content">
-			<h1>☠️ You Died</h1>
-			<p>Your journey ends here...</p>
+			<h1 id="deathModalTitle">☠️ You Died</h1>
+			<p id="deathModalSubtitle">Your journey ends here...</p>
+			<div id="deathModalNarration" class="death-narration"></div>
+			<button id="deathModalDismiss" class="btn death-dismiss-btn" data-sound="Parchment Roll Up" data-sound-hover="Magical Shimmer">Return to Lobby</button>
 		</div>
 	</div>
 
 	<!-- === NARRATION INDICATOR === -->
 	<div id="narratorIndicator" class="hidden">
 		<span id="narratorText">Narrating...</span>
-		<button id="stopNarrationBtn" title="Stop narration">⏹ Stop</button>
+		<button id="stopNarrationBtn" data-sound="Book Slam Shut" title="Stop narration">⏹ Stop</button>
 	</div>
 	
 	<!-- === STORY READER MODAL === -->
 	<div id="storyModal" class="modal" style="display:none;">
 		<div class="modal-content modal-wide">
-			<button class="modal-close" data-modal-close>✕</button>
+			<button class="modal-close" data-modal-close data-sound="Parchment Roll Up">✕</button>
 			<h2 id="storyModalTitle" style="margin:0 0 0.25em;">—</h2>
 			<div id="storyModalMeta" style="margin-bottom:0.75em;"></div>
 			<div class="story-tabs" style="display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:0.75em;">
-				<button class="story-tab story-tab--active" data-story-tab="log">📖 Full Story</button>
-				<button class="story-tab" data-story-tab="summary">📋 Summary</button>
-				<button class="story-tab" data-story-tab="pinned">📌 Pinned</button>
+				<button class="story-tab story-tab--active" data-story-tab="log" data-sound="Page Turn">📖 Full Story</button>
+				<button class="story-tab" data-sound-hover="Magical Shimmer" data-story-tab="summary" data-sound="Page Turn">📋 Summary</button>
+				<button class="story-tab" data-sound-hover="Magical Shimmer" data-story-tab="pinned" data-sound="Page Turn">📌 Pinned</button>
 			</div>
 			<div id="storyModalLog" class="story-log-reader"></div>
 			<div id="storyModalSummary" class="story-log-reader" style="display:none;"></div>
@@ -668,22 +689,22 @@
 	<!-- === PLAYER OPTIONS MODAL === -->
 	<div id="playerOptionsModal" class="modal" style="display:none;">
 		<div class="modal-content">
-			<button class="modal-close" data-modal-close>✕</button>
+			<button class="modal-close" data-modal-close data-sound="Parchment Roll Up">✕</button>
 			<h2>Options</h2>
 			<div id="playerOptionsGameSettings"></div>
 			<hr />
 			<h4 style="margin-bottom:0.5em;">Story Font</h4>
 			<p style="font-size:0.82em;color:#999;margin:0 0 1em;">Choose the typeface used in the story log.</p>
 			<div class="font-picker">
-				<button class="font-option" data-font="Cinzel" style="font-family:'Cinzel',serif;">
+				<button class="font-option" data-sound-hover="Magical Shimmer" data-font="Cinzel" data-sound="Gem Socket" style="font-family:'Cinzel',serif;">
 					<span class="font-name">Cinzel</span>
 					<span class="font-sample">The Dragon stirs in the deep...</span>
 				</button>
-				<button class="font-option" data-font="Lora" style="font-family:'Lora',serif;">
+				<button class="font-option" data-sound-hover="Magical Shimmer" data-font="Lora" data-sound="Gem Socket" style="font-family:'Lora',serif;">
 					<span class="font-name">Lora</span>
 					<span class="font-sample">The Dragon stirs in the deep...</span>
 				</button>
-				<button class="font-option" data-font="Crimson Pro" style="font-family:'Crimson Pro',serif;">
+				<button class="font-option" data-sound-hover="Magical Shimmer" data-font="Crimson Pro" data-sound="Gem Socket" style="font-family:'Crimson Pro',serif;">
 					<span class="font-name">Crimson Pro</span>
 					<span class="font-sample">The Dragon stirs in the deep...</span>
 				</button>
@@ -696,12 +717,12 @@
 					<small style="color:#999;">Turn off if multiple players are in the same room</small>
 				</div>
 				<label style="display:flex;align-items:center;gap:0.5em;cursor:pointer;font-size:0.88em;">
-					<input type="checkbox" id="narrationEnabledToggle" style="width:1.1em;height:1.1em;accent-color:#7a50c8;cursor:pointer;" checked />
+					<input type="checkbox" id="narrationEnabledToggle" data-sound="Page Turn" style="width:1.1em;height:1.1em;accent-color:#7a50c8;cursor:pointer;" checked />
 				</label>
 			</div>
 			<hr style="margin-top:1.25em;" />
 			<h4 style="margin-bottom:0.5em;">Character</h4>
-			<button id="exportCharGameBtn" style="margin:0 0 0.5em;display:block;width:100%;background:linear-gradient(90deg,#3a5a3a,#4a7a4a);border-color:#5a9a5a;color:#cfffcf;">📤 Export Character Sheet</button>
+			<button id="exportCharGameBtn" data-sound="Quill Scratch" data-sound-hover="Magical Shimmer" style="margin:0 0 0.5em;display:block;width:100%;background:linear-gradient(90deg,#3a5a3a,#4a7a4a);border-color:#5a9a5a;color:#cfffcf;">📤 Export Character Sheet</button>
 		</div>
 	</div>
 
@@ -713,6 +734,7 @@
 	<script src="/tts.js" defer></script>
 	<script src="/music.js" defer></script>
 	<script src="/sfx.js" defer></script>
+	<script src="/uiSounds.js" defer></script>
 	<script src="/eventHandlers.js" defer></script>
 	<script src="/uiComponents.js" defer></script>
 	<script src="/app.js" defer></script>

@@ -67,8 +67,10 @@ function parseCookie(cookieStr) {
 
 // === ASSET DOWNLOAD CONFIG ===
 import readline from "readline";
-const MUSIC_ZIP_URL = "https://github.com/Kenji776/StoryTeller/releases/download/resource/music.zip";
-const SFX_ZIP_URL   = "https://github.com/Kenji776/StoryTeller/releases/download/sfx/sfx.zip";
+const MUSIC_ZIP_URL      = "https://github.com/Kenji776/StoryTeller/releases/download/resource/music.zip";
+const SFX_ZIP_URL        = "https://github.com/Kenji776/StoryTeller/releases/download/sfx/sfx.zip";
+const MENU_MUSIC_ZIP_URL = "https://github.com/Kenji776/StoryTeller/releases/download/menu-music/menu-music.zip";
+const UI_SFX_ZIP_URL     = "https://github.com/Kenji776/StoryTeller/releases/download/ui-sfx/ui-sfx.zip";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -200,6 +202,18 @@ app.use("/admin", express.static(path.join(__dirname, "..", "client", "admin")))
 // Serve main client (admin files are no longer here)
 app.use(express.static(path.join(__dirname, "..", "client")));
 
+// List available menu music files
+const MENU_MUSIC_DIR = path.join(__dirname, "..", "client", "music", "menu");
+app.get("/api/menu-music", (req, res) => {
+	try {
+		if (!fs.existsSync(MENU_MUSIC_DIR)) return res.json([]);
+		const files = fs.readdirSync(MENU_MUSIC_DIR).filter(f => f.endsWith(".mp3"));
+		res.json(files);
+	} catch {
+		res.json([]);
+	}
+});
+
 const IMAGES_DIR = path.join(__dirname, "data", "images");
 if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
 app.use("/character-images", express.static(IMAGES_DIR));
@@ -257,24 +271,27 @@ const room = (lobbyId) => lobbyId;
 const MUSIC_DIR = path.join(__dirname, "..", "client", "music");
 
 async function ensureMusic() {
-	const mp3s = fs.existsSync(MUSIC_DIR)
-		? fs.readdirSync(MUSIC_DIR).filter(f => f.endsWith(".mp3"))
-		: [];
-	if (mp3s.length > 0) return; // music already present
+	const GAME_MUSIC_DIR = path.join(MUSIC_DIR, "game");
+	const hasMp3s = fs.existsSync(GAME_MUSIC_DIR) && fs.readdirSync(GAME_MUSIC_DIR).some(f => f.endsWith(".mp3"));
+	if (hasMp3s) return; // game music already present
 
-	if (!fs.existsSync(MUSIC_DIR)) fs.mkdirSync(MUSIC_DIR, { recursive: true });
+	if (!fs.existsSync(GAME_MUSIC_DIR)) fs.mkdirSync(GAME_MUSIC_DIR, { recursive: true });
 
-	// Ask the user whether they want to download the standard music library
-	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-	const answer = await new Promise(resolve => {
-		rl.question("🎵 No music files found. Download the standard music library? (y/n): ", resolve);
-	});
-	rl.close();
+	// In non-interactive environments (Docker, etc.), auto-download without prompting
+	if (process.stdin.isTTY) {
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		const answer = await new Promise(resolve => {
+			rl.question("🎵 No music files found. Download the standard music library? (y/n): ", resolve);
+		});
+		rl.close();
 
-	if (answer.trim().toLowerCase() !== "y") {
-		log("⏭️  Skipping music download. The game will run without background music.");
-		log(`   You can manually place MP3 files in: ${MUSIC_DIR}`);
-		return;
+		if (answer.trim().toLowerCase() !== "y") {
+			log("⏭️  Skipping music download. The game will run without background music.");
+			log(`   You can manually place MP3 files in: ${path.join(MUSIC_DIR, "game")}`);
+			return;
+		}
+	} else {
+		log("🎵 No music files found. Non-interactive environment detected — downloading automatically...");
 	}
 
 	const zipPath = path.join(MUSIC_DIR, "music.zip");
@@ -289,16 +306,16 @@ async function ensureMusic() {
 		await pipeline(res.body, fs.createWriteStream(zipPath));
 		log("🎵 Download complete. Extracting...");
 
-		execSync(`tar -xf "${zipPath}" -C "${MUSIC_DIR}"`);
+		execSync(`unzip -o "${zipPath}" -d "${GAME_MUSIC_DIR}"`);
 		fs.unlinkSync(zipPath);
 
-		const count = fs.readdirSync(MUSIC_DIR).filter(f => f.endsWith(".mp3")).length;
-		log(`🎵 Music ready — ${count} tracks extracted.`);
+		const count = fs.readdirSync(GAME_MUSIC_DIR, { recursive: true }).filter(f => String(f).endsWith(".mp3")).length;
+		log(`🎵 Music ready — ${count} tracks extracted to game music folder.`);
 	} catch (err) {
 		log(`❌ Music download failed: ${err.message}`);
 		log(`   You can manually download music.zip from:`);
 		log(`   ${MUSIC_ZIP_URL}`);
-		log(`   and extract the MP3 files into: ${MUSIC_DIR}`);
+		log(`   and extract the MP3 files into: ${GAME_MUSIC_DIR}`);
 		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 	}
 }
@@ -307,23 +324,27 @@ async function ensureMusic() {
 const SFX_DIR = path.join(__dirname, "..", "client", "sfx");
 
 async function ensureSfx() {
-	const sfxFiles = fs.existsSync(SFX_DIR)
-		? fs.readdirSync(SFX_DIR).filter(f => f.endsWith(".mp3"))
-		: [];
-	if (sfxFiles.length > 0) return; // sfx already present
+	const GAME_SFX_DIR = path.join(SFX_DIR, "game");
+	const hasSfx = fs.existsSync(GAME_SFX_DIR) && fs.readdirSync(GAME_SFX_DIR).some(f => f.endsWith(".mp3"));
+	if (hasSfx) return; // game sfx already present
 
-	if (!fs.existsSync(SFX_DIR)) fs.mkdirSync(SFX_DIR, { recursive: true });
+	if (!fs.existsSync(GAME_SFX_DIR)) fs.mkdirSync(GAME_SFX_DIR, { recursive: true });
 
-	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-	const answer = await new Promise(resolve => {
-		rl.question("🔊 No sound effects found. Download the standard SFX library? (y/n): ", resolve);
-	});
-	rl.close();
+	// In non-interactive environments (Docker, etc.), auto-download without prompting
+	if (process.stdin.isTTY) {
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		const answer = await new Promise(resolve => {
+			rl.question("🔊 No sound effects found. Download the standard SFX library? (y/n): ", resolve);
+		});
+		rl.close();
 
-	if (answer.trim().toLowerCase() !== "y") {
-		log("⏭️  Skipping SFX download. The game will run without sound effects.");
-		log(`   You can manually place MP3 files in: ${SFX_DIR}`);
-		return;
+		if (answer.trim().toLowerCase() !== "y") {
+			log("⏭️  Skipping SFX download. The game will run without sound effects.");
+			log(`   You can manually place MP3 files in: ${path.join(SFX_DIR, "game")}`);
+			return;
+		}
+	} else {
+		log("🔊 No sound effects found. Non-interactive environment detected — downloading automatically...");
 	}
 
 	const zipPath = path.join(SFX_DIR, "sfx.zip");
@@ -338,16 +359,116 @@ async function ensureSfx() {
 		await pipeline(res.body, fs.createWriteStream(zipPath));
 		log("🔊 Download complete. Extracting...");
 
-		execSync(`tar -xf "${zipPath}" -C "${SFX_DIR}"`);
+		execSync(`unzip -o "${zipPath}" -d "${GAME_SFX_DIR}"`);
 		fs.unlinkSync(zipPath);
 
-		const count = fs.readdirSync(SFX_DIR).filter(f => f.endsWith(".mp3")).length;
-		log(`🔊 SFX ready — ${count} effects extracted.`);
+		const count = fs.readdirSync(GAME_SFX_DIR, { recursive: true }).filter(f => String(f).endsWith(".mp3")).length;
+		log(`🔊 SFX ready — ${count} effects extracted to game SFX folder.`);
 	} catch (err) {
 		log(`❌ SFX download failed: ${err.message}`);
 		log(`   You can manually download sfx.zip from:`);
 		log(`   ${SFX_ZIP_URL}`);
-		log(`   and extract the MP3 files into: ${SFX_DIR}`);
+		log(`   and extract the MP3 files into: ${GAME_SFX_DIR}`);
+		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+	}
+}
+
+// === MENU MUSIC ASSET DOWNLOAD ===
+async function ensureMenuMusic() {
+	const menuDir = path.join(MUSIC_DIR, "menu");
+	const hasMp3s = fs.existsSync(menuDir) && fs.readdirSync(menuDir).some(f => f.endsWith(".mp3"));
+	if (hasMp3s) return;
+
+	if (!fs.existsSync(menuDir)) fs.mkdirSync(menuDir, { recursive: true });
+
+	if (process.stdin.isTTY) {
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		const answer = await new Promise(resolve => {
+			rl.question("🎶 No menu music found. Download the menu music library? (y/n): ", resolve);
+		});
+		rl.close();
+
+		if (answer.trim().toLowerCase() !== "y") {
+			log("⏭️  Skipping menu music download.");
+			log(`   You can manually place MP3 files in: ${menuDir}`);
+			return;
+		}
+	} else {
+		log("🎶 No menu music found. Non-interactive environment detected — downloading automatically...");
+	}
+
+	const zipPath = path.join(MUSIC_DIR, "menu-music.zip");
+
+	log("🎶 Downloading menu music pack...");
+	log(`   ${MENU_MUSIC_ZIP_URL}`);
+
+	try {
+		const res = await fetch(MENU_MUSIC_ZIP_URL);
+		if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+		await pipeline(res.body, fs.createWriteStream(zipPath));
+		log("🎶 Download complete. Extracting...");
+
+		execSync(`unzip -o "${zipPath}" -d "${menuDir}"`);
+		fs.unlinkSync(zipPath);
+
+		const count = fs.readdirSync(menuDir).filter(f => f.endsWith(".mp3")).length;
+		log(`🎶 Menu music ready — ${count} tracks extracted.`);
+	} catch (err) {
+		log(`❌ Menu music download failed: ${err.message}`);
+		log(`   You can manually download menu-music.zip from:`);
+		log(`   ${MENU_MUSIC_ZIP_URL}`);
+		log(`   and extract the MP3 files into: ${menuDir}`);
+		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+	}
+}
+
+// === UI SFX ASSET DOWNLOAD ===
+async function ensureUiSfx() {
+	const uiDir = path.join(SFX_DIR, "ui");
+	const hasMp3s = fs.existsSync(uiDir) && fs.readdirSync(uiDir).some(f => f.endsWith(".mp3"));
+	if (hasMp3s) return;
+
+	if (!fs.existsSync(uiDir)) fs.mkdirSync(uiDir, { recursive: true });
+
+	if (process.stdin.isTTY) {
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		const answer = await new Promise(resolve => {
+			rl.question("🔔 No UI sound effects found. Download the UI SFX library? (y/n): ", resolve);
+		});
+		rl.close();
+
+		if (answer.trim().toLowerCase() !== "y") {
+			log("⏭️  Skipping UI SFX download.");
+			log(`   You can manually place MP3 files in: ${uiDir}`);
+			return;
+		}
+	} else {
+		log("🔔 No UI sound effects found. Non-interactive environment detected — downloading automatically...");
+	}
+
+	const zipPath = path.join(SFX_DIR, "ui-sfx.zip");
+
+	log("🔔 Downloading UI SFX pack...");
+	log(`   ${UI_SFX_ZIP_URL}`);
+
+	try {
+		const res = await fetch(UI_SFX_ZIP_URL);
+		if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
+
+		await pipeline(res.body, fs.createWriteStream(zipPath));
+		log("🔔 Download complete. Extracting...");
+
+		execSync(`unzip -o "${zipPath}" -d "${uiDir}"`);
+		fs.unlinkSync(zipPath);
+
+		const count = fs.readdirSync(uiDir).filter(f => f.endsWith(".mp3")).length;
+		log(`🔔 UI SFX ready — ${count} effects extracted.`);
+	} catch (err) {
+		log(`❌ UI SFX download failed: ${err.message}`);
+		log(`   You can manually download ui-sfx.zip from:`);
+		log(`   ${UI_SFX_ZIP_URL}`);
+		log(`   and extract the MP3 files into: ${uiDir}`);
 		if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
 	}
 }
@@ -422,14 +543,59 @@ function resolveActiveTurn(lobbyId) {
 	return store.turnInfo(lobbyId);
 }
 
-function checkAndEndIfAllDead(lobbyId) {
-	if (store.checkAllDead(lobbyId)) {
-		store.setPhase(lobbyId, "wiped");
-		cancelTurnTimer(lobbyId);
-		io.to(room(lobbyId)).emit("game:over", { reason: "wiped" });
-		broadcastLobbies();
-		log(`💀 All players dead in lobby ${lobbyId} — marked wiped`);
+async function checkAndEndIfAllDead(lobbyId) {
+	if (!store.checkAllDead(lobbyId)) return;
+
+	store.setPhase(lobbyId, "wiped");
+	cancelTurnTimer(lobbyId);
+	log(`💀 All players dead in lobby ${lobbyId} — generating TPK epilogue...`);
+
+	// Show lock overlay while the LLM generates the epilogue
+	io.to(room(lobbyId)).emit("ui:lock", { actor: "DM", message: "The DM is writing the final chapter..." });
+
+	// Generate a dramatic epilogue via the LLM
+	try {
+		const msgs = store.composeWipeEpilogue(lobbyId);
+		const rawReply = await Promise.race([
+			getLLMResponse(msgs, llmOpts(lobbyId)),
+			new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout")), LLM_TIMEOUT_MS)),
+		]);
+		const replyText = typeof rawReply === "string" ? rawReply.trim() : "";
+		let epilogueHtml = "";
+		let music = "sad_moment";
+		let sfx = [];
+
+		if (replyText) {
+			try {
+				const parsed = JSON.parse(replyText.replace(/^```json?\s*|```$/g, "").trim());
+				epilogueHtml = parsed.text || replyText;
+				if (parsed.music) music = parsed.music;
+				if (Array.isArray(parsed.sfx)) sfx = parsed.sfx;
+			} catch {
+				epilogueHtml = replyText;
+			}
+		}
+
+		if (epilogueHtml) {
+			store.appendDM(lobbyId, epilogueHtml);
+			io.to(room(lobbyId)).emit("narration", { content: epilogueHtml });
+			if (music) io.to(room(lobbyId)).emit("music:change", { mood: music });
+			if (sfx.length) {
+				const { resolveSFXFiles } = await import("./services/sfxResolver.js");
+				resolveSFXFiles(sfx).then(sfxFiles => {
+					if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+				}).catch(() => {});
+			}
+			await streamNarrationToClients(io, room(lobbyId), epilogueHtml, store.getNarratorVoice(lobbyId));
+		}
+	} catch (err) {
+		log(`⚠️ TPK epilogue generation failed: ${err.message}`);
+		// Fall through to emit game:over even if epilogue fails
 	}
+
+	io.to(room(lobbyId)).emit("ui:unlock");
+	io.to(room(lobbyId)).emit("game:over", { reason: "wiped" });
+	broadcastLobbies();
 }
 
 function startTurnTimer(lobbyId, readingDelayMs = 0) {
@@ -543,10 +709,15 @@ async function handleTimerExpiry(lobbyId, playerName) {
 				const u = dmObj.updates || {};
 				broadcastXPUpdates(io, store, lobbyId, u.xp);
 				broadcastHPUpdates(io, store, lobbyId, u.hp);
-				checkAndEndIfAllDead(lobbyId);
+				await checkAndEndIfAllDead(lobbyId);
+
+				// If everyone is dead, the epilogue already played — bail out
+				if (store.index[lobbyId]?.phase === "wiped") return;
+
 				broadcastInventoryUpdates(io, store, lobbyId, u.inventory);
 				broadcastGoldUpdates(io, store, lobbyId, u.gold);
 				broadcastConditionUpdates(io, store, lobbyId, u.conditions);
+				if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 				broadcastPartyState(io, store, lobbyId);
 				updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
 				if (Array.isArray(dmObj.suggestions) && dmObj.suggestions.length) {
@@ -570,6 +741,9 @@ async function handleTimerExpiry(lobbyId, playerName) {
 	} catch (err) {
 		log(`⏰ Timer expiry LLM error: ${err.message}`);
 	}
+
+	// Don't advance turns or unlock if game already ended
+	if (store.index[lobbyId]?.phase === "wiped") return;
 
 	store.nextTurn(lobbyId);
 	const { current: next, order } = resolveActiveTurn(lobbyId);
@@ -635,6 +809,7 @@ async function handleRestResolved(lobbyId, result, type, proposer) {
 				broadcastInventoryUpdates(io, store, lobbyId, u.inventory);
 				broadcastGoldUpdates(io, store, lobbyId, u.gold);
 				broadcastConditionUpdates(io, store, lobbyId, u.conditions);
+				if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 				broadcastPartyState(io, store, lobbyId);
 				updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
 				if (Array.isArray(dmObj.suggestions) && dmObj.suggestions.length) {
@@ -766,7 +941,7 @@ io.on("connection", (socket) => {
 	});
 
 
-	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, llmProvider, llmModel }) => {
+	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, llmProvider, llmModel }) => {
 		if (!store.isHost(lobbyId, socket.id)) return;
 		store.setTimerSettings(lobbyId, timerEnabled, timerMinutes, maxMissedTurns);
 		if (narratorVoiceId !== undefined) store.setNarratorVoice(lobbyId, narratorVoiceId, narratorVoiceName);
@@ -775,6 +950,7 @@ io.on("connection", (socket) => {
 		if (difficulty     !== undefined) store.setDifficulty(lobbyId, difficulty);
 		if (lootGenerosity !== undefined) store.setLootGenerosity(lobbyId, lootGenerosity);
 		if (campaignSetting !== undefined) store.setCampaignSetting(lobbyId, campaignSetting);
+		if (startingLevel  !== undefined) store.setStartingLevel(lobbyId, startingLevel);
 		if (llmProvider || llmModel) store.setLLMSettings(lobbyId, llmProvider, llmModel);
 		sendState(lobbyId);
 		broadcastLobbies();
@@ -955,6 +1131,7 @@ io.on("connection", (socket) => {
 			socket.join(lobbyId);
 			lobby.sockets[socket.id] = { playerName: cleanName, ready: true };
 			store.upsertPlayer(lobbyId, socket.id, cleanName, sheet);
+			store.initializeAtLevel(lobbyId, cleanName, getAbilityForLevel);
 
 			// Insert into initiative based on DEX (higher DEX = earlier turn)
 			const dex = Number(sheet?.stats?.dex) || 8;
@@ -1020,6 +1197,7 @@ io.on("connection", (socket) => {
 		try {
 			if (!store.belongs(lobbyId, socket.id)) return;
 			store.upsertPlayer(lobbyId, socket.id, name, sheet);
+			store.initializeAtLevel(lobbyId, name, getAbilityForLevel);
 			log(`🧙‍♂️ Player sheet saved: ${name} (lobby ${lobbyId})`);
 			log(sheet);
 			sendState(lobbyId);
@@ -1058,6 +1236,31 @@ io.on("connection", (socket) => {
 		}
 	});
 
+	socket.on("item:unequip", ({ lobbyId, slot }) => {
+		try {
+			if (!store.belongs(lobbyId, socket.id)) return;
+			if (!["weapon", "armor", "trinket"].includes(slot)) {
+				return socket.emit("toast", { type: "error", message: "Invalid equipment slot." });
+			}
+			const playerName = store.playerBySid(lobbyId, socket.id)?.name;
+			if (!playerName) return;
+
+			const result = store.unequipItem(lobbyId, playerName, slot);
+			if (!result) {
+				return socket.emit("toast", { type: "error", message: `Nothing equipped in ${slot} slot.` });
+			}
+
+			log(`🔄 ${playerName} unequipped "${result.unequipped.name}" from ${slot} (lobby ${lobbyId})`);
+			socket.emit("toast", { type: "success", message: `Unequipped ${result.unequipped.name}.` });
+
+			sendState(lobbyId);
+			broadcastPartyState(io, store, lobbyId);
+		} catch (err) {
+			log("💥 Error unequipping item:", err);
+			socket.emit("toast", { type: "error", message: "Failed to unequip item." });
+		}
+	});
+
 	socket.on("player:ready", ({ lobbyId, ready }) => {
 		try {
 			if (!store.belongs(lobbyId, socket.id)) return;
@@ -1082,7 +1285,7 @@ io.on("connection", (socket) => {
 		// Grant the class ability for the new level
 		const playerClass = lobby.players[playerName]?.class;
 		const newAbility = getAbilityForLevel(playerClass, newLevel);
-		if (newAbility) store.addAbility(lobbyId, playerName, newAbility);
+		if (newAbility) store.addAbility(lobbyId, playerName, { ...newAbility, level: newLevel });
 
 		// Re-read stats after all mutations are applied
 		const newStats = lobby.players[playerName]?.stats ?? null;
@@ -1333,10 +1536,18 @@ io.on("connection", (socket) => {
 
 				broadcastXPUpdates(io, store, lobbyId, u.xp);
 				broadcastHPUpdates(io, store, lobbyId, u.hp);
-				checkAndEndIfAllDead(lobbyId);
+				await checkAndEndIfAllDead(lobbyId);
+
+				// If everyone is dead, the epilogue already played — bail out
+				if (store.index[lobbyId]?.phase === "wiped") {
+					io.to(room(lobbyId)).emit("ui:unlock");
+					return;
+				}
+
 				broadcastInventoryUpdates(io, store, lobbyId, u.inventory);
 				broadcastGoldUpdates(io, store, lobbyId, u.gold);
 				broadcastConditionUpdates(io, store, lobbyId, u.conditions);
+				if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 
 				// Deduct a spell slot if the LLM confirmed a spell was cast
 				if (dmObj.spellUsed === true) {
@@ -1726,7 +1937,7 @@ io.on("connection", (socket) => {
 		log(`✅ ADMIN connected to lobby ${lobbyId} (${code}) with ${Object.keys(state.players).length} players`);
 	});
 
-	socket.on("admin:event", ({ code, type, payload }) => {
+	socket.on("admin:event", async ({ code, type, payload }) => {
 		if (!isSocketAdmin(code)) {
 			return socket.emit("toast", { type: "error", message: "Not authorized" });
 		}
@@ -1801,20 +2012,33 @@ io.on("connection", (socket) => {
 				break;
 			}
 			case "player:death": {
-				const { player } = payload;
-				console.log(`💀 Admin forced death for ${player} in lobby ${code}`);
+				const { player, reason } = payload;
+				console.log(`💀 Admin forced death for ${player} in lobby ${code}${reason ? ` — ${reason}` : ""}`);
+
+				// Append death event to history so the LLM has context
+				const deathNarration = reason
+					? `${player} has been killed: ${reason}`
+					: `${player} has been struck down by a fatal blow.`;
+				store.appendDM(lobbyId, deathNarration);
+				io.to(room(lobbyId)).emit("narration", { content: deathNarration });
 
 				store.markPlayerDead(lobbyId, player);
 				store.removeFromTurnOrder(lobbyId, player);
-				checkAndEndIfAllDead(lobbyId);
 
+				// Emit player:death BEFORE checking for TPK so clients get the
+				// individual death event before any potential wipe epilogue/game:over
 				const { current: dCurrent, order: dOrder } = store.turnInfo(lobbyId);
 				io.to(room(lobbyId)).emit("player:death", {
 					player,
-					message: `${player} has fallen (admin override)!`,
+					message: reason ? `${player} has fallen: ${reason}` : `${player} has fallen (admin override)!`,
 				});
 				io.to(room(lobbyId)).emit("turn:update", { current: dCurrent, order: dOrder });
-				sendState(lobbyId);
+
+				await checkAndEndIfAllDead(lobbyId);
+
+				if (store.index[lobbyId]?.phase !== "wiped") {
+					sendState(lobbyId);
+				}
 
 				break;
 			}
@@ -2185,14 +2409,74 @@ async function fetchVoices() {
 		fs.writeFileSync(VOICE_CACHE_FILE, JSON.stringify(ELEVEN_VOICES, null, 2));
 
 		return ELEVEN_VOICES;
-		
+
 	} catch (err) {
-		console.error(err, "fetchVoices", { route: "internal/fetchVoices" });
+		log(`⚠️  ElevenLabs API fetch failed: ${err.message} — checking cache...`);
+
+		// Fall back to cached voices file
+		try {
+			if (fs.existsSync(VOICE_CACHE_FILE)) {
+				const cached = JSON.parse(fs.readFileSync(VOICE_CACHE_FILE, "utf8"));
+				if (Array.isArray(cached) && cached.length) {
+					ELEVEN_VOICES = cached;
+					log(`✅ Loaded ${cached.length} voices from cache`);
+					return ELEVEN_VOICES;
+				}
+			}
+		} catch (cacheErr) {
+			log(`⚠️  Voice cache read failed: ${cacheErr.message}`);
+		}
+
 		return [];
 	}
 }
 
 // ===== ElevenLabs streaming helper =====
+
+/**
+ * Convert ElevenLabs character-level alignment to word-level timing data.
+ * @param {object}  alignment   - { characters, character_start_times_seconds, character_end_times_seconds }
+ * @param {number}  timeOffset  - cumulative seconds from prior text chunks
+ * @param {number}  indexOffset - cumulative word count from prior text chunks
+ * @returns {Array<{word:string, start:number, end:number, index:number}>}
+ */
+function charAlignmentToWords(alignment, timeOffset, indexOffset) {
+	const { characters, character_start_times_seconds, character_end_times_seconds } = alignment;
+	if (!characters || !character_start_times_seconds || !character_end_times_seconds) return [];
+
+	const words = [];
+	let wordStart = null;
+	let wordChars = "";
+
+	for (let i = 0; i < characters.length; i++) {
+		const ch = characters[i];
+		if (ch === " " || ch === "\n" || ch === "\t") {
+			if (wordChars) {
+				words.push({
+					word: wordChars,
+					start: wordStart + timeOffset,
+					end: character_end_times_seconds[i - 1] + timeOffset,
+					index: indexOffset + words.length,
+				});
+				wordChars = "";
+				wordStart = null;
+			}
+		} else {
+			if (wordStart === null) wordStart = character_start_times_seconds[i];
+			wordChars += ch;
+		}
+	}
+	if (wordChars && characters.length > 0) {
+		words.push({
+			word: wordChars,
+			start: wordStart + timeOffset,
+			end: character_end_times_seconds[characters.length - 1] + timeOffset,
+			index: indexOffset + words.length,
+		});
+	}
+	return words;
+}
+
 async function streamNarrationToClients(io, lobbyId, text, voiceId, playerName) {
 	const streamId = randomUUID();
 	try {
@@ -2229,6 +2513,9 @@ async function streamNarrationToClients(io, lobbyId, text, voiceId, playerName) 
 			streamId,
 		});
 
+		let cumulativeDuration = 0;
+		let wordOffset = 0;
+
 		for (let i = 0; i < chunks.length; i++) {
 			const part = chunks[i].trim();
 			if (!part) continue;
@@ -2237,52 +2524,108 @@ async function streamNarrationToClients(io, lobbyId, text, voiceId, playerName) 
 				continue;
 			}
 
-			// Don't prefix player name — just read their words directly for immersion
-			const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
-				method: "POST",
-				headers: {
-					"xi-api-key": ELEVEN_API_KEY,
-					"Content-Type": "application/json",
-					Accept: "audio/mpeg",
-				},
-				body: JSON.stringify({
-					text: cleanText,
-					model_id: "eleven_flash_v2_5",
-					voice_settings: { stability: 0.4, similarity_boost: 0.8 },
-				}),
-			});
+			// Use with-timestamps endpoint for word-level alignment data
+			const response = await fetch(
+				`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream/with-timestamps`,
+				{
+					method: "POST",
+					headers: {
+						"xi-api-key": ELEVEN_API_KEY,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						text: cleanText,
+						model_id: "eleven_flash_v2_5",
+						voice_settings: { stability: 0.4, similarity_boost: 0.8 },
+					}),
+				}
+			);
 
 			if (!response.ok) {
 				throw new Error(`TTS request failed: ${response.statusText}`);
 			}
 
-			const stream = response.body instanceof PassThrough ? response.body : response.body.pipe(new PassThrough());
-			let buffer = [];
+			// Response is newline-delimited JSON with audio_base64 and alignment fields
+			const nodeStream = response.body instanceof PassThrough
+				? response.body
+				: response.body.pipe(new PassThrough());
+
+			let audioBuffer = [];
+			let jsonLine = "";
+			let alignmentChars = null;
 			const CHUNK_SIZE = 8 * 1024;
 
 			await new Promise((resolve, reject) => {
-				let totalBytes = 0;
-				stream.on("data", (chunk) => {
-					buffer.push(chunk);
-					const total = buffer.reduce((sum, b) => sum + b.length, 0);
-					if (total >= CHUNK_SIZE) {
-						const combined = Buffer.concat(buffer);
-						io.to(room(lobbyId)).emit("narration:audio", { data: combined.toString("base64"), streamId });
-						buffer = [];
-						totalBytes += chunk.length;
+				nodeStream.on("data", (rawChunk) => {
+					jsonLine += rawChunk.toString();
+					const lines = jsonLine.split("\n");
+					jsonLine = lines.pop(); // keep incomplete tail
+
+					for (const line of lines) {
+						if (!line.trim()) continue;
+						try {
+							const obj = JSON.parse(line);
+							if (obj.audio_base64) {
+								const audioBuf = Buffer.from(obj.audio_base64, "base64");
+								audioBuffer.push(audioBuf);
+								const total = audioBuffer.reduce((s, b) => s + b.length, 0);
+								if (total >= CHUNK_SIZE) {
+									const combined = Buffer.concat(audioBuffer);
+									io.to(room(lobbyId)).emit("narration:audio", {
+										data: combined.toString("base64"),
+										streamId,
+									});
+									audioBuffer = [];
+								}
+							}
+							if (obj.alignment) {
+								alignmentChars = obj.alignment;
+							} else if (obj.normalizedAlignment && !alignmentChars) {
+								alignmentChars = obj.normalizedAlignment;
+							}
+						} catch { /* skip malformed JSON lines */ }
 					}
 				});
 
-				stream.on("end", () => {
-					if (buffer.length > 0) {
-						const combined = Buffer.concat(buffer);
-						io.to(lobbyId).emit("narration:audio", { data: combined.toString("base64"), streamId });
+				nodeStream.on("end", () => {
+					// Process remaining partial JSON line
+					if (jsonLine.trim()) {
+						try {
+							const obj = JSON.parse(jsonLine);
+							if (obj.audio_base64) {
+								audioBuffer.push(Buffer.from(obj.audio_base64, "base64"));
+							}
+							if (obj.alignment) alignmentChars = obj.alignment;
+							else if (obj.normalizedAlignment && !alignmentChars) alignmentChars = obj.normalizedAlignment;
+						} catch { /* ignore */ }
+					}
+					// Flush remaining audio
+					if (audioBuffer.length > 0) {
+						const combined = Buffer.concat(audioBuffer);
+						io.to(room(lobbyId)).emit("narration:audio", {
+							data: combined.toString("base64"),
+							streamId,
+						});
 					}
 					resolve();
 				});
 
-				stream.on("error", reject);
+				nodeStream.on("error", reject);
 			});
+
+			// Emit word-level alignment data for this chunk
+			if (alignmentChars) {
+				const words = charAlignmentToWords(alignmentChars, cumulativeDuration, wordOffset);
+				if (words.length > 0) {
+					io.to(room(lobbyId)).emit("narration:alignment", { streamId, words });
+					wordOffset += words.length;
+					// Advance cumulative duration using the last character's end time
+					const endTimes = alignmentChars.character_end_times_seconds;
+					if (endTimes && endTimes.length > 0) {
+						cumulativeDuration += endTimes[endTimes.length - 1];
+					}
+				}
+			}
 
 			if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 250));
 		}
@@ -2376,12 +2719,23 @@ app.get("/api/features", (req, res) => {
 		claude:     serviceStatus.claude,
 		elevenlabs: serviceStatus.elevenlabs,
 		devMode,
+		version:    process.env.APP_VERSION || "0.0",
 	});
 });
 
 // === ELEVENLABS VOICE ENDPOINT ===
 app.get("/api/voices", async (req, res) => {
-	if (!serviceStatus.elevenlabs) {
+	// If ElevenLabs wasn't available at startup but we have a key, retry now
+	// (Docker containers often have network delays at boot)
+	if (!serviceStatus.elevenlabs && ELEVEN_API_KEY) {
+		const retried = await fetchVoices();
+		if (retried.length) {
+			serviceStatus.elevenlabs = true;
+			log("✅ ElevenLabs recovered on retry — voices now available");
+		} else {
+			return res.json({ ok: false, voices: [], error: "ElevenLabs is not available" });
+		}
+	} else if (!serviceStatus.elevenlabs) {
 		return res.json({ ok: false, voices: [], error: "ElevenLabs is not available" });
 	}
 	try {
@@ -2701,7 +3055,7 @@ function validateConfigFiles() {
 	if (allOk) log("📋 All config files OK");
 }
 
-ensureMusic().then(() => ensureSfx()).then(() => {
+ensureMusic().then(() => ensureMenuMusic()).then(() => ensureSfx()).then(() => ensureUiSfx()).then(() => {
 	server.listen(PORT, async () => {
 		log(`✅ Server running at http://localhost:${PORT}`);
 		validateConfigFiles();

@@ -445,7 +445,9 @@ $("killPlayer").addEventListener("click", () => {
 	const player = els.playerSelect.value;
 	if (!player) return alert("Select a player");
 	if (!confirm(`Kill ${player}?`)) return;
-	emitEvent("player:death", { player });
+	const reason = $("killReason").value.trim();
+	emitEvent("player:death", { player, reason });
+	$("killReason").value = "";
 });
 
 // ═══ DM TOOLS ═══
@@ -493,7 +495,7 @@ socket.on("admin:sfx:result", ({ ok, effect, source, error }) => {
 	els.sfxResultName.textContent = effect.name;
 	els.sfxResultFile.textContent = effect.file;
 	els.sfxResultAudio.style.display = "block";
-	els.sfxResultAudio.src = `/sfx/${effect.file}`;
+	els.sfxResultAudio.src = `/sfx/game/${effect.file}`;
 	els.sfxResultAudio.play().catch(() => {});
 });
 

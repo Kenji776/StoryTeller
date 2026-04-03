@@ -20,6 +20,27 @@ function init() {
 	loadVoices();
 	fetchActiveLobbies();
 
+	// Welcome modal — acts as the user-gesture gate to unlock autoplay
+	const welcomeModal = document.getElementById("welcomeModal");
+	const welcomeBtn   = document.getElementById("welcomeOkBtn");
+	if (welcomeModal && welcomeBtn) {
+		welcomeBtn.addEventListener("click", () => {
+			welcomeModal.remove();
+			window.musicManager?.startMenuMusic();
+		});
+	} else {
+		// Fallback: if modal markup is missing, use passive listeners like before
+		const startMenu = async () => {
+			await window.musicManager?.startMenuMusic();
+			if (window.musicManager?._menuPlaying) {
+				document.removeEventListener("click", startMenu);
+				document.removeEventListener("keydown", startMenu);
+			}
+		};
+		document.addEventListener("click", startMenu, { once: false });
+		document.addEventListener("keydown", startMenu, { once: false });
+	}
+
 	// Apply saved story font preference
 	const savedFont = localStorage.getItem("storyFont") || "Lora";
 	if (typeof applyStoryFont === "function") applyStoryFont(savedFont);
@@ -39,6 +60,8 @@ function init() {
 			const btn = document.getElementById("quickStartPublicBtn");
 			if (btn) btn.style.display = "";
 		}
+		const versionEl = document.getElementById("appVersion");
+		if (versionEl && f.version) versionEl.textContent = `v${f.version}`;
 	}).catch(() => {});
 }
 

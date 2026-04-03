@@ -59,6 +59,9 @@ header h1 {
 	gap: 16px;
 	padding:10px;
 }
+#game > .grid.two {
+	grid-template-columns: 1fr minmax(0, 1.15fr);
+}
 .lobby-grid {
 	display: grid;
 	grid-template-columns: 1fr 1fr;
@@ -152,6 +155,12 @@ button.secondary:hover {
 	right: 0.4em;
 	z-index: 10;
 	margin-bottom: 0.5em;
+}
+.menu-music-widget {
+	position: fixed;
+	top: 0.5em;
+	right: 0.5em;
+	z-index: 100;
 }
 .audio-divider {
 	width: 1px;
@@ -263,6 +272,17 @@ hr {
 }
 .equip-btn:hover {
 	background: rgba(100,180,255,0.25);
+}
+.equipped-indicator {
+	cursor: pointer;
+	background: rgba(100,220,100,0.15);
+	border-color: #5bbf5b;
+	color: #8eda8e;
+}
+.equipped-indicator:hover {
+	background: rgba(220,100,100,0.2);
+	border-color: #bf5b5b;
+	color: #eda08e;
 }
 #yourSheet label {
 	color: #f0dca7;
@@ -1017,11 +1037,11 @@ hr {
 	color: #d4b8ff;
 	border: 1px solid #6a4fa0;
 	border-radius: 6px;
-	padding: 4px 8px;
-	font-size: 0.85em;
+	padding: 6px 10px;
+	font-size: 1em;
 	cursor: pointer;
-	max-width: 200px;
-	height: 32px;
+	max-width: 240px;
+	height: 36px;
 	transition: border-color 0.2s, box-shadow 0.2s;
 }
 #quickActionSelect:hover:not(:disabled) {
@@ -1035,11 +1055,13 @@ hr {
 #quickActionSelect optgroup {
 	color: #888;
 	font-style: normal;
-	font-size: 0.8em;
+	font-size: 0.95em;
 }
 #quickActionSelect option {
 	background: #1e1a2e;
 	color: #d4b8ff;
+	font-size: 1em;
+	padding: 4px 0;
 }
 
 @keyframes die-pulse {
@@ -1245,6 +1267,16 @@ textarea.locked {
   font-style: italic;
 }
 
+/* Word-level narration highlight (karaoke sync) */
+.narration-word {
+  transition: color 0.12s ease, text-shadow 0.12s ease;
+}
+
+.narration-word.word-active {
+  color: #fff;
+  text-shadow: 0 0 8px rgba(180, 160, 255, 0.6), 0 0 2px rgba(255, 255, 255, 0.4);
+}
+
 /* Player actions — distinct and confident */
 .story-entry.player-action {
   background: rgba(60, 120, 255, 0.15);
@@ -1384,7 +1416,8 @@ textarea.locked {
 	text-align: right;
 }
 .attr-slider {
-	width: 70%;
+	flex: 1 1 0;
+	min-width: 0;
 	margin-left: 0.5em;
 }
 .attr-value {
@@ -1395,12 +1428,17 @@ textarea.locked {
 }
 .grid.three > div {
 	position: relative;
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
 }
 .grid.three > div[title]::after {
-	content: " ⓘ";
+	content: "ⓘ";
 	color: #999;
 	font-size: 0.8em;
 	cursor: help;
+	flex-shrink: 0;
+	margin-left: 0.3em;
 }
 #pointsRemaining {
   color: #ffd866;
@@ -1476,8 +1514,13 @@ textarea.locked {
 	text-align: center;
 	color: #fff;
 	z-index: 1;
-	animation: heartbeat 2s ease-in-out infinite;
 	text-shadow: 0 0 25px crimson, 0 0 50px rgba(255, 0, 0, 0.7);
+	max-width: 700px;
+	width: 90%;
+	max-height: 90vh;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
 }
 
 /* Main Title */
@@ -1487,7 +1530,7 @@ textarea.locked {
 	letter-spacing: 0.15em;
 	color: #ff1e1e;
 	text-transform: uppercase;
-	animation: death-fadein 3s ease-out forwards;
+	animation: death-fadein 3s ease-out forwards, heartbeat 2s ease-in-out 3s infinite;
 }
 
 /* Subtitle */
@@ -1495,6 +1538,59 @@ textarea.locked {
 	font-size: 1.5rem;
 	color: #ccc;
 	animation: fadeIn 5s ease-out forwards;
+}
+
+/* Scrollable narration area for final messages */
+#deathModal .death-narration {
+	max-height: 45vh;
+	overflow-y: auto;
+	text-align: left;
+	font-family: "EB Garamond", Georgia, serif;
+	font-size: 1.1rem;
+	line-height: 1.6;
+	color: #ddd;
+	text-shadow: none;
+	background: rgba(0, 0, 0, 0.5);
+	border: 1px solid rgba(255, 50, 50, 0.3);
+	border-radius: 8px;
+	padding: 1.2rem 1.5rem;
+	margin: 1rem 0;
+	width: 100%;
+	animation: fadeIn 3s ease-out forwards;
+}
+#deathModal .death-narration:empty {
+	display: none;
+}
+#deathModal .death-narration .death-narration-entry {
+	margin-bottom: 0.8rem;
+	padding-bottom: 0.8rem;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+#deathModal .death-narration .death-narration-entry:last-child {
+	margin-bottom: 0;
+	padding-bottom: 0;
+	border-bottom: none;
+}
+
+/* Dismiss button */
+#deathModal .death-dismiss-btn {
+	margin-top: 1rem;
+	padding: 0.7rem 2rem;
+	font-family: "Cinzel", serif;
+	font-size: 1rem;
+	color: #fff;
+	background: rgba(139, 0, 0, 0.7);
+	border: 1px solid rgba(255, 50, 50, 0.5);
+	border-radius: 6px;
+	cursor: pointer;
+	letter-spacing: 0.08em;
+	transition: background 0.3s, border-color 0.3s;
+	animation: fadeIn 5s ease-out forwards;
+	text-shadow: none;
+}
+#deathModal .death-dismiss-btn:hover {
+	background: rgba(180, 0, 0, 0.9);
+	border-color: rgba(255, 80, 80, 0.8);
 }
 
 /* Active State */

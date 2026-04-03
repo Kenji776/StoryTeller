@@ -89,6 +89,168 @@
           "range": "30 ft aura"
         }
       }
+    ],
+    "11": [
+      {
+        "name": "Three Attacks",
+        "description": "Your martial training reaches a new apex, granting you a third strike with every flurry of blows. Few enemies can withstand this relentless pressure.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Three attacks per Attack action"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Ability Score Improvement",
+        "description": "Countless hours of rigorous training sharpen your body and mind to a razor's edge.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Increase one ability score by 2, or two by 1 each (max 20)"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Indomitable (Two Uses)",
+        "description": "Your iron will refuses to yield to magical compulsion or debilitating effects — twice per rest.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "Reroll a failed saving throw",
+          "uses": 2,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Supreme Warrior",
+        "description": "You read an opponent's next move before they make it, turning their momentum against them.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "When a creature misses you with a melee attack, make one melee weapon attack against it",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Relentless Body",
+        "description": "Your body has been tempered through countless battles into something approaching the mythic. Wounds that would kill ordinary soldiers barely slow you.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Resistance to nonmagical bludgeoning, piercing, and slashing. HP max increases by 30."
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Martial Versatility",
+        "description": "You have fought with every weapon style imaginable and can switch between them mid-combat with fluid grace.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Change your Fighting Style to any other option until your next short rest",
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Four Attacks",
+        "description": "You are a living engine of destruction. Your strikes come in a blur of steel that most combatants cannot even perceive.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Four attacks per Attack action"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Indomitable (Three Uses)",
+        "description": "Your will is legendary — pain, magic, and fear have no dominion over you.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "Reroll a failed saving throw",
+          "uses": 3,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Survivor",
+        "description": "At the start of each turn, you regain hit points equal to 5 + your CON modifier if you have no more than half your HP left.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Regenerate 5 + CON modifier HP per turn when below half HP"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Legendary Champion",
+        "description": "Songs are sung of your deeds, and enemies falter at the mere sight of you. Your prowess transcends mortal limits.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+4 to STR or DEX (max 24). Once per turn on hit, force DC 18 STR save or target knocked prone and stunned."
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Martial Apex",
+        "description": "You have mastered every weapon, every stance, every technique. Your attacks carry supernatural force.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Weapon attacks count as magical and deal +2d6 force damage. +3 to attack and damage rolls."
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Undying Fury",
+        "description": "When death reaches for you, your warrior's spirit throws it back. You refuse to fall while enemies still stand.",
+        "details": {
+          "usage": "Passive",
+          "effect": "When reduced to 0 HP, drop to 1 HP instead and gain advantage on all attacks until end of next turn.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Warlord's Presence",
+        "description": "Your battlefield presence warps the flow of combat. Allies fight harder under your command.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Up to 5 allies within 60 ft gain advantage on attacks and saves until start of your next turn.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Avatar of War",
+        "description": "You are war itself given form. Weapons gleam brighter in your hands and the ground shakes with your advance.",
+        "details": {
+          "usage": "Action",
+          "effect": "For 1 minute: speed doubles, can't be grappled or restrained, deal max damage on all attacks.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Five Attacks",
+        "description": "At the pinnacle of martial mastery, you strike with blinding speed. Each exchange of blows is a masterclass in destruction.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Five attacks per Attack action. On a critical hit, target must succeed DC 20 CON save or be stunned."
+        }
+      }
     ]
   },
   "Wizard": {
@@ -181,6 +343,163 @@
         "description": "Your concentration can no longer be broken by taking damage. You also have advantage on all Intelligence-based checks and saving throws.",
         "details": {
           "usage": "Passive"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Arcane Supremacy",
+        "description": "Your mastery of the arcane allows you to push beyond normal limits. You gain access to 6th-level spell slots.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Access to 6th-level spell slots. Add two 6th-level spells to your spellbook."
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Arcane Resilience",
+        "description": "Years of studying dangerous magical forces have suffused your body with protective arcane energy.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Proficiency in CON saves. +2 to one ability score (max 20)."
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Seventh Circle",
+        "description": "You breach the seventh circle of arcane power, unlocking spells that bend reality and challenge nature.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Access to 7th-level spell slots. Add two 7th-level spells to your spellbook."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Arcane Tradition Mastery",
+        "description": "Your chosen school of magic reaches its fullest expression, granting a devastating technique unique to your specialty.",
+        "details": {
+          "usage": "Varies",
+          "effect": "Gain your Arcane Tradition's 14th-level feature. Spell save DC increases by 1."
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Eighth Circle",
+        "description": "You wield spells of near-divine power, reshaping reality with words and gestures that would shatter a lesser mind.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Access to 8th-level spell slots. Add two 8th-level spells to your spellbook."
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Spell Resistance",
+        "description": "Your constant exposure to arcane forces has made you resistant to hostile magic.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Advantage on saves against spells. Resistance to damage from spells."
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Ninth Circle",
+        "description": "You stand at the apex of mortal spellcraft. Few beings in existence can match your command of the arcane.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Access to 9th-level spell slots including Wish."
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Spell Mastery (Improved)",
+        "description": "Two spells are so deeply etched into your mind that you no longer need a slot to cast them.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Choose one 1st-level and one 2nd-level spell — cast at lowest level without a spell slot."
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Signature Spells",
+        "description": "Two spells define your legend. You always have them prepared and can cast each once per short rest at 5th level for free.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Two 3rd-level-or-lower spells always prepared, cast free once per short rest at 5th level."
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Arcane Transcendence",
+        "description": "You have pressed beyond the boundaries of mortal magic into territory that borders on the divine.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Gain a 10th-level slot (upcast 9th-level: max damage dice, targets have disadvantage on saves).",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Reality Anchor",
+        "description": "Your mastery is so complete that you can lock down the magical fabric around you.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "For 1 minute, spells can't be countered and concentration can't be broken by damage.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Arcane Dominion",
+        "description": "You seize control of magical effects and turn enemy spellcasters into liabilities.",
+        "details": {
+          "usage": "Action",
+          "effect": "Target a concentration spell within 120 ft. Caster makes INT save or you steal control for 1 min.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Time Dilation",
+        "description": "You bend the flow of time, slipping between moments to act with impossible frequency.",
+        "details": {
+          "usage": "Action",
+          "effect": "Cast Time Stop; cast one 5th-level-or-lower spell for free during each extra turn.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Weave Manipulation",
+        "description": "You feel the very threads of the Weave and alter how magic functions in your presence.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Allied spellcasters within 30 ft gain +2 spell save DC. Enemy casters within 30 ft suffer -2.",
+          "range": "30 ft aura"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Archmagus",
+        "description": "You are a living fulcrum of arcane power. The universe bends toward your intentions.",
+        "details": {
+          "usage": "Passive",
+          "effect": "INT increases to 26. Wish never causes stress. Once per day, cast any known spell without slot, components, or concentration."
         }
       }
     ]
@@ -283,6 +602,180 @@
           "range": "10 ft aura"
         }
       }
+    ],
+    "11": [
+      {
+        "name": "Divine Intervention (Improved)",
+        "description": "Your deity answers your prayers with absolute certainty — your faith has grown strong enough to move the heavens.",
+        "details": {
+          "usage": "Action",
+          "effect": "Divine Intervention automatically succeeds. The deity acts in a manner befitting your domain.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Holy Radiance",
+        "description": "Your divine presence blazes like a second sun. Undead and fiends recoil from the holiness pouring from you.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Emit bright light in 30 ft for 1 min. Undead/fiends take 4d8 radiant and must WIS save or be frightened.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Blessed Fortitude",
+        "description": "Your god's hand rests upon you, turning aside death and suffering that would destroy any other servant.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Advantage on death saves. Regain 1d10 + WIS HP at start of turn when at 0 HP."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Mass Restoration",
+        "description": "With a single prayer, you flood your allies with healing energy that washes away wounds and curses.",
+        "details": {
+          "usage": "Action",
+          "effect": "All allies within 60 ft regain 10d6 + WIS HP. All conditions removed.",
+          "uses": 1,
+          "recharge": "long rest",
+          "cost": "7th-level spell slot"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Divine Domain Pinnacle",
+        "description": "Your domain's gifts reach their fullest expression, channeling your deity's core essence.",
+        "details": {
+          "usage": "Varies",
+          "effect": "Channel Divinity DC increases by 2. Gain your domain's pinnacle feature."
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Aura of the Divine",
+        "description": "You emanate a constant field of protective holiness that shields those around you.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Allies within 30 ft have advantage on saves vs. spells and magical effects.",
+          "range": "30 ft aura"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Holy Nimbus",
+        "description": "You are wreathed in blinding holy light that burns evil creatures who dare approach.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "30 ft bright light for 1 min. Enemies take 10 radiant/turn. Undead/fiends have disadvantage on attacks.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Miracle Worker",
+        "description": "Your prayers can replicate any cleric spell at maximum power, channeling raw divine energy.",
+        "details": {
+          "usage": "Action",
+          "effect": "Cast any cleric spell of 9th level or lower without a slot. All dice maximized.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Resurrection Aura",
+        "description": "Death cannot claim those in your care. The dying cling to life in your presence.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Allies within 30 ft who drop to 0 HP drop to 1 HP instead (once per ally per short rest). Cast Raise Dead free 1/long rest."
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Avatar of the Divine",
+        "description": "Your god briefly inhabits your mortal form, transforming you into a weapon of wrath and mercy.",
+        "details": {
+          "usage": "Action",
+          "effect": "For 1 min: 60-ft fly speed, spell save DC +4, bonus action 6d10 radiant to any visible creature.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Holy Judgment",
+        "description": "Your prayers call down divine fire with terrifying precision upon the wicked.",
+        "details": {
+          "usage": "Action",
+          "effect": "Up to 3 creatures within 120 ft take 10d10 radiant and are blinded 1 min (CON save halves, negates blind). Undead/fiends auto-fail.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Wrath of Heaven",
+        "description": "The sky darkens, the earth trembles, and enemies of the faith are consumed by divine fire.",
+        "details": {
+          "usage": "Action",
+          "damage": "15d10 radiant",
+          "area": "60-ft radius",
+          "range": "300 ft",
+          "save": "Constitution for half",
+          "effect": "Allies in area regain 8d10 HP.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Eternal Covenant",
+        "description": "Your connection to your deity transcends the mortal plane. You commune at will and receive direct guidance.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Cast Commune at will. Deity warns of danger within 1 mile. Immune to charm, fear, and possession."
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Divine Shield",
+        "description": "An impenetrable shield of divine energy surrounds you and your allies in the darkest hours.",
+        "details": {
+          "usage": "Action",
+          "effect": "You and all allies within 30 ft gain immunity to all damage for 1 round.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Hand of God",
+        "description": "You are the living will of your deity made manifest. You do not serve the divine — you are its instrument.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Permanently blessed (as Bless, no concentration). Once per day, target a creature within 60 ft — reduced to 0 HP (no save). Fails vs. legendary creatures or deities."
+        }
+      }
     ]
   },
   "Rogue": {
@@ -373,6 +866,164 @@
         "details": {
           "uses": 1,
           "recharge": "short rest"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Reliable Talent (Improved)",
+        "description": "Your trained skills perform at impossible consistency. There is no margin for error in your craft.",
+        "details": {
+          "usage": "Passive",
+          "effect": "On proficient ability checks, treat any roll below 15 as 15. Double proficiency on one additional skill."
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Blindsense",
+        "description": "Your senses are honed to the point where sight is almost redundant. You feel heat, air displacement, and vibrations.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Know the location of hidden/invisible creatures within 10 ft. Cannot be surprised."
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Slippery Mind",
+        "description": "Your will is a locked room with no door. You resist every charm and compulsion.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Proficiency in WIS saves. If already proficient, gain proficiency in CHA saves."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Sneak Attack (Improved)",
+        "description": "Your precision strikes deal devastating damage. You know every weak point, every gap in armor.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Sneak Attack increases to 7d6. Critical Sneak Attacks also blind the target until end of its next turn."
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Shadow Meld",
+        "description": "You step into dim light and simply cease to exist as far as mundane senses are concerned.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "While in dim light or darkness, become invisible until you attack or leave darkness. Not pierced by darkvision.",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Master Thief",
+        "description": "No lock, trap, or magical ward can keep you out. Your fingers have supernatural sensitivity.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+10 to Thieves' Tools checks. Can disarm magical traps. Auto-detect traps within 30 ft."
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Sneak Attack (Greater)",
+        "description": "Your roguish archetype reaches its fullest expression — a defining capability that separates you from all others.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Sneak Attack increases to 9d6. Gain your archetype's 17th-level feature."
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Ethereal Step",
+        "description": "You can briefly step into the Ethereal Plane, becoming untouchable and passing through solid matter.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Phase into the Ethereal Plane until end of turn. Move through creatures and objects.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Death Mark",
+        "description": "You study a target with cold detachment, cataloguing every weakness and gap in their defenses.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Mark creature within 60 ft for 1 min. Sneak Attack deals +3d6. Crits also stun.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Perfect Assassination",
+        "description": "You have reduced killing to an art form of terrible elegance. One second of opportunity ends a life.",
+        "details": {
+          "usage": "Action",
+          "effect": "Attack a creature you have advantage against. Max Sneak Attack damage on hit. Target makes CON save or drops to 0 HP.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Phantom Strikes",
+        "description": "Your blade strikes through armor, around shields, past magical wards. Your attacks exist at the intersection of the physical and the impossible.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Weapon attacks ignore resistance/immunity to physical damage. Once per turn, bonus action weapon attack without using Cunning Action."
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Shadow Clone",
+        "description": "You split your shadow into a duplicate that fights alongside you, mimicking your movements with lethal precision.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Create a shadow duplicate within 5 ft (your AC, 1 HP, copies attacks at half damage). Lasts 1 minute.",
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Temporal Dodge",
+        "description": "Your reflexes operate slightly ahead of time itself. You see attacks before they happen.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "When targeted by any attack or spell, teleport 15 ft — the attack automatically misses.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Soul Steal",
+        "description": "When you land a killing blow, you steal a fragment of the target's life essence to empower yourself.",
+        "details": {
+          "usage": "Passive",
+          "effect": "When you reduce a creature to 0 HP with Sneak Attack, regain HP equal to Rogue level and gain advantage on all rolls until end of next turn."
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Legend of the Shadows",
+        "description": "You are a myth. A name whispered in fearful circles, a ghost who leaves only corpses and questions.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Sneak Attack increases to 13d6. Permanently under Nondetection. Once per turn on hit, DC 20 CON save or drop to 0 HP."
         }
       }
     ]
@@ -468,6 +1119,165 @@
         "details": {
           "usage": "Once per turn",
           "effect": "+WIS to attack or damage vs. favoured enemy"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Whirlwind Attack",
+        "description": "You can use your action to make a melee attack against every creature within 5 feet of you, with a separate roll for each.",
+        "details": {
+          "usage": "Action",
+          "effect": "Make a melee attack against every creature within 5 ft",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Feral Senses (Improved)",
+        "description": "Your primal awareness expands beyond normal perception, letting you detect invisible foes and sense movement through the earth.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Blindsight 30 ft. Cannot be surprised. Detect hidden creatures within 30 ft through magical concealment."
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Stalker's Flurry",
+        "description": "When your attack misses, your predator's instincts kick in and you lash out with a follow-up strike.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Once per turn, when you miss an attack, immediately make another attack against the same target."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Nature's Veil",
+        "description": "You draw the magic of the natural world around you like a cloak, becoming one with the terrain.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Become invisible until start of next turn. Not pierced by truesight.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Superior Hunter's Prey",
+        "description": "Your bond with a chosen quarry becomes absolute — you sense their heartbeat and anticipate their moves.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Extra 1d8 weapon damage vs. Favored Enemy. Always know direction/distance to Favored Enemy within 10 miles."
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Guardian of the Wild",
+        "description": "The wilderness itself fights alongside you. Roots trip your enemies, wind deflects arrows aimed at you.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+2 AC in natural terrain. Difficult terrain doesn't affect you. Enemies in natural terrain within 30 ft have -10 ft speed."
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Multishot Mastery",
+        "description": "You nock multiple arrows simultaneously, sending a volley of deadly shafts toward multiple foes.",
+        "details": {
+          "usage": "Action",
+          "effect": "Make three ranged attacks, each targeting a different creature, all with advantage.",
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Primal Champion of the Wild",
+        "description": "The wilderness acknowledges you as its champion. Beasts will not attack you unless compelled by magic.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Speak with Animals/Plants at will. Beasts are charmed by you. +2 to spell attack rolls and save DCs."
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Titan Companion",
+        "description": "Your animal companion evolves beyond its natural limits, growing to tremendous size with supernatural resilience.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Companion grows to Large, gains +4 to all stats, doubles HP max, attacks are magical with +3 to hit and damage."
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Foe Slayer (Improved)",
+        "description": "You have become the ultimate hunter — your strikes against most-hated foes are almost always lethal.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Add WIS mod to attack or damage vs. Favored Enemy. Advantage on all rolls vs. Favored Enemy."
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Arrow of Doom",
+        "description": "You conjure an arrow of pure elemental force — when it strikes, it detonates in a blast powerful enough to level fortifications.",
+        "details": {
+          "usage": "Action",
+          "damage": "20d10 force on hit; 10d10 in 20-ft radius (DEX save half)",
+          "range": "600 ft",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Terrain Ascendancy",
+        "description": "You transcend terrain entirely, moving through any environment as if it were open ground.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Ignore difficult terrain. Gain climb and swim speed equal to movement. Walk on vertical surfaces and ceilings. Immune to environmental hazards."
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Hunt the Unkillable",
+        "description": "No quarry is beyond your reach — your senses pierce magical wards, dimensional barriers, and death itself.",
+        "details": {
+          "usage": "Action",
+          "effect": "Designate a Marked Quarry. Always know their exact location regardless of distance or plane. Once per long rest, open a portal to within 60 ft of them."
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Legendary Volley",
+        "description": "You loose a single legendary shot that splits into a dozen ghostly copies, each finding a different target.",
+        "details": {
+          "usage": "Action",
+          "effect": "One ranged attack roll applied to up to 12 creatures within 120 ft. Each hit takes full weapon damage + WIS mod.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Lord of the Wild",
+        "description": "You ascend to become a living avatar of the untamed wilderness — nature bends to your will, beasts worship you as their patron.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to poison, disease, charm, fear. Cast Conjure Animals, Wall of Thorns, Earthquake 1/long rest free. Animals within 1 mile obey. Weapon attacks deal +2d8 force."
         }
       }
     ]
@@ -566,6 +1376,181 @@
           "effect": "Immune to charm/fear; +2 AC aura for allies"
         }
       }
+    ],
+    "11": [
+      {
+        "name": "Improved Divine Smite (Greater)",
+        "description": "Your strikes blaze with holy power so intense they sear the very souls of the undead and wicked.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Every melee weapon hit deals an extra 1d8 radiant damage, in addition to Divine Smite."
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Aura Expansion",
+        "description": "Your holy aura radiates further, shielding a wider circle of allies with divine protection.",
+        "details": {
+          "usage": "Passive",
+          "effect": "All Paladin auras expand to 30-ft radius. Aura of Protection bonus increases by 1.",
+          "range": "30 ft"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Radiant Strike",
+        "description": "You channel divine wrath directly into your weapon, transforming it into a blazing instrument of punishment.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Weapon attacks deal +2d8 radiant and ignore radiant resistance until end of turn.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Cleansing Touch",
+        "description": "You lay hands on allies and strip away any magical affliction. No enchantment or curse can hold those you free.",
+        "details": {
+          "usage": "Action",
+          "effect": "End one spell or magical effect on yourself or a willing creature you touch.",
+          "uses": "CHA modifier per long rest"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Divine Mount",
+        "description": "You call forth a celestial steed from the upper planes that serves as your mount and companion in holy battle.",
+        "details": {
+          "usage": "Action",
+          "effect": "Summon a Celestial Warhorse (max HP, magical attacks, +2d6 radiant on hits). Returns if killed, re-summon after long rest.",
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Holy Nimbus",
+        "description": "You are wreathed in blinding holy light that burns evil creatures who dare approach.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "30 ft bright light for 1 min. Enemies take 10 radiant/turn. Undead/fiends have disadvantage on attacks.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Aura of Invincibility",
+        "description": "Your divine aura thickens to near-physical substance, granting damage resistance to those within it.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Allies within 30 ft gain resistance to nonmagical bludgeoning, piercing, and slashing.",
+          "range": "30 ft aura"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Transcendent Smite",
+        "description": "You pour your entire divine essence into a single catastrophic strike that tears through magical defenses.",
+        "details": {
+          "usage": "Action",
+          "damage": "12d8 radiant + weapon",
+          "save": "CON or stunned until end of next turn",
+          "effect": "Bypasses all damage resistances and immunities.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Divine Intervention",
+        "description": "Your connection to your deity is absolute — when you call for aid, your god's hand reaches into the mortal world.",
+        "details": {
+          "usage": "Action",
+          "effect": "Auto-success. Choose: resurrect all dead allies within 60 ft; 20d10 radiant to up to 5 creatures; or immunity to all damage/conditions for allies within 30 ft for 1 min.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Sanctified Fortress",
+        "description": "You consecrate the ground around you as sacred territory, turning the battlefield into an extension of your deity's will.",
+        "details": {
+          "usage": "Action",
+          "effect": "60-ft zone moves with you for 10 min. Enemies have disadvantage on attacks/saves. Allies gain advantage on attacks and regain 5 HP/turn.",
+          "duration": "10 minutes",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Wrath of Heaven",
+        "description": "You become a conduit for celestial fury, calling down a pillar of divine fire that obliterates the unworthy.",
+        "details": {
+          "usage": "Action",
+          "damage": "20d6 radiant + 20d6 fire",
+          "area": "20-ft radius, 100-ft tall cylinder",
+          "range": "300 ft",
+          "save": "DEX for half; failed saves also blinded 1 min",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Divine Immunity",
+        "description": "Your body is so thoroughly suffused with divine power that mundane harm cannot reach you.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to poison, disease, charm, and fear. Resistance to all spell damage. Cannot be reduced below 1 HP more than once per round."
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Aspect of the Celestial",
+        "description": "You temporarily take on the full radiance of a celestial being, growing wings of divine fire.",
+        "details": {
+          "usage": "Action",
+          "effect": "For 1 min: wings (60-ft fly), +3d8 radiant on melee, advantage on all rolls, undead/fiends within 30 ft WIS save or frightened.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Oath Fulfilled",
+        "description": "Your sacred oath reaches its ultimate expression. The vow you swore is no longer mere words — it is woven into the fabric of reality.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Your Paladin auras extend to 60 ft. You are immune to radiant and necrotic damage. +2 to all saving throws."
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Avatar of Divinity",
+        "description": "You transcend the boundary between mortal champion and divine instrument, becoming a living embodiment of your deity's power.",
+        "details": {
+          "usage": "Passive",
+          "effect": "HP max +50. Immune to radiant/necrotic. Fiends/undead within 60 ft take 20 radiant/turn. Allies within 60 ft regain 10 HP/turn. If reduced to 0 HP, drop to 1 HP instead and deal 10d10 radiant to enemies within 30 ft (1/long rest)."
+        }
+      }
     ]
   },
   "Barbarian": {
@@ -655,6 +1640,171 @@
         "details": {
           "usage": "Passive (permanent)",
           "effect": "+4 STR, +4 CON; maximums raised by 4"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Relentless Rage (Improved)",
+        "description": "Primal fury keeps you standing through sheer defiance of mortality. Your rage refuses to let you fall while blood remains to be shed.",
+        "details": {
+          "usage": "Passive",
+          "effect": "If you drop to 0 HP while raging, DC 10 CON save to drop to 1 HP instead. DC increases by 5 each use, resets on long rest."
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Persistent Rage",
+        "description": "Once ignited, your rage burns until you choose to end it or fall unconscious. You are a tireless engine of destruction.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Rage no longer ends early if you haven't attacked or taken damage."
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Brutal Critical (Improved)",
+        "description": "When your weapon finds a vital spot, you don't just wound — you devastate.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Roll three additional weapon damage dice on a critical hit."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Retaliation",
+        "description": "Pain only makes you angrier. When an enemy draws blood, your weapon lashes out before the sting registers.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "When a creature within 5 ft damages you, make a melee weapon attack against it.",
+          "recharge": "At will"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Titanic Throw",
+        "description": "You hurl a creature or massive object with enough force to shatter stone, using your enemy as a projectile.",
+        "details": {
+          "usage": "Action",
+          "effect": "Grapple a creature up to one size larger. On success, hurl 30 ft dealing 4d10 bludgeoning. Creatures in landing zone take 4d10 and DC 18 STR save or prone.",
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Primal Fury",
+        "description": "When your rage peaks, your strikes become a blur of savage violence that overwhelms any defense.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "While raging, enter Primal Fury for 1 min: +1 extra attack per Attack action, +1d12 damage on all attacks, disadvantage on all saves.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Unstoppable",
+        "description": "While raging, nothing short of death can halt your charge. Paralysis, stun, and binding magic slide off you.",
+        "details": {
+          "usage": "Passive",
+          "effect": "While raging, immune to paralyzed/stunned/restrained by nonmagical means. CON save at end of turn to end magical versions."
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Indomitable Might (Improved)",
+        "description": "Your physical strength transcends mortal limits, accomplishing feats that would require siege engines.",
+        "details": {
+          "usage": "Passive",
+          "effect": "STR counts as 30 for carrying/lifting/checks/saves. Advantage on all STR checks/saves. Unarmed strikes deal 2d8 magical bludgeoning."
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Greater Rage",
+        "description": "Your rage evolves into something ancient and terrifying — a primal force that resonates with the world's first violence.",
+        "details": {
+          "usage": "Passive",
+          "effect": "While raging: +6 damage (up from +4), 30-ft fly speed, enemies within 10 ft DC 18 WIS save or frightened."
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Primal Champion (Improved)",
+        "description": "Your body reaches the absolute pinnacle of physical development, a monument to strength and endurance.",
+        "details": {
+          "usage": "Passive",
+          "effect": "STR and CON increase by 4 each (max 26). You can rage unlimited times per day."
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Avatar of Destruction",
+        "description": "You briefly become a physical manifestation of primal destruction — growing to giant size and radiating crushing force.",
+        "details": {
+          "usage": "Action",
+          "effect": "For 1 min: grow to Huge, double space, triple reach, +4d12 weapon damage, creatures within 15 ft take 20 force/turn (DC 20 CON half). Resistance to all damage.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Rend the Earth",
+        "description": "You slam the ground with such force that the earth cracks and heaves, sending devastating shockwaves in all directions.",
+        "details": {
+          "usage": "Action",
+          "damage": "15d10 bludgeoning",
+          "area": "60-ft radius",
+          "save": "DC 22 STR or knocked prone and stunned 1 turn; half on success",
+          "effect": "Area becomes difficult terrain.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Warlord's Wrath",
+        "description": "Your rage becomes infectious — a primal battle cry that ignites fury in nearby allies.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "When you rage, allies within 30 ft gain for 1 min: +3 attack/damage, resistance to physical damage, immunity to fear.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Invulnerable Hide",
+        "description": "Years of punishment have transformed your skin into something barely flesh — it deflects blades, absorbs impacts, and shrugs off fire.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to poison/disease. Resistance to all damage while raging. AC cannot be lower than 22. Crits against you become normal hits."
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Rage Incarnate",
+        "description": "You are Rage itself given form. Your fury reshapes the world around you and can never be truly extinguished.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Unlimited rages, rage never ends unless you choose. While raging: immune to spell damage, +3d10 melee damage. Once per long rest, 120-ft cone of 30d10 force (DC 25 STR half)."
         }
       }
     ]
@@ -754,6 +1904,177 @@
           "effect": "Inspiration die = d12; refunds on max roll"
         }
       }
+    ],
+    "11": [
+      {
+        "name": "Magical Secrets (Greater)",
+        "description": "Your breadth of knowledge expands even further, letting you pluck spells from any tradition.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Choose two additional spells from any class list (up to 6th level). They count as bard spells."
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Song of Rest (Greater)",
+        "description": "Your music during rest is so restorative that it knits wounds shut with almost miraculous speed.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Song of Rest heals an additional 2d8 HP. One creature also regains a spent Hit Die."
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Cutting Words (Superior)",
+        "description": "Your verbal jabs have grown into psychic blades that cut more deeply than any sword.",
+        "details": {
+          "usage": "Reaction",
+          "effect": "If target still succeeds after Cutting Words reduction, spend a 2nd-level slot to force a reroll (take lower)."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Peerless Skill",
+        "description": "When your talents fall just short, you reach into your repertoire and find the right flourish.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Expend Bardic Inspiration to add the die to your own ability checks."
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Mass Inspiration",
+        "description": "Your performance crescendos into something that touches every ally simultaneously.",
+        "details": {
+          "usage": "Action",
+          "effect": "Grant Bardic Inspiration dice to all friendly creatures within 60 ft who can hear you. Doesn't count against normal uses.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Irresistible Performance",
+        "description": "Your performances are so captivating that even hostile creatures pause to listen.",
+        "details": {
+          "usage": "Action",
+          "effect": "All hostile creatures within 60 ft that can hear you make a WIS save or are charmed for 1 minute.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "The Legendary Tale",
+        "description": "You speak a legend of such raw bardic power that reality begins to conform to the narrative.",
+        "details": {
+          "usage": "Action",
+          "effect": "Describe an event within 120 ft — the DM determines how it manifests. Alternatively, cast any 7th-level-or-lower spell from any class free.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Symphony of Souls",
+        "description": "Your music weaves through the spiritual essence of allies, binding them into one harmonious entity.",
+        "details": {
+          "usage": "Action",
+          "effect": "For 1 min: allies within 60 ft share telepathy, advantage on attacks when near another affected ally, can absorb 5 damage for each other.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Crowd Control Maestro",
+        "description": "A single song simultaneously ensnares an entire crowd in whatever emotional state you choose.",
+        "details": {
+          "usage": "Action",
+          "effect": "Choose charmed, frightened, or stunned. All enemies within 60 ft WIS save or affected until end of next turn.",
+          "uses": "Proficiency bonus per long rest"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Superior Inspiration",
+        "description": "Your Bardic Inspiration borders on the miraculous — allies transcend their limits entirely.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Allies roll Bardic Inspiration dice twice (take higher). When you would run out of uses, regain 1."
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Reality Aria",
+        "description": "You perform a piece of such profound truth that reality itself begins to rewrite the laws of physics in the area.",
+        "details": {
+          "usage": "Action",
+          "effect": "For 1 min within 120 ft, choose 3: halve/reverse gravity in 30 ft; double all healing; maximize all damage rolls; creatures can't die; advantage/disadvantage on all rolls; teleportation always succeeds.",
+          "duration": "1 minute",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Word of Legend",
+        "description": "You speak a single word of such legendary bardic power that it reshapes reality in an instant.",
+        "details": {
+          "usage": "Action",
+          "effect": "Choose: (a) all allies within 60 ft fully heal and cure all conditions; (b) one creature within 60 ft CON save or drop to 0 HP; (c) all creatures within 60 ft charmed 24 hours (WIS negates).",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Eternal Refrain",
+        "description": "You compose a melody that loops through time itself, letting you revisit a moment and choose differently.",
+        "details": {
+          "usage": "Action",
+          "effect": "You and chosen creatures within 30 ft return to positions/states from 1 round ago (HP, conditions, positions reset). Dead creatures return at 1 HP.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Anthem of Annihilation",
+        "description": "Your voice rises to a frequency that reality cannot bear, unleashing a wave of pure sonic destruction.",
+        "details": {
+          "usage": "Action",
+          "damage": "30d6 thunder + 30d6 psychic",
+          "area": "300-ft radius",
+          "save": "CON for half thunder; INT for half psychic",
+          "effect": "Failed both saves: deafened and stunned 1 min. Sound heard 10 miles away.",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "The Living Legend",
+        "description": "You transcend the role of performer and become a mythological force. Reality defers to your narrative authority.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to charm, fear, psychic damage. Cast any spell from any class 1/long rest free. Inspiration dice become d12s. Once per long rest, speak a Decree: describe an outcome — if physically possible within 1 hour, fate makes it happen."
+        }
+      }
     ]
   },
   "Monk": {
@@ -846,6 +2167,182 @@
           "cost": "4 ki",
           "duration": "1 minute",
           "effect": "Invisible; resistance to all but force damage; advantage on attacks"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Quivering Palm",
+        "description": "You set up lethal vibrations in a creature's body with a single touch. Within 24 hours, you can cause it to drop to 0 HP — or deal 10d10 necrotic on a successful CON save.",
+        "details": {
+          "usage": "Action (touch) + Action (detonate)",
+          "save": "Constitution",
+          "damage": "10d10 necrotic on save",
+          "duration": "24 hours",
+          "cost": "3 ki points"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Tongue of the Sun and Moon",
+        "description": "You learn to touch the ki of other minds, allowing you to understand and be understood by any creature with a language.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Comprehend and speak all languages"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Diamond Soul (Improved)",
+        "description": "Your mastery of ki grants you proficiency in all saving throws and the ability to reroll failures.",
+        "details": {
+          "usage": "Passive / Reaction",
+          "effect": "Proficiency in all saves; spend 1 ki to reroll a failed save",
+          "cost": "1 ki point (reroll)"
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Timeless Body",
+        "description": "Your ki sustains you so that you suffer none of the frailty of old age. You can't be aged magically and no longer need food or water.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to magical aging; no need for food or water"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Ki Resonance Strike",
+        "description": "You amplify a single strike with a focused burst of ki energy that ripples through a creature's nervous system.",
+        "details": {
+          "usage": "Action",
+          "damage": "4d10 force (bonus)",
+          "effect": "Target stunned until end of your next turn",
+          "cost": "4 ki points"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Empty Body (Improved)",
+        "description": "Spend 4 ki to become invisible for 1 minute with resistance to all damage but force. Or spend 8 ki to cast Astral Projection without material components.",
+        "details": {
+          "usage": "Action",
+          "duration": "1 minute",
+          "effect": "Invisible; resistance to all damage except force",
+          "cost": "4 ki (invisibility) / 8 ki (Astral Projection)"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Perfect Self",
+        "description": "When you roll for initiative and have no ki points remaining, you regain 4 ki points. Your body is never truly depleted in crisis.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Regain 4 ki on initiative if empty"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Astral Step",
+        "description": "You slip between the material and astral planes mid-combat, teleporting and leaving a disorienting afterimage.",
+        "details": {
+          "usage": "Bonus action",
+          "range": "60 ft",
+          "effect": "Teleport; enemies within 10 ft of origin have disadvantage on attacks until start of next turn",
+          "cost": "3 ki points"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Flurry of a Thousand Blows",
+        "description": "Your Flurry of Blows evolves — spend 3 ki instead of 1 to make four bonus unarmed strikes instead of two.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Four bonus unarmed strikes instead of two",
+          "cost": "3 ki points"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Ascendant Form",
+        "description": "You transcend mortal limits, wreathed in golden ki light. Unarmed strikes deal +2d10 radiant, speed doubles, immune to charm/fear/paralysis/stun.",
+        "details": {
+          "usage": "Action",
+          "duration": "1 minute",
+          "damage": "+2d10 radiant on unarmed strikes",
+          "effect": "Speed doubled; immune to charmed, frightened, paralyzed, stunned",
+          "cost": "10 ki points",
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Void Palm",
+        "description": "An evolution of Quivering Palm — plant a void resonance that disintegrates the target on a failed CON save, or deals 15d10 necrotic on success.",
+        "details": {
+          "usage": "Action (touch) + Action (detonate)",
+          "save": "Constitution",
+          "damage": "15d10 necrotic on save; disintegrated on failure",
+          "cost": "6 ki points",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Ki Absorption",
+        "description": "When you succeed on a save against a spell, you absorb its energy and regain ki points equal to half the spell's level.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Regain ki equal to half spell level (min 1) on successful save vs. spell"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Unbroken Stance",
+        "description": "Your ki is so refined that your body cannot be moved against your will. You stand like a mountain.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to prone; cannot be forcibly moved or teleported; advantage on all saving throws"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Thousand Strike Tempest",
+        "description": "You move with impossible speed, striking every foe within reach simultaneously.",
+        "details": {
+          "usage": "Action",
+          "range": "30-ft burst",
+          "effect": "One unarmed strike against each creature in range; stunned on failed CON save",
+          "cost": "8 ki points",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Enlightened Immortal",
+        "description": "You achieve perfect harmony of body, mind, and ki. You no longer age, are immune to disease and poison, and your ki flares to defy death itself.",
+        "details": {
+          "usage": "Passive / Reaction",
+          "effect": "Ageless; immune to disease/poison. When reduced to 0 HP, spend 5 ki to drop to 1 HP instead and push all creatures within 20 ft back 30 ft.",
+          "cost": "5 ki (reaction)",
+          "uses": 1,
+          "recharge": "long rest"
         }
       }
     ]
@@ -947,6 +2444,182 @@
           "effect": "Cast spells while Wild Shaped"
         }
       }
+    ],
+    "11": [
+      {
+        "name": "Elemental Wild Shape",
+        "description": "You can expend two Wild Shape uses to transform into an air, earth, fire, or water elemental.",
+        "details": {
+          "usage": "Action",
+          "effect": "Transform into an elemental",
+          "cost": "Two Wild Shape uses",
+          "duration": "Until you drop to 0 HP or revert"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Nature's Veil",
+        "description": "As a bonus action, expend a Wild Shape use to become magically invisible until the start of your next turn.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Invisible until start of next turn",
+          "cost": "One Wild Shape use"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Symbiotic Entity",
+        "description": "When you wild shape, gain temporary HP equal to 4× your druid level and your beast attacks deal bonus poison damage.",
+        "details": {
+          "usage": "Passive (on Wild Shape)",
+          "effect": "Gain 4× druid level temp HP; beast attacks deal +proficiency bonus poison damage"
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Primordial Surge",
+        "description": "You call upon primal forces — earth splits, vines erupt, flames bloom. Creatures in a 60-ft radius must make STR saves or be restrained and take 6d8 bludgeoning.",
+        "details": {
+          "usage": "Action",
+          "area": "60-ft radius",
+          "range": "120 ft",
+          "save": "Strength",
+          "damage": "6d8 bludgeoning; 3d8/turn while restrained",
+          "duration": "1 minute (concentration)",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Verdant Avatar",
+        "description": "Assume the form of a massive plant-beast hybrid — 100 temp HP, 4d10 slam attacks, thorns deal 2d8 to melee attackers.",
+        "details": {
+          "usage": "Action",
+          "cost": "Three Wild Shape uses",
+          "duration": "1 hour or until temp HP depleted",
+          "effect": "20-ft form; 100 temp HP; 4d10 slam; thorns 2d8 piercing",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Nature's Ward",
+        "description": "You are immune to poison and disease. You cannot be charmed or frightened by elementals or fey, and immune to curses.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to poison, disease, curse; immune to charm/fear from fey and elementals"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Titan Wild Shape",
+        "description": "Your Wild Shape can now take legendary beast forms — creatures up to CR equal to your druid level divided by 3. Retain concentration spells.",
+        "details": {
+          "usage": "Action",
+          "effect": "Wild Shape into CR (druid level / 3); retain concentration spells",
+          "cost": "Two Wild Shape uses"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Timeless Body",
+        "description": "Primal magic causes you to age at 1/10 the normal rate. You are immune to any magical effect that would age you.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Age 1/10 rate; immune to magical aging"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "World Wrath",
+        "description": "Call a catastrophic convergence of elemental forces. All creatures in a 60-ft radius take 12d10 elemental damage.",
+        "details": {
+          "usage": "Action",
+          "range": "300 ft",
+          "area": "60-ft radius",
+          "save": "Dexterity for half",
+          "damage": "12d10 (fire, lightning, cold, or bludgeoning)",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Archdruid",
+        "description": "You can use Wild Shape unlimited times. Ignore verbal/somatic components in beast form and can speak while transformed.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Unlimited Wild Shape; ignore V/S components in beast form; speak in beast form"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Voice of the World",
+        "description": "The world speaks through you. Commune with the land in a 10-mile radius, and plants/animals obey your spoken commands.",
+        "details": {
+          "usage": "Action / Passive",
+          "range": "10-mile radius",
+          "effect": "Omniscient awareness of local terrain/creatures/events; animals and plants obey simple commands"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Reincarnation Cycle",
+        "description": "When killed, the world draws you back. Within 24 hours, your body is reborn from the earth as if by true resurrection.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Automatic true resurrection after death",
+          "recharge": "Once per year"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Elemental Dominion",
+        "description": "Command elementals without a spell. Summon 1d4+1 elder elementals that obey you for 1 hour.",
+        "details": {
+          "usage": "Action",
+          "effect": "Summon 1d4+1 elder elementals",
+          "duration": "1 hour",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "World Shaper",
+        "description": "Over 10 minutes, reshape the landscape within a 1-mile radius — raise terrain, redirect rivers, grow or wither forests.",
+        "details": {
+          "usage": "10 minutes (ritual)",
+          "area": "1-mile radius",
+          "effect": "Permanently reshape terrain, rivers, and plant growth",
+          "recharge": "Once per week"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "One With Nature",
+        "description": "You achieve perfect union with the living world. On natural ground outside combat, immune to all damage. In combat: resistance to all damage, blindsight 120 ft, recover one spell slot per turn (5th level or lower).",
+        "details": {
+          "usage": "Passive",
+          "effect": "Immune to damage on natural ground (out of combat); resistance to all in combat; blindsight 120 ft; recover one 5th-or-lower slot/turn"
+        }
+      }
     ]
   },
   "Sorcerer": {
@@ -1041,6 +2714,179 @@
         "details": {
           "usage": "Passive + once per rest",
           "effect": "+CHA to all spell damage; free Twin Spell 1/long rest"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Metamagic Mastery",
+        "description": "You gain two additional Metamagic options and can apply two to a single spell simultaneously. Sorcery Point max increases by 4.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Two additional Metamagic options; +4 Sorcery Points; stack two Metamagics per spell"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Arcane Overload",
+        "description": "Push a spell beyond its limits by flooding it with raw sorcerous power, maximizing all damage dice.",
+        "details": {
+          "usage": "Passive (on casting)",
+          "cost": "Sorcery points equal to spell level",
+          "effect": "Maximize all damage dice of the spell"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Wild Surge Mastery",
+        "description": "You harness wild magic rather than fear it. Roll twice on the Wild Magic Surge table and choose the result.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Roll twice on Wild Magic Surge table (choose result). Tides of Chaos recharges on short rest."
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Elemental Affinity Burst",
+        "description": "Spend 3 sorcery points when casting to make your chosen element ignore resistance and immunity.",
+        "details": {
+          "usage": "Passive (on casting)",
+          "cost": "3 sorcery points",
+          "effect": "Chosen elemental damage type ignores resistance and immunity for the turn"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Arcane Explosion",
+        "description": "Release a catastrophic pulse of raw arcane energy. All creatures within 30 ft make CON saves or take 10d6 force and are knocked prone.",
+        "details": {
+          "usage": "Action",
+          "area": "30-ft radius",
+          "save": "Constitution",
+          "damage": "10d6 force",
+          "effect": "Prone on failed save",
+          "cost": "6 sorcery points",
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Spell Duplication",
+        "description": "After casting a single-target spell of 5th level or lower, spend sorcery points to cast it again on a different target for free.",
+        "details": {
+          "usage": "Bonus action",
+          "cost": "Sorcery points equal to spell level",
+          "effect": "Cast same spell again on different target at no spell slot cost"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Elemental Form",
+        "description": "Transform your body into living elemental energy for 1 minute — immune to chosen element, pass through creatures dealing 3d10 damage.",
+        "details": {
+          "usage": "Bonus action",
+          "cost": "8 sorcery points",
+          "duration": "1 minute",
+          "effect": "Immunity to chosen element; pass through creatures (3d10 damage); spells converted to chosen type"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Spell Torrent",
+        "description": "After casting a spell as an action, cast a second spell of 3rd level or lower as a bonus action without a spell slot.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Cast a 3rd-level-or-lower spell free after your action spell",
+          "uses": 1,
+          "recharge": "short rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Mutable Magic",
+        "description": "When a creature succeeds on a save against your spell, spend 3 sorcery points to force a reroll (take lower).",
+        "details": {
+          "usage": "Reaction",
+          "cost": "3 sorcery points",
+          "effect": "Force reroll on successful save against your spell, use lower result"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Sorcerous Restoration",
+        "description": "At the start of each turn in combat, regain 4 sorcery points. On a short rest, regain all sorcery points.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Regain 4 sorcery points per turn in combat; regain all on short rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Reality Fracture",
+        "description": "Tear a hole in reality, releasing raw magic. All creatures within 60 ft make CON saves or take 14d10 force and are stunned for 1 minute.",
+        "details": {
+          "usage": "Action",
+          "area": "60-ft radius",
+          "save": "Constitution",
+          "damage": "14d10 force",
+          "effect": "Stunned 1 min on fail",
+          "cost": "10 sorcery points",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Arcane Ascension",
+        "description": "Your sorcerous bloodline fully awakens. You gain an additional 9th-level spell slot and +2 to spell save DC permanently.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Additional 9th-level spell slot; +2 spell save DC"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Chaos Incarnate",
+        "description": "Once per turn, trigger any wild magic surge effect you've previously experienced, targeting any creature you choose.",
+        "details": {
+          "usage": "Bonus action",
+          "effect": "Trigger any previously seen Wild Magic Surge effect of your choosing",
+          "recharge": "Once per turn"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Unstoppable Spell",
+        "description": "Spend 7 sorcery points to make a spell completely unavoidable — bypasses immunities, can't be countered, targets have disadvantage on saves.",
+        "details": {
+          "usage": "Passive (on casting)",
+          "cost": "7 sorcery points",
+          "effect": "Spell ignores immunities/resistances; can't be counterspelled; disadvantage on saves; can't use legendary resistance"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Living Spellstorm",
+        "description": "Your body becomes a nexus of arcane energy so intense that reality warps around you. Spells cast by others in your aura trigger wild surges. Your own spells are always empowered and maximized.",
+        "details": {
+          "usage": "Passive",
+          "area": "30-ft aura",
+          "effect": "Other casters auto-trigger Wild Surges; your spells are free Empowered and Maximized; immune to spell damage"
         }
       }
     ]
@@ -1138,6 +2984,182 @@
           "recharge": "long rest",
           "duration": "1-minute ritual",
           "effect": "Regain all spell slots"
+        }
+      }
+    ],
+    "11": [
+      {
+        "name": "Mystic Arcanum (6th Level)",
+        "description": "Your patron grants a fragment of devastating power — one 6th-level spell, cast once per long rest without a slot.",
+        "details": {
+          "usage": "Action",
+          "effect": "Cast one 6th-level spell once per long rest without a slot",
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "12": [
+      {
+        "name": "Eldritch Blast: Entropic Lance",
+        "description": "Each Eldritch Blast beam deals an additional 1d8 necrotic damage. Creatures killed by it can't be resurrected by spells of 5th level or lower.",
+        "details": {
+          "usage": "Passive",
+          "damage": "+1d8 necrotic per beam",
+          "effect": "Kills prevent resurrection by 5th-level-or-lower spells"
+        }
+      }
+    ],
+    "13": [
+      {
+        "name": "Mystic Arcanum (7th Level)",
+        "description": "Your patron tears a deeper rift in your mind, flooding it with a 7th-level secret.",
+        "details": {
+          "usage": "Action",
+          "effect": "Cast one 7th-level spell once per long rest without a slot",
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "14": [
+      {
+        "name": "Dark Patron's Favor",
+        "description": "Your patron rewards devotion with a direct infusion of their essence. Choose: fire/poison immunity (Fiend), 1-mile telepathy (Great Old One), or Irresistible Dance at will (Archfey).",
+        "details": {
+          "usage": "Passive",
+          "effect": "Choose one patron gift based on your pact"
+        }
+      }
+    ],
+    "15": [
+      {
+        "name": "Mystic Arcanum (8th Level)",
+        "description": "Your patron pushes forbidden knowledge into your consciousness — an 8th-level spell for your arsenal.",
+        "details": {
+          "usage": "Action",
+          "effect": "Cast one 8th-level spell once per long rest without a slot",
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "16": [
+      {
+        "name": "Pact Ascendant",
+        "description": "Your pact boon evolves. Familiar gains 2× warlock level HP and can use your spell slots. Pact weapon deals +1d8 force. Tome learns 3 more cantrips.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Pact Boon upgraded: familiar stronger, weapon deadlier, or tome expanded"
+        }
+      }
+    ],
+    "17": [
+      {
+        "name": "Mystic Arcanum (9th Level)",
+        "description": "Your patron has given you the most devastating secret it possesses: a 9th-level spell branded into your soul.",
+        "details": {
+          "usage": "Action",
+          "effect": "Cast one 9th-level spell once per long rest without a slot",
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "18": [
+      {
+        "name": "Eldritch Dominion",
+        "description": "Cast Dominate Monster without a slot or components. The target cannot use legendary resistance against it.",
+        "details": {
+          "usage": "Action",
+          "save": "Wisdom",
+          "effect": "Dominate Monster at will; target can't use legendary resistance",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "19": [
+      {
+        "name": "Planar Conduit",
+        "description": "You are a living gateway between worlds. Tear open a rift to summon 1d4 creatures of CR 10 or lower from your patron's plane.",
+        "details": {
+          "usage": "Action",
+          "effect": "Summon 1d4 creatures of CR 10 or lower from patron's plane",
+          "duration": "1 hour",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "20": [
+      {
+        "name": "Eldritch Master (Improved)",
+        "description": "Spend 1 minute in prayer to regain all spell slots and Mystic Arcanum. While on cooldown, regain a slot on each kill.",
+        "details": {
+          "usage": "1-minute ritual",
+          "effect": "Regain all spell slots and Mystic Arcanum; regain one slot per kill while on cooldown",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "21": [
+      {
+        "name": "Patron's Vessel",
+        "description": "Your patron directly manifests through you. CHA becomes 26, spell save DC +4, creatures that fail saves are also frightened 1 hour.",
+        "details": {
+          "usage": "Action",
+          "duration": "1 minute",
+          "effect": "CHA 26; +4 spell save DC; failed saves also frighten for 1 hour",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "22": [
+      {
+        "name": "Dark Covenant",
+        "description": "You bargain deeper into your pact. Gain two additional Eldritch Invocations. Limited invocations can be used twice per day.",
+        "details": {
+          "usage": "Passive",
+          "effect": "+2 Eldritch Invocations; limited invocations can be used twice per day"
+        }
+      }
+    ],
+    "23": [
+      {
+        "name": "Soulbrand",
+        "description": "Permanently mark a creature's soul with your patron's sigil. They have disadvantage on saves against your spells and you always know their location across planes.",
+        "details": {
+          "usage": "Action",
+          "range": "Touch",
+          "save": "Charisma",
+          "effect": "Permanent: disadvantage on saves vs. your spells; you sense their location across planes",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "24": [
+      {
+        "name": "Void Gaze",
+        "description": "Lock eyes with a creature within 60 ft, forcing it to confront the void. Failed WIS save: incapacitated and 8d10 psychic per turn for 1 minute.",
+        "details": {
+          "usage": "Action",
+          "range": "60 ft",
+          "save": "Wisdom",
+          "damage": "8d10 psychic per turn",
+          "duration": "1 minute (concentration)",
+          "effect": "Incapacitated; repeats save end of each turn",
+          "uses": 1,
+          "recharge": "long rest"
+        }
+      }
+    ],
+    "25": [
+      {
+        "name": "Apotheosis of the Pact",
+        "description": "The boundary between you and your patron dissolves entirely. You gain Legendary Resistance 3/day, double Eldritch Blast beams, Mystic Arcanum (up to 8th) at will, advantage on all saves, and immunity to charm and fear.",
+        "details": {
+          "usage": "Passive",
+          "effect": "Legendary Resistance 3/day; double Eldritch Blast beams; Mystic Arcanum (8th and below) at will; advantage on all saves; immune to charm/fear"
         }
       }
     ]

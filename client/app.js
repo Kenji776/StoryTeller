@@ -24,6 +24,25 @@ document.addEventListener("click", (e) => {
 
 let renderedHistoryCount = 0;
 let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+// === Word-level narration highlight tracking ===
+// Stores the DOM element of the most recent DM narration entry so the
+// audio highlight system (tts.js) can find the word <span>s to animate.
+window._activeNarrationDiv = null;
+
+/**
+ * Wrap each word in a narration string with an indexed <span> for
+ * synchronized audio highlighting.  Bracket content like [stage directions]
+ * is left un-wrapped so span indices stay aligned with the TTS alignment
+ * data (which never sees bracket text).
+ */
+function wrapNarrationWords(text) {
+	let wordIndex = 0;
+	return text.replace(/\[[^\]]*\]|(\S+)/g, (match, word) => {
+		if (word === undefined) return match;                       // bracket content — keep as-is
+		return `<span class="narration-word" data-word-idx="${wordIndex++}">${word}</span>`;
+	});
+}
 const clientId = Math.random()
 	.toString(36)
 	.slice(2, 10);
@@ -261,14 +280,14 @@ async function loadVoices() {
 		const data = await res.json();
 		if (!data.ok) throw new Error("Failed to load voices");
 
-		voiceSelect.innerHTML = data.voices.map((v) => `<option value="${v.id}">${v.name}${v.accent ? ` (${v.accent})` : ""}</option>`).join("");
+		els.voiceSelect.innerHTML = data.voices.map((v) => `<option value="${v.id}">${v.name}${v.accent ? ` (${v.accent})` : ""}</option>`).join("");
 	} catch (err) {
 		console.error("Voice load failed:", err);
-		voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
+		els.voiceSelect.innerHTML = '<option value="">Error loading voices</option>';
 	}
 }
 
-voiceSelect.addEventListener("change", (e) => {
+els.voiceSelect.addEventListener("change", (e) => {
 	selectedVoiceId = e.target.value;
 	console.log("🎤 Selected voice:", selectedVoiceId);
 });
@@ -324,6 +343,14 @@ function renderState(s) {
 	// === Phase Badge & Lobby Code ===
 	els.phaseBadge.textContent = s.phase?.toUpperCase() || "—";
 	els.lobbyCode.textContent = s.code ? `#${s.code}` : "";
+
+	// === Starting level — sync to character builder ===
+	const levelInput = document.getElementById("level");
+	if (levelInput && s.startingLevel && s.phase !== "running") {
+		levelInput.value = s.startingLevel;
+		if (typeof recalcPointBudget === "function") recalcPointBudget();
+		if (typeof recalcHP === "function") recalcHP();
+	}
 
 	// === Render Lobby Game Options Panel ===
 	renderLobbyOptions(s);
@@ -491,7 +518,7 @@ function renderPlayers(s) {
 			<span class="player-entry" data-player="${p.name}" style="flex:1;">
 				${icon} <strong>${p.name || "(unnamed)"}</strong>${hostBadge}${raceClass}
 			</span>
-			${canKick ? `<button class="kick-btn" data-player="${p.name}" title="Kick player">✕</button>` : ""}
+			${canKick ? `<button class="kick-btn" data-player="${p.name}" data-sound="Shield Block Thud" title="Kick player">✕</button>` : ""}
 		`;
 		d.style.cssText = "display:flex;align-items:center;gap:0.5em;";
 
@@ -547,7 +574,7 @@ function renderSheet(s) {
 		document.getElementById("charSpellSlots").textContent = `${slotsLeft}/${maxSlots}`;
 
 		// XP bar
-		const thresholds = [0, 300, 900, 2700, 6500];
+		const thresholds = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000,400000,450000,500000,560000,620000];
 		const level = p.level || 1;
 		const next = thresholds[level] || 99999;
 		const prev = thresholds[level - 1] || 0;
@@ -583,7 +610,12 @@ function renderSheet(s) {
 
 		// === ABILITIES & INVENTORY — use component renderers so display is always current ===
 		drawAbilitiesComponent("gameAbilitiesContainer", p.abilities || [], false, true);
-		drawInventoryComponent("gameInventoryContainer", p.inventory || [], false);
+		const equippedMap = {
+				weapon:  p.weapon?.name  || "",
+				armor:   p.armor?.name   || "",
+				trinket: p.trinket?.name || "",
+			};
+		drawInventoryComponent("gameInventoryContainer", p.inventory || [], false, equippedMap);
 	} else {
 		// Fallback: old lobby preview
 		const stats = Object.entries(p.stats || {})
@@ -676,6 +708,7 @@ function renderLogs(state) {
 			pinBtn.className = "pin-moment-btn";
 			pinBtn.title = "Pin this moment";
 			pinBtn.textContent = "📌";
+			pinBtn.dataset.sound = "Map Pin";
 			pinBtn.onclick = () => {
 				const idx = Number(div.dataset.historyIndex);
 				const isPinned = div.classList.toggle("pinned");
@@ -725,6 +758,7 @@ function appendLog(text, historyIndex) {
 		pinBtn.className = "pin-moment-btn";
 		pinBtn.title = "Pin this moment";
 		pinBtn.textContent = "📌";
+		pinBtn.dataset.sound = "Map Pin";
 		pinBtn.onclick = () => {
 			const idx = Number(div.dataset.historyIndex);
 			const isPinned = div.classList.toggle("pinned");
@@ -773,6 +807,7 @@ function renderInventoryList(inv = []) {
 function hideDeathModal() {
 	const modal = document.getElementById("deathModal");
 	modal.classList.remove("active");
+	document.getElementById("deathModalNarration").innerHTML = "";
 	document.querySelectorAll("input, button, select, textarea").forEach((el) => {
 		el.disabled = false;
 		el.classList.remove("disabled");
@@ -781,11 +816,37 @@ function hideDeathModal() {
 	setActionInputForTurn(currentTurnPlayer);
 }
 
-function showDeathModal() {
-	// Show the modal
-	document.getElementById("deathModal").classList.add("active");
+/**
+ * Show the death/game-over modal.
+ * @param {"death"|"wipe"} mode - "death" for individual, "wipe" for TPK
+ * @param {object} [opts]
+ * @param {string} [opts.subtitle] - Custom subtitle text
+ * @param {boolean} [opts.returnToLobby] - Whether dismiss returns to landing screen
+ */
+function showDeathModal(mode = "death", opts = {}) {
+	const modal = document.getElementById("deathModal");
+	const titleEl = document.getElementById("deathModalTitle");
+	const subtitleEl = document.getElementById("deathModalSubtitle");
+	const narrationEl = document.getElementById("deathModalNarration");
+	const dismissBtn = document.getElementById("deathModalDismiss");
+	const alreadyActive = modal.classList.contains("active");
 
-	// Disable gameplay UI but keep chat functional
+	if (mode === "wipe") {
+		titleEl.textContent = "☠️ Total Party Kill";
+		subtitleEl.textContent = opts.subtitle || "The entire party has fallen. The world moves on without you...";
+		dismissBtn.textContent = "Return to Lobby";
+	} else {
+		titleEl.textContent = "☠️ You Died";
+		subtitleEl.textContent = opts.subtitle || "Your journey ends here...";
+		dismissBtn.textContent = "Continue Watching";
+	}
+
+	// Clear narration area for fresh content (caller will re-populate)
+	narrationEl.innerHTML = "";
+
+	modal.classList.add("active");
+
+	// Disable gameplay UI
 	const gameplayInputs = document.querySelectorAll(
 		"#actionInput, #actionButton, #quickActionSelect, .dice-btn, #micBtn"
 	);
@@ -796,15 +857,43 @@ function showDeathModal() {
 		}
 	});
 
-	// Optionally: play a dramatic sound or fade out background music
-	if (typeof playSound === "function") {
+	// Only play death sound on first show — not when upgrading from death → wipe
+	if (!alreadyActive && typeof playSound === "function") {
 		playSound("death");
 	}
 
-	// Auto-dismiss the death overlay after 15 seconds
-	setTimeout(() => {
-		document.getElementById("deathModal").classList.remove("active");
-	}, 15000);
+	// Set up dismiss handler (replace old listener each time)
+	const handler = () => {
+		dismissBtn.removeEventListener("click", handler);
+		// Stop any background music when dismissing
+		window.musicManager?.stop();
+		if (mode === "wipe" || opts.returnToLobby) {
+			modal.classList.remove("active");
+			document.getElementById("deathModalNarration").innerHTML = "";
+			show(els.landing);
+			// Resume menu music on landing page
+			window.musicManager?.startMenuMusic();
+		} else {
+			// Individual death — just close the overlay so they can spectate
+			modal.classList.remove("active");
+		}
+	};
+	dismissBtn.replaceWith(dismissBtn.cloneNode(true)); // strip all old listeners
+	document.getElementById("deathModalDismiss").addEventListener("click", handler);
+}
+
+/**
+ * Append narration HTML to the death modal's narration area.
+ * Used to feed in final LLM messages so the player can read them.
+ */
+function appendDeathNarration(html) {
+	const container = document.getElementById("deathModalNarration");
+	if (!container) return;
+	const entry = document.createElement("div");
+	entry.className = "death-narration-entry";
+	entry.innerHTML = html;
+	container.appendChild(entry);
+	container.scrollTop = container.scrollHeight;
 }
 
 // === Speech to Text (Web Speech API) ===
@@ -974,9 +1063,9 @@ function updateRestVoteModal(state, open) {
 	});
 })();
 
-function lockUI(actorName) {
+function lockUI(actorName, message) {
 	_uiLocked = true;
-	document.getElementById("uiLockMessage").textContent = `Waiting to resolve ${actorName}'s action...`;
+	document.getElementById("uiLockMessage").textContent = message || `Waiting to resolve ${actorName}'s action...`;
 	uiLock.classList.remove("hidden");
 	els.actionInput.disabled = true;
 	els.sendAction.disabled = true;
@@ -1027,7 +1116,7 @@ function rigUI() {
 		const slider = document.createElement("input");
 		slider.type = "range";
 		slider.min = "8";
-		slider.max = "15";
+		slider.max = "25";
 		slider.value = num.value;
 		slider.id = id + "_slider";
 		slider.className = "attr-slider";
@@ -1036,27 +1125,35 @@ function rigUI() {
 		valueSpan.textContent = num.value;
 		valueSpan.className = "attr-value";
 
-		let prevValue = Number(slider.value);
-
 		slider.addEventListener("input", () => {
 			const newVal = Number(slider.value);
-
-			// Calculate cost difference
-			const currentSpent = calcPoints(); // current total
-			const oldCost = costTable[prevValue] || 0;
+			// Use the hidden number input as the source of truth for the
+			// "old" value. This stays correct even when randomize or other
+			// code sets slider.value programmatically without firing events.
+			const oldVal = Number(num.value);
+			const oldCost = costTable[oldVal] || 0;
 			const newCost = costTable[newVal] || 0;
 			const diff = newCost - oldCost;
+			const currentSpent = calcPoints(); // reads from hidden inputs
 			const remaining = basePoints - currentSpent;
 
-			// Prevent overspending
-			if (diff > remaining) {
-				slider.value = prevValue; // revert
-				flashPoints("⚠ Too few points!");
+			// Prevent overspending, but always allow sliding DOWN
+			if (diff > 0 && diff > remaining) {
+				// Find the highest value this slider can afford
+				let best = oldVal;
+				for (let v = oldVal + 1; v <= newVal; v++) {
+					if ((costTable[v] || 0) - oldCost <= remaining) best = v;
+					else break;
+				}
+				slider.value = best;
+				num.value = best;
+				valueSpan.textContent = best;
+				updatePointsDisplay();
+				if (best === oldVal) flashPoints("⚠ Too few points!");
 				return;
 			}
 
 			// Accept new value
-			prevValue = newVal;
 			num.value = newVal;
 			valueSpan.textContent = newVal;
 			updatePointsDisplay();
@@ -1127,7 +1224,7 @@ function showRejoinModal(lobbyCode, availableChars, hibernating = false) {
 							</label>
 							<span class="rejoin-status" id="rejoin-status-${i}" style="font-size:0.78em;text-align:right;max-width:160px;"></span>
 						</div>`
-					: `<button class="primary rejoin-claim-btn" data-idx="${i}" data-name="${c.name}" data-charid="">⚔️ Rejoin</button>`
+					: `<button class="primary rejoin-claim-btn" data-idx="${i}" data-name="${c.name}" data-charid="" data-sound="Tavern Crowd Cheer" data-sound-hover="Magical Shimmer">⚔️ Rejoin</button>`
 				}
 			</div>
 		</div>`;
@@ -1282,7 +1379,7 @@ function renderLobbiesList(lobbies) {
 		tabsEl.innerHTML = Object.entries(tabGroups).map(([key, g]) => {
 			const c = counts[key];
 			const sel = key === _activeTab ? "lobby-tab--active" : "";
-			return `<button class="lobby-tab ${sel}" data-tab="${key}" ${c === 0 ? "disabled" : ""}>${g.label}${c ? ` <span class="lobby-tab-count">${c}</span>` : ""}</button>`;
+			return `<button class="lobby-tab ${sel}" data-tab="${key}" data-sound="Page Turn" data-sound-hover="Magical Shimmer" ${c === 0 ? "disabled" : ""}>${g.label}${c ? ` <span class="lobby-tab-count">${c}</span>` : ""}</button>`;
 		}).join("");
 
 		tabsEl.querySelectorAll(".lobby-tab").forEach((btn) => {
@@ -1336,8 +1433,8 @@ function renderLobbiesList(lobbies) {
 		const lastSeen = l.lastActivity ? timeAgo(l.lastActivity) : "";
 
 		// Actions — inline row
-		const readBtn = !l.hasPassword ? `<button class="lobby-action-btn" onclick="showStoryModal('${l.code}')">📖 Read</button>` : "";
-		const joinBtn = isJoinable(l.phase) ? `<button class="lobby-action-btn lobby-action-join" onclick="quickJoin('${l.code}')">⚔️ Join</button>` : "";
+		const readBtn = !l.hasPassword ? `<button class="lobby-action-btn" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer" onclick="showStoryModal('${l.code}')">📖 Read</button>` : "";
+		const joinBtn = isJoinable(l.phase) ? `<button class="lobby-action-btn lobby-action-join" data-sound="Tavern Crowd Cheer" data-sound-hover="Magical Shimmer" onclick="quickJoin('${l.code}')">⚔️ Join</button>` : "";
 		const codeTag = !isOver(l.phase) ? `<code class="lobby-code-tag">${l.code}</code>` : "";
 
 		return `
@@ -1545,7 +1642,7 @@ function updateGameUI(state) {
 	if (goldEl2) goldEl2.textContent = meChar.gold ?? 0;
 
 	// === XP Progress Bar ===
-	const thresholds = [0, 300, 900, 2700, 6500];
+	const thresholds = [0,300,900,2700,6500,14000,23000,34000,48000,64000,85000,100000,120000,140000,165000,195000,225000,265000,305000,355000,400000,450000,500000,560000,620000];
 	const level = meChar.level || 1;
 	const next = thresholds[level] || 99999;
 	const prev = thresholds[level - 1] || 0;
@@ -1572,7 +1669,12 @@ function updateGameUI(state) {
 
 	// === ABILITIES & INVENTORY — use component renderers so display is always current ===
 	drawAbilitiesComponent("gameAbilitiesContainer", meChar.abilities || [], false, true);
-	drawInventoryComponent("gameInventoryContainer", meChar.inventory || [], false);
+	const meEquipped = {
+		weapon:  meChar.weapon?.name  || "",
+		armor:   meChar.armor?.name   || "",
+		trinket: meChar.trinket?.name || "",
+	};
+	drawInventoryComponent("gameInventoryContainer", meChar.inventory || [], false, meEquipped);
 
 	// === Turn Banner ===
 	const turnName = state.initiative?.[state.turnIndex] || null;

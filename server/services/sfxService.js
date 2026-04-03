@@ -10,7 +10,7 @@ import { fileURLToPath } from "url";
 import fetch from "node-fetch";
 
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
-const SFX_DIR      = path.join(__dirname, "..", "..", "client", "sfx");
+const SFX_DIR      = path.join(__dirname, "..", "..", "client", "sfx", "game");
 const LIBRARY_PATH = path.join(__dirname, "..", "..", "client", "config", "sfx-library.json");
 
 // Minimum tag-overlap score required to consider a library effect a match.

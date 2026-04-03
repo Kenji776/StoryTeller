@@ -662,7 +662,8 @@
 						<details class="event-group">
 							<summary style="color:#f88;">Kill Player</summary>
 							<div>
-								<p class="hint" style="margin:0 0 0.5rem;">Force a player's HP to 0 and trigger the death sequence.</p>
+								<p class="hint" style="margin:0 0 0.5rem;">Force a player's HP to 0 and trigger the death sequence. Optionally describe what killed them so the LLM can narrate it.</p>
+								<textarea id="killReason" class="admin-textarea" placeholder="e.g. A boulder crashes down from the ceiling, crushing them instantly..." style="margin-bottom:0.4rem;min-height:3rem;"></textarea>
 								<button id="killPlayer" class="btn btn-danger">Kill Player</button>
 							</div>
 						</details>

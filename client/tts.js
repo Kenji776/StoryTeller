@@ -14,6 +14,9 @@ class NarrationChannel {
 		this.active = false;
 		this.cancelled = false;
 		this._stopPromise = null;
+		// Word-level highlight state
+		this.alignmentWords = [];
+		this._highlightedIdx = -1;
 	}
 
 	// ── Pipeline helpers ─────────────────────────────────────────────────────
@@ -59,6 +62,7 @@ class NarrationChannel {
 	// ── Teardown ─────────────────────────────────────────────────────────────
 
 	_teardown() {
+		this._clearHighlight();
 		try { if (this.mediaSource && this.mediaSource.readyState === "open") this.mediaSource.endOfStream(); } catch {}
 		try {
 			if (this.audio) {
@@ -74,6 +78,15 @@ class NarrationChannel {
 		this.mediaSource = null;
 		this.audio = null;
 		this.queue = [];
+		this.alignmentWords = [];
+		this._highlightedIdx = -1;
+	}
+
+	_clearHighlight() {
+		const div = window._activeNarrationDiv;
+		if (!div) return;
+		const active = div.querySelector(".narration-word.word-active");
+		if (active) active.classList.remove("word-active");
 	}
 
 	// ── Init ─────────────────────────────────────────────────────────────────
@@ -85,6 +98,8 @@ class NarrationChannel {
 		this.sourceBuffer = null;
 		this.cancelled = false;
 		this.active = true;
+		this.alignmentWords = [];
+		this._highlightedIdx = -1;
 
 		this.mediaSource = new MediaSource();
 		this.audio = new Audio();
@@ -130,6 +145,42 @@ class NarrationChannel {
 		});
 
 		this.audio.addEventListener("canplay", () => channel._tryPlay());
+
+		// Word-level highlight: on each timeupdate, find the word being spoken
+		// and toggle a CSS class on the matching <span> in the narration div.
+		this.audio.addEventListener("timeupdate", () => {
+			if (channel.cancelled || !channel.alignmentWords.length) return;
+			const narrationDiv = window._activeNarrationDiv;
+			if (!narrationDiv) return;
+
+			const t = channel.audio.currentTime;
+			let activeIdx = -1;
+			for (let i = 0; i < channel.alignmentWords.length; i++) {
+				const w = channel.alignmentWords[i];
+				if (t >= w.start && t <= w.end) { activeIdx = w.index; break; }
+			}
+			// If between words, keep the last highlighted word visible
+			if (activeIdx === -1 && channel._highlightedIdx >= 0) {
+				for (let i = 0; i < channel.alignmentWords.length; i++) {
+					const w = channel.alignmentWords[i];
+					if (t < w.start) { activeIdx = (i > 0) ? channel.alignmentWords[i - 1].index : -1; break; }
+				}
+			}
+
+			if (activeIdx !== channel._highlightedIdx) {
+				const prev = narrationDiv.querySelector(".narration-word.word-active");
+				if (prev) prev.classList.remove("word-active");
+
+				if (activeIdx >= 0) {
+					const span = narrationDiv.querySelector(`[data-word-idx="${activeIdx}"]`);
+					if (span) {
+						span.classList.add("word-active");
+						span.scrollIntoView({ block: "nearest", behavior: "smooth" });
+					}
+				}
+				channel._highlightedIdx = activeIdx;
+			}
+		});
 	}
 
 	// ── Reconstruct if broken ────────────────────────────────────────────────
@@ -287,6 +338,14 @@ async function stopNarration() {
 /** Stop only the DM channel (used when player interrupts to submit action). */
 async function stopDMNarration() {
 	await dmChannel.stop();
+}
+
+/** Append word-level alignment data to the channel that owns this streamId. */
+function setAlignmentData(streamId, words) {
+	const ch = _channelForStream(streamId);
+	if (ch && Array.isArray(words)) {
+		ch.alignmentWords = ch.alignmentWords.concat(words);
+	}
 }
 
 stopNarrationBtn.addEventListener("click", stopNarration);
