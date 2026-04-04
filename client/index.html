@@ -26,6 +26,21 @@
         <div id="phaseBadge" class="badge">—</div>
       </header>
 
+      <!-- Audio widget — anchored to top-right of container, visible on all screens -->
+      <div id="audioWidget" class="audio-widget hidden">
+        <div id="musicRow" class="audio-row">
+          <button id="musicMuteBtn" class="audio-mute-btn" title="Toggle music mute">🎵</button>
+          <span id="musicSongTitle" class="audio-label">—</span>
+          <input id="musicVolumeSlider" class="audio-volume-slider" type="range" min="0" max="100" value="35" title="Music volume" />
+        </div>
+        <div class="audio-divider hidden" id="audioDivider"></div>
+        <div id="sfxRow" class="audio-row hidden">
+          <button id="sfxMuteBtn" class="audio-mute-btn" title="Toggle SFX mute">🔊</button>
+          <span class="audio-label">SFX</span>
+          <input id="sfxVolumeSlider" class="audio-volume-slider" type="range" min="0" max="100" value="50" title="SFX volume" />
+        </div>
+      </div>
+
       <!-- LANDING PAGE -->
       <section id="landing" class="panel">
         
@@ -36,11 +51,11 @@
           <h3 style="grid-area:head-l;">Create Lobby</h3>
           <h3 style="grid-area:head-r;">Join Lobby</h3>
 
-          <button id="createLobby" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer" style="grid-area:row1-l;">Create Custom Game</button>
+          <button id="createLobby" class="primary" data-sound="Quest Herald Blast" data-sound-hover="Magical Shimmer" style="grid-area:row1-l;">Create Custom Game</button>
           <input id="joinCode" placeholder="Enter code (e.g., B9K3FD)" style="grid-area:row1-r;" />
 
-          <button id="quickStartBtn" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer" style="grid-area:row2-l;display:none;background:#4a3;border-color:#4a3;">⚡ Quick Start (Test Mode)</button>
-          <button id="quickStartPublicBtn" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer" style="grid-area:row2-l;display:none;background:linear-gradient(90deg,#5a3a8a,#7a50c8);border-color:#9a70e8;">🎲 Quick Start</button>
+          <button id="quickStartBtn" class="primary" data-sound="Quest Herald Blast" data-sound-hover="Magical Shimmer" style="grid-area:row2-l;display:none;background:#4a3;border-color:#4a3;">⚡ Quick Start (Test Mode)</button>
+          <button id="quickStartPublicBtn" class="primary" data-sound="Quest Herald Blast" data-sound-hover="Magical Shimmer" style="grid-area:row2-l;display:none;background:linear-gradient(90deg,#5a3a8a,#7a50c8);border-color:#9a70e8;">🎲 Quick Start</button>
           <button id="joinLobby" data-sound="Tavern Crowd Cheer" data-sound-hover="Magical Shimmer" style="grid-area:row2-r;">Join</button>
 
           <label style="grid-area:row3-l;display:flex;align-items:center;gap:0.5em;cursor:pointer;">
@@ -89,7 +104,7 @@
             <button id="randomizeChar" class="secondary" data-sound="Dice Tumble" data-sound-hover="Magical Shimmer">🎲 Randomize</button>
             <button id="openOptionsBtn" class="secondary hidden" data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer">⚙️ Game Options</button>
             <button id="phaseReady" class="secondary" data-sound="Gem Socket" data-sound-hover="Magical Shimmer">Ready Check</button>
-            <button id="startGame" class="primary" data-sound="Epic Adventure Fanfare" data-sound-hover="Magical Shimmer">Start Game</button>
+            <button id="startGame" class="primary" data-sound="Quest Herald Blast" data-sound-hover="Magical Shimmer">Start Game</button>
           </div>
           <input type="file" id="importCharInput" accept=".stchar" style="display:none;" />
         </div>
@@ -277,30 +292,8 @@
         </div>
       </section>
 
-	<!-- Menu music widget — visible on landing & lobby screens -->
-	<div id="menuMusicWidget" class="audio-widget menu-music-widget hidden">
-		<button id="menuMusicMuteBtn" class="audio-mute-btn" title="Toggle music mute">🎵</button>
-		<span id="menuMusicLabel" class="audio-label">Menu Music</span>
-		<input id="menuMusicVolumeSlider" class="audio-volume-slider" type="range" min="0" max="100" value="35" title="Music volume" />
-	</div>
-
 	<!-- GAME PAGE -->
 	<section id="game" class="panel hidden" style="position:relative;">
-
-	<!-- Audio widget — upper right corner -->
-	<div id="audioWidget" class="audio-widget">
-		<div id="musicRow" class="audio-row hidden">
-			<button id="musicMuteBtn" class="audio-mute-btn" title="Toggle music mute">🎵</button>
-			<span id="musicSongTitle" class="audio-label">—</span>
-			<input id="musicVolumeSlider" class="audio-volume-slider" type="range" min="0" max="100" value="35" title="Music volume" />
-		</div>
-		<div class="audio-divider hidden" id="audioDivider"></div>
-		<div class="audio-row">
-			<button id="sfxMuteBtn" class="audio-mute-btn" title="Toggle SFX mute">🔊</button>
-			<span class="audio-label">SFX</span>
-			<input id="sfxVolumeSlider" class="audio-volume-slider" type="range" min="0" max="100" value="50" title="SFX volume" />
-		</div>
-	</div>
 
 	<div class="row space-between">
 		<div>

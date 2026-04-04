@@ -680,18 +680,18 @@
 						<h3 style="font-family:'Cinzel',serif;color:#eacb83;font-size:0.95rem;margin:1.25rem 0 0.6rem;">Music Control</h3>
 						<div class="form-row">
 							<select id="musicMoodSelect" class="admin-select" style="flex:1;">
-								<option value="lively_town">Lively Town</option>
-								<option value="tense_battle">Tense Battle</option>
-								<option value="boss_fight">Boss Fight</option>
-								<option value="peaceful_nature">Peaceful Nature</option>
-								<option value="dungeon_ambient">Dungeon Ambient</option>
-								<option value="tavern">Tavern</option>
-								<option value="mystery">Mystery</option>
-								<option value="exploration">Exploration</option>
-								<option value="sad_moment">Sad Moment</option>
-								<option value="victory">Victory</option>
-								<option value="horror">Horror</option>
+								<!-- Populated dynamically from music_moods.json -->
 							</select>
+							<script>
+								fetch("/config/music_moods.json").then(r=>r.json()).then(data=>{
+									const sel=document.getElementById("musicMoodSelect");
+									for(const m of data.moods){
+										const opt=document.createElement("option");
+										opt.value=m.id; opt.textContent=m.label;
+										sel.appendChild(opt);
+									}
+								});
+							</script>
 							<button id="sendMusicChange" class="btn btn-primary">Play</button>
 							<button id="sendMusicStop" class="btn">Stop</button>
 							<span class="hint">Now: <strong id="currentMoodLabel">--</strong></span>

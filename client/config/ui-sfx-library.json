@@ -396,6 +396,24 @@
 				"durationSec": 2,
 				"generatedAt": "2026-04-03T07:05:11.568Z"
 			}
+		},
+		{
+			"name": "Quest Herald Blast",
+			"file": "quest_herald_blast.mp3",
+			"tags": [
+				"start",
+				"create",
+				"exciting",
+				"fun",
+				"adventure"
+			],
+			"usage": "Create Game button — an exciting, fun herald call to adventure",
+			"prompt": "A thrilling magical whoosh that builds into a bright orchestral stinger with shimmering chimes, a snappy snare hit, and a triumphant horn note that soars upward — joyful, energetic, and adventurous like opening a magical portal to a new world, with a sparkling fairy-dust tail that fades fast",
+			"_generated": {
+				"prompt": "A thrilling magical whoosh that builds into a bright orchestral stinger with shimmering chimes, a snappy snare hit, and a triumphant horn note that soars upward — joyful, energetic, and adventurous like opening a magical portal to a new world, with a sparkling fairy-dust tail that fades fast",
+				"durationSec": 2,
+				"generatedAt": "2026-04-03T20:09:43.183Z"
+			}
 		}
 	]
 }

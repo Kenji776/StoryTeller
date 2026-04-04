@@ -50,6 +50,9 @@ function registerSocketEvents() {
 	socket.on("state:update", (state) => {
 		currentState = state;
 
+		// Keep music manager aware of the current campaign world
+		window.musicManager?.setWorldType(state.campaignSetting);
+
 		if (state.party && state.party.length) {
 			drawPartyComponent("partyContainer", state.party);
 		}
@@ -197,12 +200,22 @@ function registerSocketEvents() {
 		}
 	});
 
+	socket.on("debug:llm", (data) => {
+		console.group("🧠 LLM Response Debug");
+		console.log("Raw LLM response:", data.raw);
+		console.log("Parsed object:", data.parsed);
+		console.log("Final narration text:", data.narrationText);
+		console.groupEnd();
+	});
+
 	socket.on("narration", ({ content, status }) => {
 		let narrationContent = (content || "").trim();
 		if (narrationContent.startsWith('{')) {
 			try {
 				const parsed = JSON.parse(narrationContent);
-				if (typeof parsed.text === "string") narrationContent = parsed.text;
+				// Extract text or prompt from accidental raw JSON narration
+				const extracted = parsed.text || parsed.prompt;
+				if (typeof extracted === "string" && extracted) narrationContent = extracted;
 			} catch {}
 		}
 		// Wrap each word in a <span> so the audio highlight system can target them
@@ -521,6 +534,10 @@ function registerSocketEvents() {
 	});
 
 	socket.on("music:change", ({ mood }) => {
+		// Ensure world type is current before matching
+		if (currentState?.campaignSetting) {
+			window.musicManager?.setWorldType(currentState.campaignSetting);
+		}
 		if (mood) {
 			window.musicManager?.requestMood(mood);
 		} else {

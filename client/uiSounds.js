@@ -77,7 +77,7 @@ const UISounds = (() => {
 
 document.addEventListener("click", (e) => {
 	// Skip mute/volume controls to avoid feedback loops
-	if (e.target.closest("#sfxMuteBtn, #musicMuteBtn, #menuMusicMuteBtn")) return;
+	if (e.target.closest("#sfxMuteBtn, #musicMuteBtn")) return;
 
 	const soundEl = e.target.closest("[data-sound]");
 	if (soundEl) {
