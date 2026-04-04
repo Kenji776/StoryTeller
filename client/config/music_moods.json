@@ -1,0 +1,82 @@
+{
+	"_instructions": "Canonical list of music moods. This is the single source of truth used by the LLM prompt, the music player, the admin UI, and the song generation tools. To add a new mood: add an entry here, then create the folder in each world under client/music/game/{world}/{mood}/.",
+	"moods": [
+		{
+			"id": "lively_town",
+			"label": "Lively Town",
+			"description": "Upbeat, cheerful market or town square music",
+			"keywords": ["upbeat", "cheerful", "folk", "town", "lively", "market", "pleasant", "joyful", "bouncy", "light"],
+			"aliases": ["town", "lively", "market"]
+		},
+		{
+			"id": "tense_battle",
+			"label": "Tense Battle",
+			"description": "Intense, urgent combat music",
+			"keywords": ["tense", "battle", "combat", "intense", "drums", "urgent", "fighting", "action", "dangerous", "aggressive"],
+			"aliases": ["battle", "combat", "fight"]
+		},
+		{
+			"id": "boss_fight",
+			"label": "Boss Fight",
+			"description": "Epic, climactic boss encounter music",
+			"keywords": ["epic", "boss", "climactic", "powerful", "dramatic", "orchestral", "intense", "final", "massive", "overwhelming"],
+			"aliases": ["boss"]
+		},
+		{
+			"id": "peaceful_nature",
+			"label": "Peaceful Nature",
+			"description": "Calm, serene outdoor or nature music",
+			"keywords": ["calm", "peaceful", "nature", "gentle", "ambient", "soft", "serene", "relaxing", "outdoor", "birds", "flowing"],
+			"aliases": ["peaceful", "nature", "calm"]
+		},
+		{
+			"id": "dungeon_ambient",
+			"label": "Dungeon Ambient",
+			"description": "Dark, eerie underground or dungeon ambience",
+			"keywords": ["dark", "eerie", "dungeon", "ambient", "ominous", "underground", "haunting", "hollow", "dripping", "oppressive"],
+			"aliases": ["dungeon", "underground", "cave"]
+		},
+		{
+			"id": "tavern",
+			"label": "Tavern",
+			"description": "Cozy, merry inn or tavern music",
+			"keywords": ["tavern", "cozy", "drinking", "folk", "merry", "inn", "cheerful", "lively", "fiddle", "hearth"],
+			"aliases": ["inn", "pub"]
+		},
+		{
+			"id": "mystery",
+			"label": "Mystery",
+			"description": "Suspenseful, uncertain investigation music",
+			"keywords": ["mysterious", "suspense", "investigation", "quiet", "tense", "unknown", "subtle", "creeping", "uncertain"],
+			"aliases": ["investigate", "mysterious", "suspense"]
+		},
+		{
+			"id": "exploration",
+			"label": "Exploration",
+			"description": "Adventurous, hopeful travel and discovery music",
+			"keywords": ["adventure", "travel", "discovery", "hopeful", "open", "journey", "wandering", "curious", "grand", "majestic"],
+			"aliases": ["explore", "adventure", "travel", "journey"]
+		},
+		{
+			"id": "sad_moment",
+			"label": "Sad Moment",
+			"description": "Melancholy, emotional music for loss or sorrow",
+			"keywords": ["sad", "melancholy", "emotional", "slow", "somber", "mournful", "poignant", "loss", "piano", "strings"],
+			"aliases": ["sad", "melancholy", "sorrow", "loss"]
+		},
+		{
+			"id": "victory",
+			"label": "Victory",
+			"description": "Triumphant, celebratory music",
+			"keywords": ["triumphant", "victory", "celebration", "uplifting", "heroic", "fanfare", "joyful", "proud", "resolved"],
+			"aliases": ["triumph", "celebration", "win", "heroic"]
+		},
+		{
+			"id": "horror",
+			"label": "Horror",
+			"description": "Terrifying, dread-filled horror music",
+			"keywords": ["horror", "terrifying", "dread", "dark", "unsettling", "fear", "creepy", "sinister", "dissonant", "nightmare"],
+			"aliases": ["scary", "terrifying", "dread", "creepy"]
+		}
+	]
+}

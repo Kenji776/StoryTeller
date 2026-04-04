@@ -245,6 +245,7 @@ async function handleQuickStartPublic() {
 			enterLobbyMode(code);
 
 			// 2. Set game options
+			window.musicManager?.setWorldType(setting.id);
 			socket.emit("lobby:settings", {
 				lobbyId,
 				campaignTone:    { id: tone.id,  label: tone.label,  emoji: tone.emoji,  prompt: tone.prompt },
@@ -1593,8 +1594,8 @@ function enterLobbyMode(code, midGameJoin = false) {
 function enterGameMode() {
 	show(els.game);
 	document.querySelectorAll(".die").forEach(btn => (btn.disabled = true));
-	// Always show the music widget once we're in-game
-	window.musicManager?.showWidget();
+	// Show the SFX row once we're in-game
+	window.musicManager?.showSfxRow();
 }
 
 function appendActionLog(text, className = "") {

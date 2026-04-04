@@ -1258,6 +1258,136 @@
 				"durationSec": 3,
 				"generatedAt": "2026-04-03T04:07:32.997Z"
 			}
+		},
+		{
+			"name": "Mug Slammed Table",
+			"file": "mug_slammed_table_mnjf373mx4ab.mp3",
+			"tags": [
+				"mug",
+				"slammed",
+				"table"
+			],
+			"_generated": {
+				"prompt": "A sound effect of mug slammed table",
+				"durationSec": 3,
+				"generatedAt": "2026-04-03T21:30:04.595Z"
+			}
+		},
+		{
+			"name": "Ember Flare",
+			"file": "ember_flare_mnjfjnx4l0ag.mp3",
+			"tags": [
+				"ember",
+				"flare"
+			],
+			"_generated": {
+				"prompt": "A sound effect of ember flare",
+				"durationSec": 3,
+				"generatedAt": "2026-04-03T21:42:52.890Z"
+			}
+		},
+		{
+			"name": "Slow Footstep",
+			"file": "slow_footstep_mnjfjp3sibeh.mp3",
+			"tags": [
+				"slow",
+				"footstep",
+				"footsteps"
+			],
+			"_generated": {
+				"prompt": "A sound effect of slow footstep",
+				"durationSec": 3,
+				"generatedAt": "2026-04-03T21:42:54.425Z"
+			}
+		},
+		{
+			"name": "Claws On Floorboards",
+			"file": "claws_on_floorboards_mnjfkw21pfwy.mp3",
+			"tags": [
+				"claws",
+				"on",
+				"floorboards",
+				"weapon",
+				"conjuration",
+				"monster",
+				"reaction",
+				"stone",
+				"explosion",
+				"destruction",
+				"notification",
+				"confirm"
+			],
+			"_generated": {
+				"prompt": "A sound effect of claws on floorboards",
+				"durationSec": 3,
+				"generatedAt": "2026-04-03T21:43:50.090Z"
+			}
+		},
+		{
+			"name": "Silence Falls",
+			"file": "silence_falls_mnjfreyk9jma.mp3",
+			"tags": [
+				"silence",
+				"falls"
+			],
+			"_generated": {
+				"prompt": "A sound effect of silence falls",
+				"durationSec": 3,
+				"generatedAt": "2026-04-03T21:48:54.525Z"
+			}
+		},
+		{
+			"name": "Wet Cough",
+			"file": "wet_cough_mnjlykm0mtqf.mp3",
+			"tags": [
+				"wet",
+				"cough"
+			],
+			"_generated": {
+				"prompt": "A sound effect of wet cough",
+				"durationSec": 3,
+				"generatedAt": "2026-04-04T00:42:26.138Z"
+			}
+		},
+		{
+			"name": "Fabric Rustle",
+			"file": "fabric_rustle_mnjmlt3omunc.mp3",
+			"tags": [
+				"fabric",
+				"rustle"
+			],
+			"_generated": {
+				"prompt": "A sound effect of fabric rustle",
+				"durationSec": 3,
+				"generatedAt": "2026-04-04T01:00:32.029Z"
+			}
+		},
+		{
+			"name": "Bamboo Rustling",
+			"file": "bamboo_rustling_mnjnl3v3fgjl.mp3",
+			"tags": [
+				"bamboo",
+				"rustling"
+			],
+			"_generated": {
+				"prompt": "A sound effect of bamboo rustling",
+				"durationSec": 3,
+				"generatedAt": "2026-04-04T01:27:57.137Z"
+			}
+		},
+		{
+			"name": "Soldier's Rough Laughter",
+			"file": "soldier_s_rough_laughter_mnjnl4xwtk77.mp3",
+			"tags": [
+				"soldiers",
+				"rough",
+				"laughter"
+			],
+			"_generated": {
+				"prompt": "A sound effect of soldier's rough laughter",
+				"durationSec": 3,
+				"generatedAt": "2026-04-04T01:27:58.533Z"
+			}
 		}
 	]
 }

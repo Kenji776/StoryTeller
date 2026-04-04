@@ -22,6 +22,14 @@ const MIN_MATCH_SCORE = 1;
 
 let _library = null;
 
+/**
+ * Reads and parses the sfx-library.json file from disk, storing the result in
+ * the module-level `_library` cache.  On any read or parse failure the cache is
+ * initialised to an empty library so callers always receive a usable object.
+ *
+ * @returns {{ categories: Object.<string, string[]>, effects: Array<Object> }}
+ *   The parsed SFX library, or an empty library stub on error.
+ */
 function loadLibrary() {
 	try {
 		_library = JSON.parse(fs.readFileSync(LIBRARY_PATH, "utf-8"));
@@ -32,11 +40,25 @@ function loadLibrary() {
 	return _library;
 }
 
+/**
+ * Returns the in-memory SFX library, loading it from disk on the first call
+ * (lazy initialisation via {@link loadLibrary}).
+ *
+ * @returns {{ categories: Object.<string, string[]>, effects: Array<Object> }}
+ *   The cached (or freshly loaded) SFX library object.
+ */
 function getLibrary() {
 	if (!_library) loadLibrary();
 	return _library;
 }
 
+/**
+ * Serialises the current in-memory `_library` to sfx-library.json using
+ * tab indentation.  Errors are logged but not re-thrown so that a failed
+ * save does not crash an in-progress generation request.
+ *
+ * @returns {void}
+ */
 function saveLibrary() {
 	try {
 		fs.writeFileSync(LIBRARY_PATH, JSON.stringify(_library, null, "\t"), "utf-8");
@@ -49,6 +71,15 @@ function saveLibrary() {
 // Tokenise an LLM description into lowercase words for matching
 // ---------------------------------------------------------------------------
 
+/**
+ * Converts a free-text string into an array of lowercase alphanumeric tokens
+ * suitable for tag-overlap scoring.  Punctuation (except hyphens) is stripped
+ * and both whitespace and hyphens are treated as word boundaries.
+ *
+ * @param {string} text - The raw text to tokenise (e.g. an LLM description or
+ *   an effect name).
+ * @returns {string[]} Array of lowercase word tokens with empty strings removed.
+ */
 function tokenize(text) {
 	return text
 		.toLowerCase()
@@ -61,6 +92,28 @@ function tokenize(text) {
 // Find best matching effect for a description string
 // ---------------------------------------------------------------------------
 
+/**
+ * Searches the SFX library for the effect whose tags and name best match the
+ * given description using a token-overlap scoring algorithm:
+ *
+ *  1. The description is tokenised into lowercase words via {@link tokenize}.
+ *  2. Each library effect's `tags` array is lowercased and merged with the
+ *     tokens derived from the effect's `name`, forming a deduplicated `allTags`
+ *     set for that effect.
+ *  3. For every description token the score is incremented as follows:
+ *     - **+1.0** for an exact match against any tag in `allTags`.
+ *     - **+0.5** for a partial/substring match (either the token contains a tag
+ *       or a tag contains the token), enabling compound phrases like "war cry"
+ *       to partially match a "warcry" tag.
+ *  4. The effect with the highest cumulative score is selected, provided that
+ *     score meets or exceeds `MIN_MATCH_SCORE` (currently 1).
+ *
+ * @param {string} description - A natural-language SFX description produced by
+ *   the LLM (e.g. "thunderous sword clash").
+ * @returns {{ name: string, file: string, tags: string[] } | null}
+ *   The best-matching library effect object, or `null` if no effect scores at
+ *   or above the minimum threshold.
+ */
 function findMatch(description) {
 	const lib    = getLibrary();
 	const tokens = tokenize(description);
@@ -95,6 +148,26 @@ function findMatch(description) {
 // Resolve a list of LLM sfx descriptions → file paths (matching or generating)
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolves an array of LLM-provided SFX descriptions to playable audio files.
+ *
+ * For each description (up to a maximum of three):
+ *  1. {@link findMatch} is called to check the local sfx-library.json.  If a
+ *     match is found its file path and display name are added to the results.
+ *  2. If no match is found and an ElevenLabs API key is provided, the effect is
+ *     generated via {@link generateSfx}, persisted to disk, added to the
+ *     library, and its entry is appended to the results.
+ *  3. If no match and no API key are available the description is silently
+ *     skipped (a warning is logged).
+ *
+ * @param {string[]} descriptions - Array of natural-language SFX descriptions
+ *   from the LLM.  Non-string or blank entries are ignored.
+ * @param {string | undefined} elevenApiKey - ElevenLabs API key used to call
+ *   the Sound Generation endpoint.  Pass `undefined` to disable generation.
+ * @returns {Promise<Array<{ file: string, name: string }>>}
+ *   Resolves to an array of objects each containing the relative `file` name
+ *   (usable as a client-side audio src) and a human-readable `name`.
+ */
 export async function resolveSfx(descriptions, elevenApiKey) {
 	if (!Array.isArray(descriptions) || !descriptions.length) return [];
 
@@ -133,6 +206,26 @@ export async function resolveSfx(descriptions, elevenApiKey) {
 // Generate a new SFX via ElevenLabs Sound Generation API
 // ---------------------------------------------------------------------------
 
+/**
+ * Calls the ElevenLabs Sound Generation API to synthesise a 3-second audio
+ * clip from the given description, saves the resulting MP3 to the local SFX
+ * directory, and registers a new entry in the in-memory library (persisted via
+ * {@link saveLibrary}).
+ *
+ * The prompt sent to the API is prefixed with "A sound effect of " to improve
+ * generation quality.  The saved filename is a URL-safe slug derived from the
+ * description combined with a short time-based unique suffix to avoid
+ * collisions.  Tags are built from the description tokens plus any category
+ * tags from the library whose strings overlap with the description tokens.
+ *
+ * @param {string} description - A natural-language SFX description
+ *   (e.g. "crackling campfire").
+ * @param {string} apiKey - A valid ElevenLabs API key with Sound Generation
+ *   access.
+ * @returns {Promise<{ name: string, file: string, tags: string[], _generated: Object }>}
+ *   Resolves to the newly created library entry object.
+ * @throws {Error} If the ElevenLabs API returns a non-OK HTTP status.
+ */
 async function generateSfx(description, apiKey) {
 	const prompt = `A sound effect of ${description}`;
 	console.log(`🔊 Generating SFX: "${prompt}"`);

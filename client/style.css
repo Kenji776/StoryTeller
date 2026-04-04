@@ -11,6 +11,7 @@ body {
 	padding: 16px;
 	max-width:90vw;
 	margin: 0 auto;
+	position: relative;
 }
 header h1 {
 	margin: 0;
@@ -154,13 +155,6 @@ button.secondary:hover {
 	top: 0.4em;
 	right: 0.4em;
 	z-index: 10;
-	margin-bottom: 0.5em;
-}
-.menu-music-widget {
-	position: fixed;
-	top: 0.5em;
-	right: 0.5em;
-	z-index: 100;
 }
 .audio-divider {
 	width: 1px;
