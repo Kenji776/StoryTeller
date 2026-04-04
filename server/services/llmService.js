@@ -6,6 +6,26 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), "..", ".env") });
 
+// ── LLM I/O logger ────────────────────────────────────────────────────────
+// Writes one JSONL entry per call to server/logs/llm-YYYY-MM-DD.jsonl
+// Each entry: { ts, provider, model, messages (input), response (output), durationMs, error? }
+const LOG_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "logs");
+fs.mkdirSync(LOG_DIR, { recursive: true });
+
+function _llmLogPath(lobbyId) {
+	if (lobbyId) return path.join(LOG_DIR, `llm-${lobbyId}.jsonl`);
+	const d = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+	return path.join(LOG_DIR, `llm-${d}.jsonl`);
+}
+
+function _writeLLMLog(entry) {
+	try {
+		fs.appendFileSync(_llmLogPath(entry.lobbyId), JSON.stringify(entry) + "\n");
+	} catch (err) {
+		console.warn("⚠️ Failed to write LLM log:", err.message);
+	}
+}
+
 // ── Test / stub responses for dev mode ──────────────────────────────────────
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const testResponses = JSON.parse(
@@ -84,17 +104,36 @@ export async function validateLLMKeys() {
 }
 
 // ── Shared entry point ───────────────────────────────────────────────────────
-export async function getLLMResponse(messages, { provider, model } = {}) {
+export async function getLLMResponse(messages, { provider, model, lobbyId } = {}) {
 	const resolvedProvider = provider || DEFAULT_PROVIDER;
 	const resolvedModel    = model    || DEFAULT_MODEL;
 
-	if (resolvedProvider === "test") {
-		return _testResponse(messages);
+	const t0 = Date.now();
+	let response, error;
+	try {
+		if (resolvedProvider === "test") {
+			response = await _testResponse(messages);
+		} else if (resolvedProvider === "claude") {
+			response = await _claudeResponse(messages, resolvedModel);
+		} else {
+			response = await _openaiResponse(messages, resolvedModel);
+		}
+		return response;
+	} catch (err) {
+		error = err.message || String(err);
+		throw err;
+	} finally {
+		_writeLLMLog({
+			ts: new Date().toISOString(),
+			lobbyId: lobbyId || null,
+			provider: resolvedProvider,
+			model: resolvedModel,
+			durationMs: Date.now() - t0,
+			messages,
+			response: response ?? null,
+			...(error ? { error } : {}),
+		});
 	}
-	if (resolvedProvider === "claude") {
-		return _claudeResponse(messages, resolvedModel);
-	}
-	return _openaiResponse(messages, resolvedModel);
 }
 
 // ── OpenAI implementation ────────────────────────────────────────────────────

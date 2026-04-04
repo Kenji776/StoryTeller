@@ -349,9 +349,9 @@ export function createTimerSystem(deps) {
 					if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 					broadcastPartyState(io, store, lobbyId);
 					updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
-					if (Array.isArray(dmObj.suggestions) && dmObj.suggestions.length) {
-						io.to(room(lobbyId)).emit("suggestions:update", { suggestions: dmObj.suggestions });
-					}
+					io.to(room(lobbyId)).emit("suggestions:update", {
+						suggestions: Array.isArray(dmObj.suggestions) ? dmObj.suggestions : [],
+					});
 					if (dmObj.music) {
 						store.setCurrentMusic(lobbyId, dmObj.music);
 						io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
@@ -363,7 +363,7 @@ export function createTimerSystem(deps) {
 					}
 				}
 
-				store.appendDM(lobbyId, narrationText);
+				store.appendDM(lobbyId, replyText);
 				io.to(room(lobbyId)).emit("narration", { content: narrationText });
 				await streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId));
 			}
@@ -459,9 +459,9 @@ export function createTimerSystem(deps) {
 					if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 					broadcastPartyState(io, store, lobbyId);
 					updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
-					if (Array.isArray(dmObj.suggestions) && dmObj.suggestions.length) {
-						io.to(room(lobbyId)).emit("suggestions:update", { suggestions: dmObj.suggestions });
-					}
+					io.to(room(lobbyId)).emit("suggestions:update", {
+						suggestions: Array.isArray(dmObj.suggestions) ? dmObj.suggestions : [],
+					});
 					if (dmObj.music) {
 						store.setCurrentMusic(lobbyId, dmObj.music);
 						io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
@@ -472,7 +472,7 @@ export function createTimerSystem(deps) {
 						}).catch(err => log("⚠️ SFX resolve error:", err.message));
 					}
 				}
-				store.appendDM(lobbyId, narrationText);
+				store.appendDM(lobbyId, replyText);
 				io.to(room(lobbyId)).emit("narration", { content: narrationText });
 				await streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId));
 			}

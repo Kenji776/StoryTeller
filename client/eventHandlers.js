@@ -521,6 +521,12 @@ safeAddEvent(els.openPlayerOptionsBtn, "click", handleOpenPlayerOptions);
 safeAddEvent(document.getElementById("readStoryGameBtn"), "click", () => {
 	if (lobbyCode) showStoryModal(lobbyCode);
 });
+// === Ask DM (popup window) ===
+safeAddEvent(document.getElementById("askDMBtn"), "click", () => {
+	const url = `/dm-chat.html?lobbyId=${encodeURIComponent(lobbyId)}&name=${encodeURIComponent(me.name)}&clientId=${clientId}`;
+	window.open(url, "AskDM", "width=600,height=700");
+});
+
 // playerOptionsClose removed — handled by centralized .modal-close
 if (els.playerOptionsModal) {
 	els.playerOptionsModal.addEventListener("click", (e) => {

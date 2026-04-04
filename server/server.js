@@ -490,7 +490,7 @@ io.on("connection", (socket) => {
 			const { current, order } = store.turnInfo(lobbyId);
 			io.to(room(lobbyId)).emit("turn:update", { current, order });
 			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
-			io.to(room(lobbyId)).emit("toast", { type: "info", message: `${cleanName} has joined the adventure!` });
+			io.to(room(lobbyId)).emit("player:joined", { player: cleanName });
 			broadcastLobbies();
 
 			const raceStr = sheet?.race || "unknown race";
@@ -695,7 +695,8 @@ io.on("connection", (socket) => {
 			store.setAdventureName(lobbyId, adventureName);
 			io.to(room(lobbyId)).emit("adventure:name", { name: adventureName });
 
-			store.appendDM(lobbyId, cleanText);
+			// Store raw JSON in history so the LLM sees JSON format in prior turns
+			store.appendDM(lobbyId, typeof openingRaw === "string" ? openingRaw.trim() : cleanText);
 			io.to(room(lobbyId)).emit("narration", { content: cleanText });
 
 			const openingMood = setupMusic || "exploration";
@@ -851,9 +852,9 @@ io.on("connection", (socket) => {
 
 				broadcastPartyState(io, store, lobbyId);
 				updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
-				if (Array.isArray(dmObj.suggestions) && dmObj.suggestions.length) {
-					io.to(room(lobbyId)).emit("suggestions:update", { suggestions: dmObj.suggestions });
-				}
+				io.to(room(lobbyId)).emit("suggestions:update", {
+					suggestions: Array.isArray(dmObj.suggestions) ? dmObj.suggestions : [],
+				});
 				if (dmObj.music) {
 					store.setCurrentMusic(lobbyId, dmObj.music);
 					io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
@@ -866,9 +867,13 @@ io.on("connection", (socket) => {
 			} else {
 				console.warn("⚠️ LLM reply not structured or parse failed");
 				console.log("Raw reply text:", replyText);
+				// Clear stale suggestions when parse fails
+				io.to(room(lobbyId)).emit("suggestions:update", { suggestions: [] });
 			}
 
-			store.appendDM(lobbyId, narrationText);
+			// Store the full raw LLM reply in history so future calls see their
+			// own JSON-formatted responses and maintain the expected format.
+			store.appendDM(lobbyId, replyText);
 			io.to(room(lobbyId)).emit("debug:llm", { raw: replyText, parsed: dmObj ?? null, narrationText });
 			io.to(room(lobbyId)).emit("narration", { content: narrationText });
 			await streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
@@ -918,8 +923,8 @@ io.on("connection", (socket) => {
 			getLLMResponse(messages, llmOpts(lobbyId)).then(async (dm) => {
 				const replyText = typeof dm === "string" ? dm.trim() : "";
 				const dmObj = await parseDMJson(replyText, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
-				const narrationText = dmObj?.text || replyText;
-				store.appendDM(lobbyId, narrationText);
+				const narrationText = (dmObj && typeof dmObj === "object") ? (dmObj.text || dmObj.prompt || replyText) : replyText;
+				store.appendDM(lobbyId, replyText);
 				io.to(room(lobbyId)).emit("narration", { content: narrationText });
 				streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 				sendState(lobbyId);
@@ -952,6 +957,32 @@ io.on("connection", (socket) => {
 			sendState(lobbyId);
 		} catch (err) {
 			log("💥 Error summarizing:", err);
+		}
+	});
+
+	// ==== Chat with DM (out-of-game Q&A) ====
+	// This may come from a separate popup window with its own socket,
+	// so we identify the player by name+lobbyId rather than socket ID.
+	socket.on("dm:chat", async ({ lobbyId, playerName, question }) => {
+		try {
+			const s = store.index[lobbyId];
+			if (!s || !playerName || !question || typeof question !== "string") return;
+			// Verify the player actually exists in this lobby
+			if (!s.players[playerName]) return;
+
+			const trimmed = question.trim().slice(0, 500);
+			if (!trimmed) return;
+
+			log(`💬 [DM Chat] ${playerName}: "${trimmed}"`);
+
+			const msgs = store.composeDMChat(lobbyId, playerName, trimmed);
+			const reply = await getLLMResponse(msgs, llmOpts(lobbyId));
+			const answer = typeof reply === "string" ? reply.trim() : "The DM is lost in thought...";
+
+			socket.emit("dm:chat:reply", { question: trimmed, answer });
+		} catch (err) {
+			log("💥 DM Chat error:", err.message);
+			socket.emit("dm:chat:reply", { question: question || "", answer: "The DM seems distracted... (an error occurred)" });
 		}
 	});
 
@@ -1016,8 +1047,7 @@ io.on("connection", (socket) => {
 
 					store.removeFromTurnOrder(lobbyId, playerName);
 
-					log(`📣 Emitting player:left + toast + turn:update to room ${lobbyId}`);
-					io.to(room(lobbyId)).emit("toast", { type: "warning", message: `${playerName} has left the adventure.` });
+					log(`📣 Emitting player:left + turn:update to room ${lobbyId}`);
 					io.to(room(lobbyId)).emit("player:left", { player: playerName });
 
 					const { current, order } = resolveActiveTurn(lobbyId);

@@ -9,7 +9,6 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { sanitizeForLLMName } from "../llmService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MUSIC_MOODS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "client", "config", "music_moods.json"), "utf8")).moods;
@@ -90,7 +89,7 @@ export const promptMethods = {
 					.map(([k, v]) => `${k}:${v}`)
 					.join(", ");
 				const inv = (p.inventory || []).map((i) => (typeof i === "string" ? i : `${i.name}×${i.count ?? 1}`)).join(", ") || "none";
-				const abil = (p.abilities || []).join(", ") || "none";
+				const abil = (p.abilities || []).map(a => (typeof a === "string" ? a : a?.name || "?")).join(", ") || "none";
 				const xp = p.xp ?? 0;
 				const wpn = p.weapon ? `${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "unarmed";
 			const arm = p.armor  ? `${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "unarmored (AC 10)";
@@ -161,7 +160,6 @@ export const promptMethods = {
 	 *   message array ready to pass to the LLM API.
 	 */
 	composeMessages(lobbyId, actorName, action, diceOutcome) {
-		const safeName = sanitizeForLLMName(actorName);
 		const s = this.index[lobbyId];
 		if (!s) return [{ role: "system", content: "Error: Lobby not found." }];
 
@@ -244,7 +242,7 @@ Schema: {
 Be cinematic, descriptive, and responsive to player actions. Maintain continuity with prior events. You should generally speaking be very allowing of stupid shit because that's what players want to do a lot of the time, so no moral policing. Be very "yes and" unless it simply doesn't work or breaks the game rules.
 Respect dice outcomes given by the server. Always reply as the DM narrating events — never as a player. The adventuring party should consist of the actual active players at least at first. Don't make up companions from the start, they must be gained organically through the story.
 Use the "music" field to set background music mood. Only change it when the scene shifts significantly — entering or leaving combat, arriving at a new location type, a death, a major revelation, a victory. Set to null when the current music still fits (which is most of the time). Available moods: ${MOOD_LIST}.
-Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${encounterInstruction}${lootInstruction}${flavorInstruction}`,
+Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation. IMPORTANT: Only include the "sfx" key ONCE in your JSON output — do not duplicate it.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${encounterInstruction}${lootInstruction}${flavorInstruction}`,
 			},
 			...(ancientHistory ? [{ role: "system", content: `Campaign backstory (older events, for reference):\n${ancientHistory}` }] : []),
 			{ role: "system", content: `Recent story arc:\n${storyContext}` },
@@ -387,14 +385,66 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 		}
 
 		// Recent unsummarized history for continuity — everything after summarizedUpTo
-		// (older events are captured in storyContext via auto-summarization)
+		// (older events are captured in storyContext via auto-summarization).
+		// The current player action is already in history (appended before composeMessages
+		// is called), so we don't add it again here.
 		const fromIdx = s.summarizedUpTo || 0;
 		base.push(...(s.history || []).slice(fromIdx));
 
-		// Player action (use sanitized name)
-		base.push({ role: "user", name: safeName, content: String(action) });
-
 		return base;
+	},
+
+	// ==== Chat with DM (out-of-game Q&A) ====
+	/**
+	 * Builds a lightweight message array for an out-of-game player question
+	 * to the DM. Includes campaign context but no action/update schema —
+	 * the LLM answers conversationally without affecting game state.
+	 *
+	 * @param {string} lobbyId - The lobby identifier.
+	 * @param {string} playerName - The asking player's name.
+	 * @param {string} question - The player's question.
+	 * @returns {Array<{role: string, content: string}>} Message array for the LLM.
+	 */
+	composeDMChat(lobbyId, playerName, question) {
+		const s = this.index[lobbyId];
+		if (!s) return [{ role: "system", content: "Error: Lobby not found." }];
+
+		const storyContext = s.storyContext || "(No story yet.)";
+		const ancientHistory = s.ancientHistory || "";
+
+		const pinnedText = (s.pinnedMoments || []).filter(p => p.snippet).map(p =>
+			`[PINNED by ${p.pinnedBy}] ${p.speaker}: ${p.snippet}`
+		).join("\n");
+
+		const playerStatus = Object.values(s.players || {}).map(p => {
+			const hp = Number(p.stats?.hp ?? 0);
+			const maxHp = Number(p.stats?.max_hp ?? p.stats?.hp ?? 10);
+			return `${p.name} (${p.class || "?"} Lv ${p.level || 1}) — HP ${hp}/${maxHp}${p.dead ? " ☠️ DEAD" : ""}`;
+		}).join(", ");
+
+		const enemyRoster = this.enemyRoster(lobbyId);
+
+		const messages = [
+			{
+				role: "system",
+				content: `You are the Dungeon Master for an ongoing D&D 5e campaign. A player is asking you an OUT-OF-GAME question about the campaign. Answer helpfully and in-character as a friendly DM.
+
+Rules:
+- This is a meta/out-of-game conversation. Your answer does NOT affect the game state.
+- Do NOT advance the story, resolve actions, or introduce new events.
+- Help the player understand what's happening, what their goals are, where they are, who NPCs are, or clarify rules.
+- Keep answers concise but thorough. Use plain text, not JSON.
+- If the player asks something their character wouldn't know, you can give gentle hints or say "your character isn't sure about that."`,
+			},
+			...(ancientHistory ? [{ role: "system", content: `Campaign backstory:\n${ancientHistory}` }] : []),
+			{ role: "system", content: `Recent story arc:\n${storyContext}` },
+			...(pinnedText ? [{ role: "system", content: `Pinned moments:\n${pinnedText}` }] : []),
+			{ role: "system", content: `Party: ${playerStatus}` },
+			...(enemyRoster ? [{ role: "system", content: `Current enemies:\n${enemyRoster}` }] : []),
+			{ role: "user", content: `[${playerName} asks out-of-game]: ${question}` },
+		];
+
+		return messages;
 	},
 
 	// ==== TPK (Total Party Kill) Epilogue Prompt ====

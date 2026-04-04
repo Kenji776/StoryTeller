@@ -127,9 +127,13 @@ function registerSocketEvents() {
 		show(els.landing);
 	});
 
+	socket.on("player:joined", ({ player }) => {
+		showToast(`${player} has joined the adventure!`, "info");
+		appendActionLog(`⚔️ <strong>${player}</strong> joined the adventure!`, "system");
+	});
+
 	socket.on("player:left", ({ player }) => {
-		console.log(`[socket] player:left received for: ${player}`);
-		appendLog(`[System] ${player} has left the adventure.`);
+		showToast(`${player} has left the adventure.`, "warning");
 		appendActionLog(`🚪 <strong>${player}</strong> disconnected.`, "system");
 	});
 
