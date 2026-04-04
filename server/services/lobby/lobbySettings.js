@@ -332,6 +332,7 @@ export const settingsMethods = {
 	getLLMSettings(lobbyId) {
 		const s = this.index[lobbyId];
 		return {
+			lobbyId,
 			provider: s?.llmProvider || getDefaultLLMSettings().provider,
 			model:    s?.llmModel    || getDefaultLLMSettings().model,
 		};

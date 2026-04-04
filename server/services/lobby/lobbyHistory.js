@@ -177,10 +177,15 @@ export const historyMethods = {
 			return;
 		}
 
-		// Build a condensed transcript from the new unsummarized messages
+		// Build a condensed transcript from the new unsummarized messages.
+		// DM history entries may be stored as raw JSON — extract the narrative
+		// text so the summarizer sees clean prose, not JSON boilerplate.
 		const transcript = toSummarize.map((m, i) => {
 			const speaker = m.role === "assistant" ? "DM" : (m.name || "Player");
 			let text = m.content || "";
+			if (m.role === "assistant" && text.startsWith("{")) {
+				try { text = JSON.parse(text).text || text; } catch {}
+			}
 			if (text.length > 500) text = text.slice(0, 500) + "…";
 			return `[${i + 1}] ${speaker}: ${text}`;
 		}).join("\n");

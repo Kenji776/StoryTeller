@@ -268,6 +268,9 @@ export const combatMethods = {
 			if (!e?.name) continue;
 			const key = e.name;
 			if (!s.enemies[key]) {
+				// Skip dead/fled enemies that don't already exist in the roster —
+				// the LLM sometimes re-sends purged enemies after combat ends
+				if (e.status === "dead" || e.status === "fled" || (Number(e.hp) || 0) <= 0) continue;
 				// New enemy — store full stat block
 				s.enemies[key] = {
 					name: key,
