@@ -165,6 +165,7 @@ function makePlayer(spec, index) {
 	});
 
 	socket.on("connect", () => log(p.short, `** socket connected (${socket.id})`));
+	socket.on("session:token", ({ token }) => { p.sessionToken = token; });
 	socket.on("disconnect", (r) => log(p.short, `** socket disconnected (${r})`));
 	socket.on("connect_error", (e) => log(p.short, `** connect_error ${e.message}`));
 
@@ -354,13 +355,19 @@ async function run() {
 			await sleep(1500);
 			victim.socket.connect();
 			await waitFor(victim.socket, "connect", 15000);
-			// Emulate what the patched browser client now does on reconnect.
-			victim.socket.emit("join:rejoin", {
-				lobbyCode: victim.lobbyCode,
-				charName: victim.name,
-				clientId: `playtest-${victim.index}`,
-				characterId: undefined,
-			});
+			// Exactly what the patched browser client now does: present the session
+			// token rather than re-joining as if for the first time.
+			if (victim.sessionToken) {
+				log(victim.short, `-> session:resume with token`);
+				victim.socket.emit("session:resume", { token: victim.sessionToken });
+			} else {
+				victim.socket.emit("join:rejoin", {
+					lobbyCode: victim.lobbyCode,
+					charName: victim.name,
+					clientId: `playtest-${victim.index}`,
+					characterId: undefined,
+				});
+			}
 			await sleep(2500);
 			const after = victim.seen.length;
 			log("RUN", `>> RECONNECT TEST: ${victim.short} received ${after - before} frames after rejoin`);

@@ -90,6 +90,12 @@ export function createTimerSystem(deps) {
 	function isPlayerConnected(lobbyId, playerName) {
 		const s = store.index[lobbyId];
 		if (!s) return false;
+
+		// A player inside their disconnect grace window still holds their seat. Without
+		// this, resolveActiveTurn ejects them the moment their socket dies — which
+		// defeated the grace window entirely, because it runs on every turn change.
+		if (deps.hasGrace?.(lobbyId, playerName)) return true;
+
 		return Object.entries(s.sockets).some(
 			([sid, rec]) => rec.playerName === playerName && io.sockets.sockets.has(sid)
 		);

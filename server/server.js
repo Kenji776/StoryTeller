@@ -34,6 +34,10 @@ import { createTimerSystem } from "./routes/turnTimer.js";
 import { registerChatEvents } from "./routes/chatEvents.js";
 import { createActionGate } from "./services/actionGate.js";
 import { createAdvisor } from "./services/newbieAdvisor.js";
+import { EventJournal } from "./services/eventJournal.js";
+import { createLobbyBus } from "./services/lobbyBus.js";
+import { PlayerSessions } from "./services/playerSessions.js";
+import { createSessionSystem } from "./routes/sessionEvents.js";
 import { buildCapability } from "./services/characterCapability.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -140,6 +144,10 @@ app.use("/character-images", express.static(IMAGES_DIR));
 // TTS routes (/api/voices, /api/voice-preview/:id)
 registerTTSRoutes(app, ttsDeps);
 
+// Populated once the session registry is constructed below; the timer system is
+// created first, so it reaches the check through this indirection.
+let graceCheck = () => false;
+
 // Timer system (creates closures over all game-loop helpers)
 const timerSystem = createTimerSystem({
 	io, store, room, log, devMode, ELEVEN_API_KEY, serviceStatus,
@@ -149,6 +157,9 @@ const timerSystem = createTimerSystem({
 	broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates,
 	broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState,
 	updateMap, resolveSfx, broadcastLobbies,
+	// Lets the timer system honour a disconnect grace window; supplied after the
+	// session registry exists, via the mutable holder below.
+	hasGrace: (lobbyId, playerName) => graceCheck(lobbyId, playerName),
 });
 
 const {
@@ -165,6 +176,32 @@ const {
  * rejects nothing, so a session's real judgements can be reviewed before it starts
  * telling players no. Set FEASIBILITY_MODE=hard or =judge to enforce.
  */
+/**
+ * Reconnection layer. The journal and bus give every state-bearing broadcast a
+ * per-lobby sequence number so a client can tell it missed something; the session
+ * registry gives a player an identity that outlives their socket id.
+ */
+const eventJournal = new EventJournal();
+const lobbyBus = createLobbyBus({
+	io,
+	journal: eventJournal,
+	epoch: Date.now(),
+	buildSnapshot: (id) => store.publicState(id),
+});
+const playerSessions = new PlayerSessions();
+graceCheck = (lobbyId, playerName) => playerSessions.byPlayer(lobbyId, playerName)?.state === "grace";
+
+const sessionSystem = createSessionSystem({
+	io, store, room, log,
+	sessions: playerSessions,
+	bus: lobbyBus,
+	resolveActiveTurn, startTurnTimer, cancelTurnTimer, broadcastLobbies,
+});
+
+// Releases seats whose grace window has fully lapsed. Runs often enough that a
+// genuinely departed player does not hold up the table for long.
+setInterval(() => { try { sessionSystem.sweep(); } catch (err) { log('sweep error', err.message); } }, 15_000).unref();
+
 const advisor = createAdvisor({ store, log, getLLMResponse, llmOpts, buildCapability });
 
 const actionGate = createActionGate({
@@ -263,6 +300,7 @@ io.on("connection", (socket) => {
 	log(`🔌 Client connected: ${socket.id}`);
 
 	// ── Delegate to sub-modules ──
+	sessionSystem.registerSessionEvents(socket);
 	registerChatEvents(socket, { io, store, room, log, sendState });
 	registerAdminEvents(socket, {
 		io, store, room, log,
@@ -447,6 +485,7 @@ io.on("connection", (socket) => {
 		if (active.has(charName)) return socket.emit("toast", { type: "error", text: "That character is already in use." });
 
 		lobby.sockets[socket.id] = { clientId, playerName: charName };
+		sessionSystem.openSession(lobbyId, charName, socket);
 		socket.join(lobbyId);
 
 		if (lobby.players[charName]) delete lobby.players[charName].disconnected;
@@ -501,6 +540,7 @@ io.on("connection", (socket) => {
 
 			socket.join(lobbyId);
 			lobby.sockets[socket.id] = { playerName: cleanName, ready: true };
+			sessionSystem.openSession(lobbyId, cleanName, socket);
 			store.upsertPlayer(lobbyId, socket.id, cleanName, sheet);
 			store.initializeAtLevel(lobbyId, cleanName, getAbilityForLevel);
 
@@ -560,6 +600,9 @@ io.on("connection", (socket) => {
 			if (!store.belongs(lobbyId, socket.id)) return;
 			store.upsertPlayer(lobbyId, socket.id, name, sheet);
 			store.initializeAtLevel(lobbyId, name, getAbilityForLevel);
+			// This is where a pre-game player first has a name, so it is the earliest
+			// point a session can be tied to them.
+			sessionSystem.openSession(lobbyId, name, socket);
 			log(`🧙‍♂️ Player sheet saved: ${name} (lobby ${lobbyId})`);
 			log(sheet);
 			sendState(lobbyId);
@@ -1087,20 +1130,16 @@ io.on("connection", (socket) => {
 				}
 
 				if (playerName && (lobby.phase === "running" || lobby.phase === "hibernating")) {
-					if (lobby.players[playerName]) lobby.players[playerName].disconnected = true;
+					// A dropped connection no longer means the player is gone. The session
+					// keeps their seat and their place in the turn order through a grace
+					// window; only if they fail to come back does the sweeper release them
+					// and announce that they left. Previously a two-second blip ejected
+					// them from initiative and told the party they had gone, before the
+					// player had even noticed anything was wrong.
+					sessionSystem.handleDisconnecting(socket);
 
 					const timerEntry = activeTimers.get(lobbyId);
 					if (timerEntry?.playerName === playerName) cancelTurnTimer(lobbyId);
-
-					store.removeFromTurnOrder(lobbyId, playerName);
-
-					log(`📣 Emitting player:left + turn:update to room ${lobbyId}`);
-					io.to(room(lobbyId)).emit("player:left", { player: playerName });
-
-					const { current, order } = resolveActiveTurn(lobbyId);
-					log(`🔄 New turn order after disconnect: [${order.join(", ")}], current: ${current}`);
-					io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
-					startTurnTimer(lobbyId);
 
 					const remaining = Object.values(lobby.sockets).filter((s) => s.playerName && s !== rec);
 					log(`👥 Remaining connected players: ${remaining.map((s) => s.playerName).join(", ") || "none"}`);

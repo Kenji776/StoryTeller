@@ -782,6 +782,36 @@ function registerSocketEvents() {
 	// closes that hole.
 	let _hasConnectedBefore = false;
 
+	// The server issues a session token the first time it knows who we are. Presenting
+	// it on reconnect is what lets the server treat us as the same player rather than
+	// a stranger on a new socket. Kept in sessionStorage so it survives a reload but
+	// does not leak into another tab playing a different character.
+	socket.on("session:token", ({ token, lobbyId: id, seq, epoch }) => {
+		try {
+			sessionStorage.setItem("st.sessionToken", token);
+			sessionStorage.setItem("st.sessionLobby", id || "");
+			sessionStorage.setItem("st.syncSeq", String(seq ?? 0));
+			sessionStorage.setItem("st.syncEpoch", String(epoch ?? 0));
+		} catch { /* private browsing — resume degrades to the explicit rejoin path */ }
+	});
+
+	socket.on("session:resumed", (res) => {
+		if (res?.ok) {
+			console.log(`🔄 Session resumed as ${res.playerName} (seq ${res.seq})`);
+			try {
+				sessionStorage.setItem("st.syncSeq", String(res.seq ?? 0));
+				sessionStorage.setItem("st.syncEpoch", String(res.epoch ?? 0));
+			} catch { /* ignore */ }
+			setConnectionStatus("online");
+			return;
+		}
+		// The token expired or the server restarted. Fall back to the explicit path,
+		// which verifies character ownership properly.
+		console.warn(`⚠️ Session resume refused (${res?.reason}) — falling back`);
+		try { sessionStorage.removeItem("st.sessionToken"); } catch { /* ignore */ }
+		resumeSession();
+	});
+
 	/**
 	 * Re-establishes this socket's membership after a reconnect.
 	 *
@@ -811,7 +841,15 @@ function registerSocketEvents() {
 	socket.on("connect", () => {
 		socket.emit("lobbies:watch");
 		setConnectionStatus("online");
-		if (_hasConnectedBefore) resumeSession();
+		if (_hasConnectedBefore) {
+			// Prefer the session token: it restores the player's identity, room and
+			// turn-order seat in one step. resumeSession() is the fallback for a token
+			// that has expired or was never issued.
+			let token = null;
+			try { token = sessionStorage.getItem("st.sessionToken"); } catch { /* ignore */ }
+			if (token) socket.emit("session:resume", { token });
+			else resumeSession();
+		}
 		_hasConnectedBefore = true;
 	});
 	socket.emit("lobbies:watch"); // also subscribe immediately if already connected
