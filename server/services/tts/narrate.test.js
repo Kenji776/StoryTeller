@@ -205,6 +205,19 @@ test("dev mode announces and ends the stream without calling a provider", async 
 	assert.equal(calls.length, 0, "dev mode exists to spend nothing");
 });
 
+test("dev mode pairs its start and end frames with the same streamId", async () => {
+	const { io, sent } = makeIo();
+	await streamNarrationToClients(io, "lob1", "Some prose.", "v1", "DM", makeDeps({ devMode: true }));
+	assert.equal(find(sent, "narration:start").payload.streamId, find(sent, "narration:audio:end").payload.streamId);
+});
+
+test("a silent stream is still targeted at the lobby room", async () => {
+	const { io, sent } = makeIo();
+	await streamNarrationToClients(io, "lob7", "Some prose.", "v1", "DM", makeDeps({ devMode: true }));
+	assert.ok(sent.length > 0);
+	for (const s of sent) assert.equal(s.room, "lob7");
+});
+
 test("no configured provider still ends the stream rather than stranding the client", async () => {
 	const { io, sent } = makeIo();
 	await streamNarrationToClients(io, "lob1", "Some prose.", "v1", "DM", makeDeps({ resolve: () => null }));

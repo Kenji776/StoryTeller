@@ -25,7 +25,7 @@ export function createTimerSystem(deps) {
 		log,
 		devMode,
 		ELEVEN_API_KEY,
-		serviceStatus,
+		ttsActiveFor,
 		LLM_TIMEOUT_MS,
 		HISTORY_SUMMARIZE_THRESHOLD,
 		MAX_SUMMARY_LENGTH,
@@ -51,7 +51,10 @@ export function createTimerSystem(deps) {
 
 	// ── Internal constants ────────────────────────────────────────────────────
 	const READING_DELAY_MS = 60_000; // grace period when TTS is off
-	const hasTTS = () => !devMode && !!ELEVEN_API_KEY && serviceStatus.elevenlabs;
+	// Whether narration audio will actually reach this lobby. Provider-dependent
+	// since TTS became pluggable, so it is injected rather than derived from a key:
+	// a lobby narrating through the local server has no ElevenLabs key involved.
+	const hasTTS = (lobbyId) => ttsActiveFor(lobbyId);
 
 	/**
 	 * Schedules the turn timer to begin after narration has finished playing on the client.
@@ -62,7 +65,7 @@ export function createTimerSystem(deps) {
 	 * @returns {void}
 	 */
 	function scheduleTimerAfterNarration(lobbyId) {
-		if (!hasTTS()) {
+		if (!hasTTS(lobbyId)) {
 			startTurnTimer(lobbyId, READING_DELAY_MS);
 			return;
 		}
@@ -182,7 +185,7 @@ export function createTimerSystem(deps) {
 						if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
 					}).catch(err => log("⚠️ TPK SFX resolve error:", err.message));
 				}
-				await streamNarrationToClients(io, room(lobbyId), epilogueHtml, store.getNarratorVoice(lobbyId));
+				await streamNarrationToClients(io, lobbyId, epilogueHtml, store.getNarratorVoice(lobbyId));
 			}
 		} catch (err) {
 			log(`⚠️ TPK epilogue generation failed: ${err.message}`);
@@ -220,7 +223,7 @@ export function createTimerSystem(deps) {
 			s.turnDeadlineAt = null;
 			store.persist(lobbyId);
 			log(`⏱ Timer pending for ${current} in lobby ${lobbyId} (${readingDelayMs / 1000}s reading delay)`);
-			io.to(room(lobbyId)).emit("timer:pending", { player: current, readingDelayMs, ttsActive: hasTTS() });
+			io.to(room(lobbyId)).emit("timer:pending", { player: current, readingDelayMs, ttsActive: hasTTS(lobbyId) });
 			const delayTimeout = setTimeout(() => {
 				activeTimers.delete(lobbyId);
 				startTurnTimer(lobbyId, 0);
@@ -388,7 +391,7 @@ export function createTimerSystem(deps) {
 		const missed = store.incrementMissedTurns(lobbyId, playerName);
 		if (missed >= (s.maxMissedTurns || 3)) {
 			await kickPlayerForInactivity(lobbyId, playerName);
-			startTurnTimer(lobbyId, hasTTS() ? 0 : READING_DELAY_MS);
+			startTurnTimer(lobbyId, hasTTS(lobbyId) ? 0 : READING_DELAY_MS);
 			return;
 		}
 
@@ -444,7 +447,7 @@ export function createTimerSystem(deps) {
 
 				store.appendDM(lobbyId, replyText);
 				io.to(room(lobbyId)).emit("narration", { content: narrationText });
-				await streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId));
+				await streamNarrationToClients(io, lobbyId, narrationText, store.getNarratorVoice(lobbyId));
 			}
 		} catch (err) {
 			log(`⏰ Timer expiry LLM error: ${err.message}`);
@@ -553,7 +556,7 @@ export function createTimerSystem(deps) {
 				}
 				store.appendDM(lobbyId, replyText);
 				io.to(room(lobbyId)).emit("narration", { content: narrationText });
-				await streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId));
+				await streamNarrationToClients(io, lobbyId, narrationText, store.getNarratorVoice(lobbyId));
 			}
 		} catch (err) {
 			log(`⚠️ Rest LLM error: ${err.message}`);

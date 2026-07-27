@@ -14,8 +14,9 @@ flowchart LR
     Browser -- "REST: /api/*" --> Server
     Server --> Store["LobbyStore (in-memory + JSON on disk)"]
     Server --> LLM["services/llm/ (provider adapters)"]
-    Server --> TTS["routes/ttsService.js (ElevenLabs)"]
+    Server --> TTS["services/tts/ (provider adapters)"]
     LLM --> Providers["OpenAI · Anthropic · Google · Ollama · custom"]
+    TTS --> Voices["Local server · ElevenLabs"]
     Store --> Disk[("server/data/lobbies/*.json")]
 ```
 
@@ -52,7 +53,11 @@ in-memory store keyed by lobby id and are never written to disk — see
 [modules/llm.md](modules/llm.md) and [ADR 0001](decisions/0001-player-supplied-ai-credentials.md).
 
 Non-secret AI settings (`llmProvider`, `llmModel`) do live in lobby state and are
-published to clients through `publicState`.
+published to clients through `publicState`, as do the narration settings
+(`ttsProvider`, `narratorVoiceId`). The local TTS server's URL is the exception:
+it is operator configuration (`LOCAL_TTS_URL`) rather than lobby state, because
+the server issues that request and a host-editable field would be an SSRF vector
+— see [ADR 0005](decisions/0005-pluggable-tts-with-a-local-server.md).
 
 ## Boundaries
 

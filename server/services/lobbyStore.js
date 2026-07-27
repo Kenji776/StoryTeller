@@ -188,6 +188,7 @@ export class LobbyStore {
 			timerEnabled: s.timerEnabled || false,
 			timerMinutes: s.timerMinutes || 5,
 			maxMissedTurns: s.maxMissedTurns || 3,
+			ttsProvider:       s.ttsProvider       || null,
 			narratorVoiceId:   s.narratorVoiceId   || null,
 			narratorVoiceName: s.narratorVoiceName || null,
 			campaignTone: s.campaignTone || null,

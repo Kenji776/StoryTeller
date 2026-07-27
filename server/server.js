@@ -29,7 +29,9 @@ import { configure as configureAssets, ensureMusic, ensureMenuMusic, ensureSfx, 
 import { parseDMJson } from "./helpers/parseDMJson.js";
 import { registerAdminAuth } from "./routes/adminAuth.js";
 import { registerAdminEvents } from "./routes/adminEvents.js";
-import { fetchVoices, streamNarrationToClients, registerTTSRoutes } from "./routes/ttsService.js";
+import { registerTTSRoutes } from "./routes/ttsService.js";
+import { streamNarrationToClients } from "./services/tts/narrate.js";
+import { resolveTTSProvider, normalizeProviderId, probeAvailability } from "./services/tts/registry.js";
 import { createTimerSystem } from "./routes/turnTimer.js";
 import { registerChatEvents } from "./routes/chatEvents.js";
 import { createActionGate } from "./services/actionGate.js";
@@ -107,6 +109,10 @@ if (devMode) log("🧩 Developer mode enabled — skipping ElevenLabs TTS.");
 
 const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
 const ELEVEN_VOICE_ID = process.env.ELEVEN_VOICE_ID || "dAcds2QMcvmv86jQMC3Y";
+// The local TTS server's address is operator configuration, never a lobby setting:
+// the server issues the request, so a host-editable field would be an SSRF vector.
+// See docs/decisions/0005-pluggable-tts-with-a-local-server.md.
+const LOCAL_TTS_URL = process.env.LOCAL_TTS_URL || "http://127.0.0.1:8199";
 const REJECTED_REQUEST_STATUS = 204;
 const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60000;
 const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 2;
@@ -116,11 +122,69 @@ const VOICE_CACHE_FILE = path.join(__dirname, "..", "client", "config", "voices_
 const serviceStatus = { openai: false, claude: false, elevenlabs: false };
 const llmOpts = (lobbyId) => store.getLLMSettings(lobbyId);
 
+/**
+ * Which TTS engines are reachable right now. Populated by the boot probe and
+ * updated by the voice routes when a provider that was down starts answering.
+ */
+const ttsAvailability = { local: false, elevenlabs: false };
+
+/** Voice each provider falls back to when a lobby has chosen none. */
+const ttsDefaultVoice = { local: null, elevenlabs: ELEVEN_VOICE_ID };
+
+/** Spoken player lines fall back to this ElevenLabs voice when a sheet carries none. */
+const PLAYER_FALLBACK_VOICE_ID = "nVR3DsQbqULlGfUZGjwn";
+
 // ── Configure sub-modules ────────────────────────────────────────────────────
 
 configureAssets({ musicDir: MUSIC_DIR, sfxDir: SFX_DIR, log });
 
-const ttsDeps = { ELEVEN_API_KEY, ELEVEN_VOICE_ID, VOICE_CACHE_FILE, devMode, REJECTED_REQUEST_STATUS, serviceStatus, log, room };
+/**
+ * Builds the dependency bundle a TTS adapter needs.
+ *
+ * @description Each adapter takes only what it uses, so the ElevenLabs key is never
+ *   handed to the local server and vice versa.
+ * @param {string} id - A registered provider id.
+ * @returns {object} The bundle for that provider.
+ */
+const providerDepsFor = (id) => (id === "local"
+	? { LOCAL_TTS_URL, log }
+	: { ELEVEN_API_KEY, VOICE_CACHE_FILE, log });
+
+/**
+ * Decides which engine and voice a lobby's narration should use.
+ *
+ * @description The stored choice is normalised against live availability, so a
+ *   lobby whose provider has gone offline degrades to one that works rather than
+ *   falling silent. Voice preference runs caller → lobby setting → provider default.
+ * @param {string} lobbyId - The lobby about to narrate.
+ * @param {string|null} requestedVoiceId - Voice the call site asked for, if any.
+ * @returns {{provider: object, providerDeps: object, voiceId: string|null}|null}
+ *   Null when no engine is available.
+ */
+const resolveTTS = (lobbyId, requestedVoiceId) => {
+	const providerId = normalizeProviderId(store.getTTSProvider(lobbyId), ttsAvailability);
+	const provider = resolveTTSProvider(providerId);
+	if (!provider) return null;
+	return {
+		provider,
+		providerDeps: providerDepsFor(providerId),
+		voiceId: requestedVoiceId || store.getNarratorVoice(lobbyId) || ttsDefaultVoice[providerId] || null,
+	};
+};
+
+const ttsDeps = { resolve: resolveTTS, devMode, REJECTED_REQUEST_STATUS, log, room };
+
+/**
+ * Whether narration audio will actually reach a lobby.
+ *
+ * @description The turn timer branches on this: when audio is coming it waits for
+ *   the client's `narration:done`, and when it is not it applies a fixed reading
+ *   delay instead. Before TTS was pluggable this was "is there an ElevenLabs key",
+ *   which would now wrongly report silence for a lobby narrating locally.
+ * @param {string} lobbyId - The lobby about to take a turn.
+ * @returns {boolean} True when a provider is resolvable and dev mode is off.
+ */
+const ttsActiveFor = (lobbyId) => !devMode && Boolean(resolveTTS(lobbyId, null));
 
 // Admin auth (registers routes on app, returns shared state)
 const adminAuth = registerAdminAuth(app, { store, charPublicKey, log });
@@ -157,8 +221,8 @@ const IMAGES_DIR = path.join(__dirname, "data", "images");
 if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
 app.use("/character-images", express.static(IMAGES_DIR));
 
-// TTS routes (/api/voices, /api/voice-preview/:id)
-registerTTSRoutes(app, ttsDeps);
+// TTS routes (/api/tts/providers, /api/voices, /api/voice-preview/:id)
+registerTTSRoutes(app, { providerDepsFor, availability: ttsAvailability, devMode, log });
 
 // Populated once the session registry is constructed below; the timer system is
 // created first, so it reaches the check through this indirection.
@@ -166,10 +230,10 @@ let graceCheck = () => false;
 
 // Timer system (creates closures over all game-loop helpers)
 const timerSystem = createTimerSystem({
-	io: busIo, store, room, log, devMode, ELEVEN_API_KEY, serviceStatus,
+	io: busIo, store, room, log, devMode, ELEVEN_API_KEY, ttsActiveFor,
 	LLM_TIMEOUT_MS, HISTORY_SUMMARIZE_THRESHOLD, MAX_SUMMARY_LENGTH,
 	getLLMResponse, llmOpts, parseDMJson,
-	streamNarrationToClients: (ioRef, rm, text, voiceId, pn) => streamNarrationToClients(ioRef, rm, text, voiceId, pn, ttsDeps),
+	streamNarrationToClients: (ioRef, lobbyId, text, voiceId, pn) => streamNarrationToClients(ioRef, lobbyId, text, voiceId, pn, ttsDeps),
 	broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates,
 	broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState,
 	updateMap, resolveSfx, broadcastLobbies,
@@ -320,7 +384,9 @@ io.on("connection", (socket) => {
 	// ===== BASIC LOBBY =====
 	socket.on("lobby:create", ({ password } = {}) => {
 		try {
-			const { lobbyId, code } = store.createLobby(socket.id, ELEVEN_VOICE_ID);
+			const defaultTTS = normalizeProviderId(null, ttsAvailability);
+			const { lobbyId, code } = store.createLobby(socket.id, ttsDefaultVoice[defaultTTS] || null);
+			if (defaultTTS) store.setTTSProvider(lobbyId, defaultTTS);
 			if (password) store.setPassword(lobbyId, password);
 			socket.join(room(lobbyId));
 			socket.emit("lobby:created", { lobbyId, code });
@@ -394,9 +460,12 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, llmProvider, llmModel }) => {
+	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, llmProvider, llmModel }) => {
 		if (!store.isHost(lobbyId, socket.id)) return;
 		store.setTimerSettings(lobbyId, timerEnabled, timerMinutes, maxMissedTurns);
+		// Provider first: switching engines swaps in that engine's remembered voice,
+		// which a narratorVoiceId in the same message is then free to overwrite.
+		if (ttsProvider !== undefined) store.setTTSProvider(lobbyId, ttsProvider);
 		if (narratorVoiceId !== undefined) store.setNarratorVoice(lobbyId, narratorVoiceId, narratorVoiceName);
 		if (campaignTone !== undefined || campaignTheme !== undefined) store.setCampaignFlavor(lobbyId, campaignTone, campaignTheme);
 		if (brutalityLevel !== undefined) store.setBrutalityLevel(lobbyId, brutalityLevel);
@@ -573,7 +642,7 @@ io.on("connection", (socket) => {
 
 			store.appendDM(lobbyId, narration);
 			busIo.to(room(lobbyId)).emit("narration", { content: narration });
-			await streamNarrationToClients(busIo, room(lobbyId), narration, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+			await streamNarrationToClients(busIo, lobbyId, narration, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 			busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 
 		} catch (err) {
@@ -788,7 +857,7 @@ io.on("connection", (socket) => {
 				}).catch(err => log("⚠️ SFX resolve error:", err.message));
 			}
 
-			await streamNarrationToClients(busIo, room(lobbyId), cleanText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+			await streamNarrationToClients(busIo, lobbyId, cleanText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 
 			busIo.to(room(lobbyId)).emit("game:ready");
 			scheduleTimerAfterNarration(lobbyId);
@@ -871,13 +940,14 @@ io.on("connection", (socket) => {
 			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload);
 			console.log(`🎭 Action from ${actor.name}: "${text}"`);
 
-			// Player voice narration
-			const playerVoice = actor?.sheet?.voice_id || "nVR3DsQbqULlGfUZGjwn";
-			if (playerVoice) {
-				await streamNarrationToClients(busIo, room(lobbyId), text, playerVoice, actor.name, ttsDeps);
-			} else {
-				console.warn("⚠️ No valid player voice found — skipping player narration");
-			}
+			// Player voice narration. A character sheet's voice_id is an ElevenLabs id,
+			// so it is only meaningful when ElevenLabs is the active engine — handing it
+			// to the local server would be rejected as a voice it has not built. On any
+			// other engine the player speaks in the lobby's narrator voice.
+			const playerVoice = store.getTTSProvider(lobbyId) === "elevenlabs"
+				? (actor?.sheet?.voice_id || PLAYER_FALLBACK_VOICE_ID)
+				: null;
+			await streamNarrationToClients(busIo, lobbyId, text, playerVoice, actor.name, ttsDeps);
 
 			// LLM DM response
 			const _timerLabel = `LLM_response_time_${lobbyId}_${Date.now()}`;
@@ -966,7 +1036,7 @@ io.on("connection", (socket) => {
 			store.appendDM(lobbyId, replyText);
 			busIo.to(room(lobbyId)).emit("debug:llm", { raw: replyText, parsed: dmObj ?? null, narrationText });
 			busIo.to(room(lobbyId)).emit("narration", { content: narrationText });
-			await streamNarrationToClients(busIo, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+			await streamNarrationToClients(busIo, lobbyId, narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 
 			if (dmObj?.roll?.sides) {
 				busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
@@ -1016,7 +1086,7 @@ io.on("connection", (socket) => {
 				const narrationText = (dmObj && typeof dmObj === "object") ? (dmObj.text || dmObj.prompt || replyText) : replyText;
 				store.appendDM(lobbyId, replyText);
 				busIo.to(room(lobbyId)).emit("narration", { content: narrationText });
-				streamNarrationToClients(busIo, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+				streamNarrationToClients(busIo, lobbyId, narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 				sendState(lobbyId);
 			});
 		} catch (err) {
@@ -1207,6 +1277,9 @@ app.get("/api/features", (req, res) => {
 		openai:     serviceStatus.openai,
 		claude:     serviceStatus.claude,
 		elevenlabs: serviceStatus.elevenlabs,
+		// Narration is available if any engine is, not just ElevenLabs. The settings
+		// window gates its voice controls on this.
+		tts:        { ...ttsAvailability, any: Object.values(ttsAvailability).some(Boolean) },
 		devMode,
 		version:    process.env.APP_VERSION || "0.0",
 	});
@@ -1286,6 +1359,45 @@ app.post("/api/character/import", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+/**
+ * Probes every TTS engine and records which can narrate.
+ *
+ * @description Also learns the local server's own default voice, so a lobby that
+ *   has chosen no voice still gets a valid one rather than whatever the server
+ *   does with a null. Dev mode skips the network entirely but reports engines as
+ *   present, because the settings window should still be explorable.
+ * @returns {Promise<void>} Resolves once `ttsAvailability` reflects reality.
+ */
+async function probeTTS() {
+	if (devMode) {
+		ttsAvailability.local = true;
+		ttsAvailability.elevenlabs = Boolean(ELEVEN_API_KEY);
+		log("  ⏭️  TTS: probing skipped (dev mode)");
+		return;
+	}
+
+	Object.assign(ttsAvailability, await probeAvailability({ depsFor: providerDepsFor }));
+
+	if (ttsAvailability.local) {
+		try {
+			const voices = await resolveTTSProvider("local").listVoices(providerDepsFor("local"));
+			ttsDefaultVoice.local = (voices.find((v) => v.isDefault) || voices[0])?.id || null;
+			log(`  ✅ Local TTS server is ready at ${LOCAL_TTS_URL} (${voices.length} voices, default "${ttsDefaultVoice.local}")`);
+		} catch (err) {
+			log(`  ⚠️  Local TTS server answered /health but not /voices: ${err.message}`);
+		}
+	} else {
+		log(`  ❌ Local TTS: not reachable at ${LOCAL_TTS_URL}`);
+	}
+
+	if (!ELEVEN_API_KEY) log("  ❌ ElevenLabs: No API key configured");
+	else if (ttsAvailability.elevenlabs) log("  ✅ ElevenLabs API key is valid");
+	else log("  ❌ ElevenLabs: key rejected or no voices returned");
+
+	// serviceStatus is what /api/features and the admin panel have always read.
+	serviceStatus.elevenlabs = ttsAvailability.elevenlabs;
+}
+
 async function validateServices() {
 	log("🔑 Validating API keys...");
 	const llm = await validateLLMKeys();
@@ -1295,28 +1407,13 @@ async function validateServices() {
 	else                 log(`  ❌ OpenAI: ${llm.openai.error}`);
 	if (llm.claude.ok)  log("  ✅ Claude API key is valid");
 	else                 log(`  ❌ Claude: ${llm.claude.error}`);
-	if (!ELEVEN_API_KEY) {
-		log("  ❌ ElevenLabs: No API key configured");
-	} else if (devMode) {
-		log("  ⏭️  ElevenLabs: Skipped (dev mode)");
-		serviceStatus.elevenlabs = true;
-	} else {
-		try {
-			const voices = await fetchVoices(ttsDeps);
-			if (voices.length > 0) {
-				serviceStatus.elevenlabs = true;
-				log(`  ✅ ElevenLabs API key is valid (${voices.length} voices loaded)`);
-			} else {
-				log("  ❌ ElevenLabs: Key may be invalid (0 voices returned)");
-			}
-		} catch (err) {
-			log(`  ❌ ElevenLabs: ${err.message || err}`);
-		}
-	}
+	await probeTTS();
+
 	const active = [
 		serviceStatus.openai && "OpenAI",
 		serviceStatus.claude && "Claude",
-		serviceStatus.elevenlabs && "ElevenLabs",
+		ttsAvailability.local && "Local TTS",
+		ttsAvailability.elevenlabs && "ElevenLabs",
 	].filter(Boolean);
 	log(`🟢 Active services: ${active.length ? active.join(", ") : "none (stub mode)"}`);
 }

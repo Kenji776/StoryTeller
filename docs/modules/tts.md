@@ -17,7 +17,43 @@ The adapter shape deliberately mirrors `services/llm/`
 | `providers/localServer.js` | Self-hosted OpenAI-compatible server: `/health`, `/voices`, `/v1/audio/speech`. |
 | `providers/elevenLabs.js` | ElevenLabs `stream/with-timestamps`, with an on-disk voice cache. |
 
-Server wiring and the lobby setting arrive with the next phase of this work.
+## How it is wired
+
+`server.js` owns two mutable maps and one resolver:
+
+- `ttsAvailability` — which engines answered the boot probe. The voice routes
+  update it when a provider that was down starts answering.
+- `ttsDefaultVoice` — per provider; the local server's own declared default is
+  learned at boot, ElevenLabs' comes from `ELEVEN_VOICE_ID`.
+- `resolveTTS(lobbyId, requestedVoiceId)` — normalises the lobby's stored provider
+  against live availability and picks a voice: caller → lobby setting → provider
+  default.
+
+`ttsActiveFor(lobbyId)` is derived from the same resolver and injected into the
+turn timer, which branches on it: when audio is coming it waits for the client's
+`narration:done`, and when it is not it applies a fixed 60-second reading delay.
+Before TTS was pluggable this was "is there an ElevenLabs key", which would now
+wrongly report silence for a lobby narrating locally.
+
+### HTTP surface
+
+| Route | Answers |
+|---|---|
+| `GET /api/tts/providers` | Every engine, its format, whether it is reachable, and the default. |
+| `GET /api/voices?provider=<id>` | That engine's voices, memoised per provider. |
+| `GET /api/voice-preview/:id?provider=<id>` | A spoken sample. 204 in dev mode. |
+
+The boot probe runs once, so both voice routes will ask a provider that is marked
+unavailable rather than refusing outright — a container whose network came up late
+recovers on the next request instead of needing a restart. An empty voice list is
+never memoised, for the same reason.
+
+### Player voices
+
+A character sheet's `voice_id` is an ElevenLabs id, so it is only used when
+ElevenLabs is the active engine. On any other engine a player's spoken line falls
+back to the lobby's narrator voice, which means every character sounds like the
+DM. Mapping characters onto local voices is not done.
 
 ## Emission
 

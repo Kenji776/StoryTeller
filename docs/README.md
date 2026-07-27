@@ -13,8 +13,13 @@ cp server/.env.example server/.env    # then fill in the values you need
 npm run dev                            # http://localhost:3000 (PORT overrides)
 ```
 
-`--devmode` (or `DEV_MODE=TRUE`) suppresses ElevenLabs narration and image
-generation to conserve API spend, and unlocks the canned-response test provider.
+`--devmode` (or `DEV_MODE=TRUE`) suppresses narration and image generation to
+conserve API spend, and unlocks the canned-response test provider.
+
+Narration works through either a self-hosted TTS server (`LOCAL_TTS_URL`,
+default `http://127.0.0.1:8199`) or ElevenLabs. Both are probed at boot; a new
+lobby prefers whichever is up, local first, and the host can switch per lobby in
+the settings window. Neither is required — without one, the game plays silently.
 
 ## Tests
 
@@ -31,9 +36,10 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 | Path | What lives there |
 |---|---|
 | `server/server.js` | Express + Socket.IO entry point; core game-flow socket events |
-| `server/routes/` | Turn timer, admin auth/events, TTS, chat |
+| `server/routes/` | Turn timer, admin auth/events, TTS HTTP routes, chat |
 | `server/services/` | Lobby store and its mixins, LLM access, map, SFX, game-state broadcasts |
 | `server/services/llm/` | Provider-agnostic AI layer — see [modules/llm.md](modules/llm.md) |
+| `server/services/tts/` | Provider-agnostic narration layer — see [modules/tts.md](modules/tts.md) |
 | `server/helpers/` | Dice, DM JSON parsing/repair, class progression, asset downloads |
 | `client/` | Browser client (no build step; plain ESM and HTML fragments) |
 
@@ -41,6 +47,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 
 - [architecture.md](architecture.md) — system map, data flow, module boundaries
 - [modules/llm.md](modules/llm.md) — the AI provider layer
+- [modules/tts.md](modules/tts.md) — the narration provider layer
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
 - [worklog/](worklog/) — append-only session journal

@@ -5,6 +5,40 @@
 
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import { getDefaultLLMSettings } from "../llmService.js";
+import { TTS_PROVIDERS } from "../tts/registry.js";
+
+/** The registry is the single source of truth for which provider ids are legal. */
+const TTS_PROVIDER_IDS = TTS_PROVIDERS.map((p) => p.id);
+
+/**
+ * Provider a lobby's current narrator voice belongs to.
+ *
+ * @description Lobbies persisted before TTS became pluggable carry an ElevenLabs
+ *   voice id and no `ttsProvider` at all, so that is the correct attribution for
+ *   an absent value — not a guess, but what those ids actually are.
+ * @param {object} lobby - The raw lobby state object.
+ * @returns {string} A provider id.
+ */
+function activeProviderOf(lobby) {
+	return lobby.ttsProvider || "elevenlabs";
+}
+
+/**
+ * The lobby's per-provider voice memory, created on first use.
+ *
+ * @param {object} lobby - The raw lobby state object.
+ * @returns {object} Map of provider id to `{id, name}` or null.
+ */
+function voiceBook(lobby) {
+	if (!lobby.narratorVoices || typeof lobby.narratorVoices !== "object") {
+		// Seed from the legacy single-voice field so an existing lobby does not lose
+		// the voice it has been narrating with.
+		lobby.narratorVoices = lobby.narratorVoiceId
+			? { [activeProviderOf(lobby)]: { id: lobby.narratorVoiceId, name: lobby.narratorVoiceName || null } }
+			: {};
+	}
+	return lobby.narratorVoices;
+}
 
 export const settingsMethods = {
 	// ==== Password ====
@@ -164,7 +198,52 @@ export const settingsMethods = {
 	},
 
 	/**
+	 * Selects which TTS engine narrates this lobby, and restores that engine's voice.
+	 *
+	 * @description Voice ids are provider-specific — an ElevenLabs id means nothing
+	 *   to the local server and "House" means nothing to ElevenLabs — so each
+	 *   provider's last chosen voice is remembered separately and swapped into the
+	 *   active slot here. A host can switch back and forth without re-picking.
+	 *
+	 *   Unlike the neighbouring setters, an unrecognised id is *ignored* rather than
+	 *   coerced to a default: coercion would let a malformed message silently move a
+	 *   lobby off the engine its host chose. Availability is not checked here; that
+	 *   is `normalizeProviderId`'s job at narration time, so a lobby survives its
+	 *   provider going offline and coming back.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @param {string|null} providerId - A registered provider id, or null to clear.
+	 * @returns {void}
+	 */
+	setTTSProvider(lobbyId, providerId) {
+		const s = this.index[lobbyId];
+		if (!s) return;
+		if (providerId !== null && !TTS_PROVIDER_IDS.includes(providerId)) return;
+
+		// Seed the book before switching: it attributes an unfiled legacy voice to
+		// whichever provider is active, and after the switch that would be the wrong one.
+		const book = voiceBook(s);
+		s.ttsProvider = providerId;
+
+		const remembered = providerId ? book[providerId] : null;
+		s.narratorVoiceId   = remembered?.id   || null;
+		s.narratorVoiceName = remembered?.name || null;
+		this.persist(lobbyId);
+	},
+
+	/**
+	 * Returns the TTS engine this lobby narrates with.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @returns {string|null} A provider id, or null if none was ever chosen.
+	 */
+	getTTSProvider(lobbyId) {
+		return this.index[lobbyId]?.ttsProvider || null;
+	},
+
+	/**
 	 * Sets the narrator voice ID and optional display name for the lobby.
+	 *
+	 * @description Also files the choice under the active provider so it survives a
+	 *   round trip through another engine — see `setTTSProvider`.
 	 * @param {string} lobbyId - The target lobby ID.
 	 * @param {string|null} voiceId - The TTS voice identifier.
 	 * @param {string|null} [voiceName=null] - Human-readable voice name.
@@ -175,6 +254,7 @@ export const settingsMethods = {
 		if (!s) return;
 		s.narratorVoiceId   = voiceId   || null;
 		s.narratorVoiceName = voiceName || null;
+		voiceBook(s)[activeProviderOf(s)] = voiceId ? { id: voiceId, name: voiceName || null } : null;
 		this.persist(lobbyId);
 	},
 
