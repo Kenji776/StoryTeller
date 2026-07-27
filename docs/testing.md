@@ -45,6 +45,14 @@ Not covered as of this writing:
   dependency this project has so far avoided.
 - Real provider calls. Every adapter is unit-tested against a fake `fetch`, which
   pins request construction and response parsing but cannot catch a provider
-  changing its API. That gap is what the integration tier is for.
+  changing its API. That gap is what the integration tier is for — and it is now
+  partly closed for TTS: `test-integration/localTts.test.js` narrates through a
+  real local server and asserts the emitted frames reassemble into a playable WAV
+  whose alignment indices match the spans the client wraps. It **skips** rather
+  than fails when no server answers on `LOCAL_TTS_URL`, so the tier stays runnable
+  without one.
+- The two client narration playback paths. `client/tts.js` chooses between
+  MediaSource streaming and buffered Blob playback based on the provider's format;
+  only the server half of that contract is covered. Verified by hand instead.
 
 _Last verified: 2026-07-27 against branch `Refactor` (634b6c1)._

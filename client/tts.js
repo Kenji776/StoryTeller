@@ -1,6 +1,22 @@
 // === Narration Stream Control ===
 // Two independent audio channels (DM + Player) so they never interfere.
-// Each channel is a self-contained MediaSource pipeline with its own queue.
+//
+// Each channel plays one of two ways, chosen by the `format` the server announces
+// on narration:start:
+//
+//   "mpeg"  — streamed incrementally through MediaSource as chunks arrive.
+//   "wav"   — collected in full, then played as one Blob. MediaSource cannot decode
+//             WAV in any browser, and the local TTS server returns a complete PCM
+//             clip rather than a stream, so there is nothing to stream anyway.
+//
+// Everything downstream of playback — fade-out, stop, word highlighting — is shared,
+// because both paths drive an ordinary HTMLAudioElement.
+
+/** Server `format` values mapped to the MIME type a Blob needs. */
+const AUDIO_MIME = { wav: "audio/wav", mpeg: "audio/mpeg" };
+
+/** The only format the MediaSource path can handle. */
+const STREAMING_FORMAT = "mpeg";
 
 class NarrationChannel {
 	constructor(name) {
@@ -14,6 +30,10 @@ class NarrationChannel {
 		this.active = false;
 		this.cancelled = false;
 		this._stopPromise = null;
+		// Playback strategy
+		this.format = STREAMING_FORMAT;
+		this.buffered = false;
+		this.blobParts = [];
 		// Word-level highlight state
 		this.alignmentWords = [];
 		this._highlightedIdx = -1;
@@ -53,6 +73,9 @@ class NarrationChannel {
 	_tryPlay() {
 		try {
 			if (!this.audio || !this.audio.paused || this.cancelled) return;
+			// The buffered path starts itself in _playBuffered once the clip is whole;
+			// there is no partial-buffer threshold to wait for.
+			if (this.buffered) return;
 			if (this.audio.buffered.length === 0) return;
 			const buffered = this.audio.buffered.end(0) - this.audio.currentTime;
 			if (buffered > 0.3) this.audio.play().catch(() => {});
@@ -78,6 +101,7 @@ class NarrationChannel {
 		this.mediaSource = null;
 		this.audio = null;
 		this.queue = [];
+		this.blobParts = [];
 		this.alignmentWords = [];
 		this._highlightedIdx = -1;
 	}
@@ -91,18 +115,34 @@ class NarrationChannel {
 
 	// ── Init ─────────────────────────────────────────────────────────────────
 
-	init(streamId) {
+	init(streamId, format = STREAMING_FORMAT) {
 		this._teardown();
 		this.streamId = streamId;
 		this.queue = [];
+		this.blobParts = [];
 		this.sourceBuffer = null;
 		this.cancelled = false;
 		this.active = true;
 		this.alignmentWords = [];
 		this._highlightedIdx = -1;
+		this.format = format || STREAMING_FORMAT;
+		this.buffered = this.format !== STREAMING_FORMAT;
 
-		this.mediaSource = new MediaSource();
 		this.audio = new Audio();
+		this._attachAudioListeners();
+
+		// The buffered path has no src until every chunk has arrived; finalize()
+		// builds the Blob. Setting one here would only produce an empty-media error.
+		if (!this.buffered) this._openMediaSource();
+	}
+
+	/**
+	 * Builds the MediaSource pipeline for incrementally streamed audio.
+	 *
+	 * @returns {void}
+	 */
+	_openMediaSource() {
+		this.mediaSource = new MediaSource();
 		this.objectURL = URL.createObjectURL(this.mediaSource);
 		this.audio.src = this.objectURL;
 
@@ -129,12 +169,32 @@ class NarrationChannel {
 			console.warn(`⚠️ [${channel.name}] MediaSource error — signalling done`);
 			channel._signalDone();
 		});
+	}
+
+	/**
+	 * Attaches the listeners both playback strategies share.
+	 *
+	 * @returns {void}
+	 */
+	_attachAudioListeners() {
+		const channel = this;
 
 		this.audio.addEventListener("error", () => {
-			// Suppress errors during teardown or before any data arrived —
-			// these are just the browser complaining about a revoked object URL
-			// or an empty MediaSource and are completely harmless.
-			if (channel.audio && !channel.cancelled && channel.sourceBuffer) {
+			if (!channel.audio || channel.cancelled) return;
+
+			if (channel.buffered) {
+				// There is no second chance here: the Blob was the whole clip, so a
+				// decode failure means this narration will never play. Signalling done
+				// is what stops the turn timer waiting three minutes for audio that
+				// is not coming.
+				console.warn(`⚠️ [${channel.name}] Could not decode ${channel.format} audio — skipping narration`);
+				channel._signalDone();
+				return;
+			}
+			// Suppress errors before any data arrived — these are just the browser
+			// complaining about a revoked object URL or an empty MediaSource and are
+			// completely harmless.
+			if (channel.sourceBuffer) {
 				console.warn(`⚠️ [${channel.name}] Audio element error — continuing`);
 			}
 		});
@@ -187,12 +247,15 @@ class NarrationChannel {
 
 	_ensurePipeline() {
 		if (this.cancelled) return false;
+		// The buffered path holds nothing that can break mid-stream — chunks accumulate
+		// in an array until finalize builds the Blob.
+		if (this.buffered) return true;
 		const broken = !this.mediaSource || !this.audio || this.mediaSource.readyState === "closed";
 		if (!broken) return true;
 		console.warn(`⚠️ [${this.name}] Pipeline broken — reconstructing`);
 		const saved = this.queue.slice();
 		const sid = this.streamId;
-		this.init(sid);
+		this.init(sid, this.format);
 		this.queue.push(...saved);
 		return true;
 	}
@@ -201,6 +264,7 @@ class NarrationChannel {
 
 	appendChunk(chunk) {
 		if (this.cancelled) return;
+		if (this.buffered) { this.blobParts.push(chunk); return; }
 		if (!this._ensurePipeline()) return;
 		if (this._pipelineReady()) {
 			if (!this._safeAppend(chunk)) this.queue.push(chunk);
@@ -209,9 +273,43 @@ class NarrationChannel {
 		}
 	}
 
+	/**
+	 * Assembles the collected chunks into one clip and plays it.
+	 *
+	 * @description Used for formats MediaSource cannot decode. Every failure path
+	 *   signals done, because the turn timer is waiting on this channel and would
+	 *   otherwise sit through its three-minute fallback in silence.
+	 * @returns {void}
+	 */
+	_playBuffered() {
+		// Cancelled covers the stop button and a player interrupting the DM: the
+		// clip is discarded, but done is still signalled, because the streaming path
+		// does the same via a torn-down MediaSource and the turn timer waits on it.
+		if (this.cancelled || !this.audio || !this.blobParts.length) {
+			this._signalDone();
+			return;
+		}
+
+		const blob = new Blob(this.blobParts, { type: AUDIO_MIME[this.format] || AUDIO_MIME.mpeg });
+		this.blobParts = [];
+		this.objectURL = URL.createObjectURL(blob);
+		this.audio.src = this.objectURL;
+
+		this.audio.play().catch((err) => {
+			// Usually the browser's autoplay policy: no user gesture yet on this tab.
+			console.warn(`⚠️ [${this.name}] Playback refused — skipping narration:`, err.message);
+			this._signalDone();
+		});
+	}
+
 	// ── Public: finalize stream ──────────────────────────────────────────────
 
 	finalize() {
+		if (this.buffered) {
+			this._playBuffered();
+			return;
+		}
+
 		if (!this.mediaSource || this.mediaSource.readyState !== "open") {
 			this._signalDone();
 			return;
@@ -293,8 +391,15 @@ function _channelForStream(streamId) {
 
 // ── Public API (called from sockets.js and eventHandlers.js) ─────────────────
 
-/** Start a new narration stream on the appropriate channel. */
-function startNarration(speaker, streamId) {
+/**
+ * Start a new narration stream on the appropriate channel.
+ *
+ * @param {string} speaker  - "DM", or a player name.
+ * @param {string} streamId - Identifies this stream across all its frames.
+ * @param {string} [format] - Audio format the server will send: "mpeg" streams
+ *   through MediaSource, anything else is collected and played as one clip.
+ */
+function startNarration(speaker, streamId, format) {
 	const isDM = (speaker === "DM");
 	const channel = isDM ? dmChannel : playerChannel;
 
@@ -306,7 +411,7 @@ function startNarration(speaker, streamId) {
 
 	// If this channel already has an active stream, tear it down first
 	if (channel.active) channel._teardown();
-	channel.init(streamId);
+	channel.init(streamId, format);
 
 	const label = isDM ? "🔮 Narrating..." : `🗣️ ${speaker} speaking...`;
 	showNarratorIndicator(true, label);

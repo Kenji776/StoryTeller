@@ -424,6 +424,18 @@
 
 	<div class="option-row">
 		<div class="option-label">
+			<span>Speech engine</span>
+			<small id="ttsProviderHint">Which service speaks the narration</small>
+		</div>
+		<div class="option-control" style="flex:1;min-width:0;">
+			<select id="ttsProviderSelect" data-sound="Page Turn" style="flex:1;min-width:0;"><option value="">Loading…</option></select>
+		</div>
+	</div>
+
+	<hr class="divider" />
+
+	<div class="option-row">
+		<div class="option-label">
 			<span>DM Narrator voice</span>
 			<small>Voice used for all DM narration in this lobby</small>
 		</div>
@@ -527,6 +539,8 @@ const elEnabled        = document.getElementById("timerEnabled");
 const elMinutes        = document.getElementById("timerMinutes");
 const elMaxMissed      = document.getElementById("maxMissedTurns");
 const elNarratorVoice  = document.getElementById("narratorVoiceSelect");
+const elTTSProvider    = document.getElementById("ttsProviderSelect");
+const elTTSHint        = document.getElementById("ttsProviderHint");
 const elLLMModel       = document.getElementById("llmModelSelect");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
@@ -618,9 +632,12 @@ function applyFeatureGating() {
 		populateLLMModels("test", null);
 	}
 
-	// Disable narrator voice if ElevenLabs is unavailable
-	if (!features.elevenlabs) {
-		elNarratorVoice.innerHTML = '<option value="">Narration unavailable (no ElevenLabs key)</option>';
+	// Disable the narration controls only when no engine at all can speak — an
+	// absent ElevenLabs key no longer means silence, since the local server may be up.
+	if (features.tts && !features.tts.any) {
+		elTTSProvider.innerHTML = '<option value="">No speech engine available</option>';
+		elTTSProvider.disabled = true;
+		elNarratorVoice.innerHTML = '<option value="">Narration unavailable</option>';
 		elNarratorVoice.disabled = true;
 		document.getElementById("previewNarratorBtn").disabled = true;
 	}
@@ -706,6 +723,7 @@ function emitSettings() {
 		timerEnabled:    elEnabled.checked,
 		timerMinutes:    Number(elMinutes.value),
 		maxMissedTurns:  Number(elMaxMissed.value),
+		ttsProvider:       elTTSProvider.value || null,
 		narratorVoiceId:   elNarratorVoice.value || null,
 		narratorVoiceName: elNarratorVoice.selectedIndex >= 0 ? elNarratorVoice.options[elNarratorVoice.selectedIndex]?.text || null : null,
 		campaignTone:    selectedTone,
@@ -728,8 +746,18 @@ function applyState(state) {
 	elMinutes.disabled   = !elEnabled.checked;
 	elMaxMissed.disabled = !elEnabled.checked;
 
-	// Narrator voice
-	if (state.narratorVoiceId && elNarratorVoice.options.length > 1) {
+	// Speech engine. Switching it makes the current voice list wrong — those ids
+	// belong to the other engine — so the list is reloaded and the lobby's voice is
+	// held as pending until the new options exist to select it from.
+	const engineChanged = state.ttsProvider
+		&& elTTSProvider.value !== state.ttsProvider
+		&& [...elTTSProvider.options].some(o => o.value === state.ttsProvider && !o.disabled);
+
+	if (engineChanged) {
+		elTTSProvider.value = state.ttsProvider;
+		if (state.narratorVoiceId) elNarratorVoice.dataset.pendingVoice = state.narratorVoiceId;
+		loadNarratorVoices();
+	} else if (state.narratorVoiceId && elNarratorVoice.options.length > 1) {
 		elNarratorVoice.value = state.narratorVoiceId;
 	} else if (state.narratorVoiceId) {
 		elNarratorVoice.dataset.pendingVoice = state.narratorVoiceId;
@@ -814,36 +842,110 @@ async function loadFlavors() {
 	}
 }
 
-// Load voices from API and populate the narrator dropdown
-async function loadNarratorVoices() {
+// ── Narration engine + voices ─────────────────────────────────────────────
+// Voice ids belong to one engine, so the voice list is reloaded whenever the
+// engine changes. The server remembers a voice per engine, which is why the
+// dropdown can be repopulated without the host losing their earlier choice.
+
+let ttsProviders = [];
+
+// Load the available engines and populate the engine dropdown.
+async function loadTTSProviders() {
 	try {
-		const res = await fetch("/api/voices");
+		const res = await fetch("/api/tts/providers");
 		const data = await res.json();
-		if (!data.ok) throw new Error("Voice load failed");
+		if (!data.ok) throw new Error("Provider load failed");
+		ttsProviders = data.providers || [];
+
+		const usable = ttsProviders.filter(p => p.available);
+		if (!usable.length) {
+			elTTSProvider.innerHTML = '<option value="">No speech engine available</option>';
+			elTTSProvider.disabled = true;
+			return null;
+		}
+
+		elTTSProvider.innerHTML = usable
+			.map(p => `<option value="${p.id}">${p.label}</option>`)
+			.join("");
+		// Engines that exist but are not reachable are shown greyed out rather than
+		// hidden, so a host can see that ElevenLabs is configured-but-down.
+		for (const p of ttsProviders.filter(p => !p.available)) {
+			const opt = document.createElement("option");
+			opt.value = p.id;
+			opt.textContent = `${p.label} (unavailable)`;
+			opt.disabled = true;
+			elTTSProvider.appendChild(opt);
+		}
+		return data.defaultProvider;
+	} catch (err) {
+		elTTSProvider.innerHTML = '<option value="">Error loading engines</option>';
+		elTTSProvider.disabled = true;
+		return null;
+	}
+}
+
+// Load voices for the selected engine and populate the narrator dropdown.
+async function loadNarratorVoices() {
+	const provider = elTTSProvider.value;
+	if (!provider) {
+		elNarratorVoice.innerHTML = '<option value="">No speech engine available</option>';
+		elNarratorVoice.disabled = true;
+		document.getElementById("previewNarratorBtn").disabled = true;
+		return;
+	}
+
+	elNarratorVoice.innerHTML = '<option value="">Loading…</option>';
+	elNarratorVoice.disabled = true;
+
+	try {
+		const res = await fetch(`/api/voices?provider=${encodeURIComponent(provider)}`);
+		const data = await res.json();
+		if (!data.ok) throw new Error(data.error || "Voice load failed");
+
 		elNarratorVoice.innerHTML = data.voices
 			.map(v => `<option value="${v.id}">${v.name}${v.accent ? ` (${v.accent})` : ""}</option>`)
 			.join("");
+		elNarratorVoice.disabled = false;
+		document.getElementById("previewNarratorBtn").disabled = false;
+
+		// Restore whichever voice this lobby last used with this engine, if it is
+		// still on offer; a stale id from the other engine simply will not match.
 		const pending = elNarratorVoice.dataset.pendingVoice;
 		if (pending) {
 			elNarratorVoice.value = pending;
 			delete elNarratorVoice.dataset.pendingVoice;
 		}
+		const detail = ttsProviders.find(p => p.id === provider);
+		elTTSHint.textContent = detail
+			? `${detail.label} — ${data.voices.length} voice${data.voices.length === 1 ? "" : "s"} available`
+			: "Which service speaks the narration";
 	} catch (err) {
-		elNarratorVoice.innerHTML = '<option value="">Error loading voices</option>';
+		elNarratorVoice.innerHTML = `<option value="">${err.message}</option>`;
+		document.getElementById("previewNarratorBtn").disabled = true;
 	}
 }
+
+elTTSProvider.addEventListener("change", async () => {
+	// Tell the server first: switching engines swaps in that engine's remembered
+	// voice, and applyState will feed it back as the pending selection.
+	emitSettings();
+	await loadNarratorVoices();
+	emitSettings();
+});
 
 // Preview the selected narrator voice
 document.getElementById("previewNarratorBtn").addEventListener("click", async () => {
 	const voiceId = elNarratorVoice.value;
 	if (!voiceId) return;
 	try {
-		const res = await fetch(`/api/voice-preview/${voiceId}`);
+		const res = await fetch(`/api/voice-preview/${encodeURIComponent(voiceId)}?provider=${encodeURIComponent(elTTSProvider.value)}`);
 		if (res.status === 204) { alert("Voice preview disabled in developer mode."); return; }
 		if (!res.ok) throw new Error(`Preview failed (${res.status})`);
 		const blob = await res.blob();
 		const url = URL.createObjectURL(blob);
-		new Audio(url).play().catch(() => {});
+		const audio = new Audio(url);
+		audio.addEventListener("ended", () => URL.revokeObjectURL(url));
+		audio.play().catch(() => URL.revokeObjectURL(url));
 	} catch (err) {
 		statusBar.textContent = "⚠️ Preview failed.";
 	}
@@ -962,8 +1064,9 @@ function randomizeOptions() {
 	// Loot Generosity
 	selectChip("lootChips", pick(["sparse", "fair", "generous"]));
 
-	// Narrator Voice (only if voices are loaded)
-	if (elNarratorVoice.options.length > 0) {
+	// Narrator Voice (only if voices are loaded; the engine itself is left alone,
+	// since randomising onto an engine the host did not choose is not a flavour roll)
+	if (!elNarratorVoice.disabled && elNarratorVoice.options.length > 0) {
 		const randomIndex = Math.floor(Math.random() * elNarratorVoice.options.length);
 		elNarratorVoice.selectedIndex = randomIndex;
 	}
@@ -1018,14 +1121,25 @@ async function boot() {
 		if (res.ok) features = await res.json();
 	} catch (e) { /* use defaults — assume all available */ }
 
-	// Load flavors and voices in parallel
-	await Promise.all([
-		loadFlavors(),
-		features.elevenlabs ? loadNarratorVoices() : Promise.resolve(),
-	]);
+	// Flavors are independent; the voice list depends on which engine is selected,
+	// so the engine list has to land first.
+	const [, defaultProvider] = await Promise.all([loadFlavors(), loadTTSProviders()]);
+
+	// Seed the engine from the lobby before listing voices, so the first fetch asks
+	// for the right engine's voices instead of loading one list and replacing it.
+	const state = window.opener?.currentState;
+	const lobbyProvider = state?.ttsProvider;
+	if (lobbyProvider && [...elTTSProvider.options].some(o => o.value === lobbyProvider && !o.disabled)) {
+		elTTSProvider.value = lobbyProvider;
+	} else if (defaultProvider) {
+		elTTSProvider.value = defaultProvider;
+	}
+	if (state?.narratorVoiceId) elNarratorVoice.dataset.pendingVoice = state.narratorVoiceId;
+
+	await loadNarratorVoices();
 
 	applyFeatureGating();
-	if (window.opener?.currentState) applyState(window.opener.currentState);
+	if (state) applyState(state);
 }
 boot();
 </script>

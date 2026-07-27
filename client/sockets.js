@@ -538,7 +538,7 @@ function registerSocketEvents() {
 		}
 	});
 
-	socket.on("narration:start", ({ speaker, streamId, status }) => {
+	socket.on("narration:start", ({ speaker, streamId, status, format }) => {
 		// 🧩 Handle dev mode or no-audio condition gracefully
 		if (status === 204 || localStorage.getItem("narrationEnabled") === "false") {
 			showNarratorIndicator(false);
@@ -547,7 +547,7 @@ function registerSocketEvents() {
 			return;
 		}
 
-		startNarration(speaker, streamId);
+		startNarration(speaker, streamId, format);
 	});
 
 	// === LEVEL UP EVENT HANDLING (client-side) ===

@@ -48,6 +48,24 @@ unavailable rather than refusing outright — a container whose network came up 
 recovers on the next request instead of needing a restart. An empty voice list is
 never memoised, for the same reason.
 
+## Client playback
+
+`client/tts.js` picks one of two strategies from the `format` on `narration:start`:
+
+| Format | Strategy |
+|---|---|
+| `mpeg` | Chunks are fed to MediaSource as they arrive; playback starts early. |
+| anything else | Chunks are collected, then played as one Blob at `narration:audio:end`. |
+
+The buffered path exists because **MediaSource cannot decode WAV in any browser**,
+and the local server returns a complete clip rather than a stream, so there is
+nothing to stream anyway. Both paths drive an ordinary `HTMLAudioElement`, so
+fade-out, stop, and word highlighting are shared.
+
+Every buffered failure — an undecodable clip, a blocked autoplay, a cancelled
+stream — calls `_signalDone()`. The turn timer is waiting on `narration:done`, and
+would otherwise sit through its three-minute fallback in silence.
+
 ### Player voices
 
 A character sheet's `voice_id` is an ElevenLabs id, so it is only used when
