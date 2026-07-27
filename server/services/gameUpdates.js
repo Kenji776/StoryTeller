@@ -259,3 +259,57 @@ export function broadcastPartyState(io, store, lobbyId) {
 
 	io.to(lobbyId).emit("party:update", { members, hostPlayer: store.hostPlayerName(lobbyId) || null });
 }
+
+// === ABILITY UPDATES ===
+/**
+ * Applies ability grants and losses from a DM response.
+ *
+ * The prompt has always told the Dungeon Master it may return
+ * `updates.abilities` with `change_type: "add" | "remove"`
+ * (`lobbyPrompts.js`), but no dispatch path read the field — so every ability the
+ * DM granted was silently discarded, and a player promised a new power never got
+ * it. This is the missing consumer.
+ *
+ * The advertised schema says `attributes` while every other ability in the game
+ * uses `details`; both are accepted rather than making the model guess which one
+ * this call wants.
+ *
+ * @param {import('socket.io').Server} io - Socket.IO server (or the sequencing facade).
+ * @param {object} store - The game state store.
+ * @param {string} lobbyId - The lobby to update.
+ * @param {Array<{player: string, change_type: string, name: string, description?: string,
+ *   attributes?: object, details?: object}>} updates - Ability changes from the DM.
+ * @returns {void}
+ */
+export function broadcastAbilityUpdates(io, store, lobbyId, updates) {
+	for (const a of Array.isArray(updates) ? updates : []) {
+		if (!a?.player || !a?.name || typeof a.name !== "string") continue;
+
+		const change = String(a.change_type || "add").toLowerCase();
+		const key = store.findPlayerKey(lobbyId, normalizeName(a.player));
+		if (!key) {
+			reportDropped(lobbyId, "abilities:update", a.player, Object.keys(store.index[lobbyId]?.players || {}));
+			continue;
+		}
+
+		if (change === "remove") {
+			const removed = store.removeAbility?.(lobbyId, key, a.name);
+			if (!removed) continue;
+		} else {
+			store.addAbility(lobbyId, key, {
+				name: a.name,
+				description: a.description || "",
+				details: a.details ?? a.attributes ?? {},
+			});
+		}
+
+		const player = store.index[lobbyId]?.players?.[key];
+		io.to(lobbyId).emit("abilities:update", {
+			player: key,
+			change,
+			name: a.name,
+			description: a.description || "",
+			abilities: Array.isArray(player?.abilities) ? player.abilities : [],
+		});
+	}
+}

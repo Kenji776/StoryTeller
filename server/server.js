@@ -19,7 +19,7 @@ import { getLLMResponse, hasLLM, hasOpenAI, hasClaude, sanitizeForLLMName, gener
 import { roll } from "./helpers/dice.js";
 import fetch from "node-fetch";
 import { randomUUID, generateKeyPairSync, createSign, createVerify, createPublicKey } from "crypto";
-import { broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates, broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState } from "./services/gameUpdates.js";
+import { broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates, broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState, broadcastAbilityUpdates } from "./services/gameUpdates.js";
 import { updateMap, registerMapEndpoints, getDefaultPlayerEmoji } from "./services/mapService.js";
 import { getAbilityForLevel } from "./helpers/classProgression.js";
 import { resolveSfx, findMatch as findSfxMatch } from "./services/sfxService.js";
@@ -255,6 +255,7 @@ const timerSystem = createTimerSystem({
 	streamNarrationToClients: (ioRef, lobbyId, text, voiceId, pn) => streamNarrationToClients(ioRef, lobbyId, text, voiceId, pn, ttsDeps),
 	broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates,
 	broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState,
+	broadcastAbilityUpdates,
 	updateMap, resolveSfx, broadcastLobbies,
 	// Lets the timer system honour a disconnect grace window; supplied after the
 	// session registry exists, via the mutable holder below.
@@ -1015,6 +1016,7 @@ io.on("connection", (socket) => {
 				broadcastInventoryUpdates(busIo, store, lobbyId, u.inventory);
 				broadcastGoldUpdates(busIo, store, lobbyId, u.gold);
 				broadcastConditionUpdates(busIo, store, lobbyId, u.conditions);
+				broadcastAbilityUpdates(busIo, store, lobbyId, u.abilities);
 				if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 				if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 

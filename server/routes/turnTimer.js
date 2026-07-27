@@ -38,6 +38,7 @@ export function createTimerSystem(deps) {
 		broadcastInventoryUpdates,
 		broadcastGoldUpdates,
 		broadcastConditionUpdates,
+		broadcastAbilityUpdates,
 		broadcastPartyState,
 		updateMap,
 		resolveSfx,
@@ -427,6 +428,7 @@ export function createTimerSystem(deps) {
 					broadcastInventoryUpdates(io, store, lobbyId, u.inventory);
 					broadcastGoldUpdates(io, store, lobbyId, u.gold);
 					broadcastConditionUpdates(io, store, lobbyId, u.conditions);
+					broadcastAbilityUpdates(io, store, lobbyId, u.abilities);
 					if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 					if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 					broadcastPartyState(io, store, lobbyId);
@@ -537,6 +539,7 @@ export function createTimerSystem(deps) {
 					broadcastInventoryUpdates(io, store, lobbyId, u.inventory);
 					broadcastGoldUpdates(io, store, lobbyId, u.gold);
 					broadcastConditionUpdates(io, store, lobbyId, u.conditions);
+					broadcastAbilityUpdates(io, store, lobbyId, u.abilities);
 					if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 					if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 					broadcastPartyState(io, store, lobbyId);

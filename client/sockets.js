@@ -466,6 +466,25 @@ function registerSocketEvents() {
 		showRejectionNotice(reason, strikes, maxStrikes, retry);
 	});
 
+	socket.on("abilities:update", ({ player, change, name, description, abilities }) => {
+		const gained = change !== "remove";
+		appendActionLog(
+			gained
+				? `✨ <strong>${player}</strong> gained <em>${name}</em>${description ? ` — ${description}` : ""}`
+				: `💨 <strong>${player}</strong> lost <em>${name}</em>`,
+			"levelup-event",
+		);
+
+		if (me.name !== player) return;
+		showToast(gained ? `You gained ${name}!` : `You lost ${name}.`, gained ? "success" : "warning");
+
+		if (currentState?.players?.[player]) currentState.players[player].abilities = abilities;
+		const container = document.getElementById("gameAbilitiesContainer");
+		if (container && typeof drawAbilitiesComponent === "function") {
+			drawAbilitiesComponent("gameAbilitiesContainer", abilities || [], false, true);
+		}
+	});
+
 	socket.on("advisor:reply", ({ options, note, capability }) => {
 		renderAdvisorOptions(options, note, capability);
 	});

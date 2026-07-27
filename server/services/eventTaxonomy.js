@@ -42,6 +42,7 @@ export const EVENT_CLASSES = {
 	"inventory:update": DURABLE,
 	"conditions:update": DURABLE,
 	"spellslots:update": DURABLE,
+	"abilities:update": DURABLE,
 	"party:update": DURABLE,
 
 	// ── Flow control the player cannot afford to miss ──

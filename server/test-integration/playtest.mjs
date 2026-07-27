@@ -31,7 +31,8 @@ const URL = arg("url", "http://localhost:3000");
 const MAX_ACTIONS = Number(arg("actions", 6));      // hard cap on LLM turns — this is the cost knob
 const WALL_CLOCK_MS = Number(arg("timeout", 420)) * 1000;
 const PACE_MS = Number(arg("pace", 8)) * 1000;      // gap between beats, so a spectator can read
-const HOLD_MS = Number(arg("hold", 0)) * 1000;      // pause after lobby creation so a spectator can attach
+const HOLD_MS = Number(arg("hold", 0)) * 1000;
+const NO_ACT = argv.includes("--noact");   // observe only: nobody acts, so the turn timer must do the work      // pause after lobby creation so a spectator can attach
 const LOG_DIR = path.join(process.cwd(), "server", "logs");
 
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-");
@@ -311,6 +312,9 @@ async function run() {
 	log("RUN", "starting game");
 
 	// ── Start ──
+	// A short timer so an expiry is observable; the store clamps below one minute.
+	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3 });
+	await sleep(200);
 	host.socket.emit("game:start", { lobbyId: host.lobbyId });
 	const opening = await waitForNarration(host.socket, 90000);
 	log("RUN", `OPENING NARRATION: ${brief(opening, 900)}`);
@@ -321,7 +325,12 @@ async function run() {
 	let reconnectTested = false;
 	let lastActedTurn = null;
 
-	while (actions < MAX_ACTIONS && Date.now() < deadline) {
+	if (NO_ACT) {
+		log("RUN", "observe-only: nobody will act, waiting for the turn timer to skip them");
+		await sleep(WALL_CLOCK_MS - (Date.now() - t0) - 5000);
+	}
+
+	while (!NO_ACT && actions < MAX_ACTIONS && Date.now() < deadline) {
 		// Poll the tracked turn rather than awaiting turn:update: the server only
 		// emits that event on turn *changes*, never for the opening turn.
 		let current = null;

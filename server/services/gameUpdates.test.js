@@ -119,3 +119,109 @@ test("updates still work when no incident log has been configured", () => {
 	assert.doesNotThrow(() => broadcastHPUpdates(io, store, "lob1", [{ player: "Ghost", delta: -1 }]));
 	assert.equal(emitted.length, 0);
 });
+
+// ── Ability grants and losses ────────────────────────────────────────────────
+
+/**
+ * @description Extends the shared doubles with the ability-related store methods.
+ * @param {object} [opts] - Overrides forwarded to makeDeps.
+ * @returns {object} The doubles.
+ */
+function makeAbilityDeps(opts = {}) {
+	const deps = makeDeps(opts);
+	const players = deps.lobby.players;
+	deps.store.addAbility = (id, name, ability) => {
+		const key = players[name] ? name : null;
+		if (!key || !ability) return;
+		players[key].abilities = Array.isArray(players[key].abilities) ? players[key].abilities : [];
+		if (!players[key].abilities.some((a) => a.name === ability.name)) players[key].abilities.push(ability);
+	};
+	deps.store.removeAbility = (id, name, abilityName) => {
+		const key = players[name] ? name : null;
+		if (!key || !Array.isArray(players[key].abilities)) return false;
+		const before = players[key].abilities.length;
+		players[key].abilities = players[key].abilities.filter((a) => a.name !== abilityName);
+		return players[key].abilities.length < before;
+	};
+	return deps;
+}
+
+test("the DM can grant an ability, which was previously advertised and then discarded", async () => {
+	// lobbyPrompts tells the DM it may return updates.abilities with change_type
+	// add/remove. No dispatch path read the field, so every granted ability was lost.
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	configureUpdates({ incidents: null });
+	const { io, store, lobby, emitted } = makeAbilityDeps();
+
+	broadcastAbilityUpdates(io, store, "lob1", [
+		{ player: "Ayla", change_type: "add", name: "Shield Bash", description: "Slam with your shield." },
+	]);
+
+	assert.ok(lobby.players.Ayla.abilities.some((a) => a.name === "Shield Bash"));
+	assert.ok(emitted.some((e) => e.event === "abilities:update"));
+});
+
+test("a granted ability keeps its description, so the player knows what it does", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	const { io, store, lobby } = makeAbilityDeps();
+	broadcastAbilityUpdates(io, store, "lob1", [
+		{ player: "Ayla", change_type: "add", name: "Shield Bash", description: "Slam with your shield." },
+	]);
+	assert.equal(lobby.players.Ayla.abilities.find((a) => a.name === "Shield Bash").description, "Slam with your shield.");
+});
+
+test("the DM can take an ability away", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	const { io, store, lobby } = makeAbilityDeps();
+	lobby.players.Ayla.abilities = [{ name: "Cursed Gift", description: "It whispers." }];
+	broadcastAbilityUpdates(io, store, "lob1", [{ player: "Ayla", change_type: "remove", name: "Cursed Gift" }]);
+	assert.deepEqual(lobby.players.Ayla.abilities, []);
+});
+
+test("granting the same ability twice does not duplicate it", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	const { io, store, lobby } = makeAbilityDeps();
+	const grant = { player: "Ayla", change_type: "add", name: "Shield Bash", description: "d" };
+	broadcastAbilityUpdates(io, store, "lob1", [grant]);
+	broadcastAbilityUpdates(io, store, "lob1", [grant]);
+	assert.equal(lobby.players.Ayla.abilities.filter((a) => a.name === "Shield Bash").length, 1);
+});
+
+test("the schema says attributes but the real data says details, so both are accepted", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	const { io, store, lobby } = makeAbilityDeps();
+	broadcastAbilityUpdates(io, store, "lob1", [
+		{ player: "Ayla", change_type: "add", name: "A", attributes: { uses: 2 } },
+		{ player: "Ayla", change_type: "add", name: "B", details: { uses: 3 } },
+	]);
+	const byName = Object.fromEntries(lobby.players.Ayla.abilities.map((a) => [a.name, a.details]));
+	assert.deepEqual(byName.A, { uses: 2 });
+	assert.deepEqual(byName.B, { uses: 3 });
+});
+
+test("an ability grant naming an unknown character raises an incident", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	const incidents = createIncidentLog();
+	configureUpdates({ incidents });
+	const { io, store } = makeAbilityDeps();
+	broadcastAbilityUpdates(io, store, "lob1", [{ player: "Ghost", change_type: "add", name: "X" }]);
+	assert.equal(incidents.list("lob1")[0].detail.event, "abilities:update");
+});
+
+test("malformed ability entries are skipped without stopping the valid ones", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	configureUpdates({ incidents: null });
+	const { io, store, lobby } = makeAbilityDeps();
+	broadcastAbilityUpdates(io, store, "lob1", [
+		null,
+		{ player: "Ayla" },
+		{ player: "Ayla", change_type: "add", name: "Real" },
+	]);
+	assert.deepEqual(lobby.players.Ayla.abilities.map((a) => a.name), ["Real"]);
+});
+
+test("a non-array abilities field is ignored rather than throwing", async () => {
+	const { broadcastAbilityUpdates } = await import("./gameUpdates.js");
+	const { io, store } = makeAbilityDeps();
+	assert.doesNotThrow(() => broadcastAbilityUpdates(io, store, "lob1", "not a list"));
+});

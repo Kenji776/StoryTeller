@@ -159,6 +159,29 @@ export const progressionMethods = {
 		this.persist(lobbyId);
 	},
 	/**
+	 * Removes a named ability from a player.
+	 *
+	 * The counterpart to addAbility, needed because the DM prompt advertises
+	 * change_type "remove" — a cursed gift taken back, a boon that expires.
+	 *
+	 * @param {string} lobbyId - The lobby identifier.
+	 * @param {string} playerName - The player's name (resolved via findPlayerKey).
+	 * @param {string} abilityName - The ability to remove; matched exactly.
+	 * @returns {boolean} True if an ability was removed, false if none matched.
+	 */
+	removeAbility(lobbyId, playerName, abilityName) {
+		const l = this.index[lobbyId];
+		const key = this.findPlayerKey(lobbyId, playerName);
+		if (!l || !key || !abilityName) return false;
+		const p = l.players[key];
+		if (!Array.isArray(p.abilities)) return false;
+		const before = p.abilities.length;
+		p.abilities = p.abilities.filter((a) => (typeof a === "string" ? a : a?.name) !== abilityName);
+		if (p.abilities.length === before) return false;
+		this.persist(lobbyId);
+		return true;
+	},
+	/**
 	 * Adjusts the number of used spell slots, clamped between 0 and the player's level.
 	 * @param {string} lobbyId - The lobby identifier.
 	 * @param {string} playerName - The player's name (resolved via findPlayerKey).
