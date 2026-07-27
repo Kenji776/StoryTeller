@@ -10,12 +10,28 @@
 import { normalizeLLMConfig, LLMConfigError } from "./config.js";
 import { openaiProvider } from "./providers/openai.js";
 import { anthropicProvider } from "./providers/anthropic.js";
+import { googleProvider } from "./providers/google.js";
+import { ollamaProvider } from "./providers/ollama.js";
+import { openaiCompatibleProvider } from "./providers/openaiCompatible.js";
+import { testProvider } from "./providers/testProvider.js";
 
 /** Every provider StoryTeller can talk to, keyed by id. */
 const PROVIDERS = new Map([
 	[openaiProvider.id, openaiProvider],
 	[anthropicProvider.id, anthropicProvider],
+	[googleProvider.id, googleProvider],
+	[ollamaProvider.id, ollamaProvider],
+	[openaiCompatibleProvider.id, openaiCompatibleProvider],
+	[testProvider.id, testProvider],
 ]);
+
+/**
+ * Providers that exist but are not offered in the picker by default. Test Mode
+ * is a development affordance; offering it on a public instance would look like
+ * a broken game rather than a free one. It remains resolvable by id so a lobby
+ * already configured for it keeps working.
+ */
+const HIDDEN_BY_DEFAULT = new Set([testProvider.id]);
 
 /**
  * @description Looks up a provider adapter by id. Ids are matched
@@ -43,18 +59,23 @@ export function getProvider(id) {
  *   The adapter functions are deliberately excluded so the result is plain
  *   JSON: this list is sent to the browser, where functions would be silently
  *   dropped and their presence would only invite misuse.
+ * @param {object} [options] - Listing options.
+ * @param {boolean} [options.includeTest=false] - Include providers hidden by
+ *   default, currently just Test Mode. Set this when the server is in dev mode.
  * @returns {Array<object>} Fresh descriptor objects, safe to serialise and to mutate.
  */
-export function listProviders() {
-	return [...PROVIDERS.values()].map(({ id, label, requiresApiKey, requiresBaseUrl, defaultBaseUrl, supportsImages, keyUrl }) => ({
-		id,
-		label,
-		requiresApiKey,
-		requiresBaseUrl,
-		defaultBaseUrl,
-		supportsImages,
-		keyUrl: keyUrl ?? null,
-	}));
+export function listProviders({ includeTest = false } = {}) {
+	return [...PROVIDERS.values()]
+		.filter(provider => includeTest || !HIDDEN_BY_DEFAULT.has(provider.id))
+		.map(({ id, label, requiresApiKey, requiresBaseUrl, defaultBaseUrl, supportsImages, keyUrl }) => ({
+			id,
+			label,
+			requiresApiKey,
+			requiresBaseUrl,
+			defaultBaseUrl,
+			supportsImages,
+			keyUrl: keyUrl ?? null,
+		}));
 }
 
 /**

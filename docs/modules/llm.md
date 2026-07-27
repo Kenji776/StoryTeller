@@ -16,11 +16,15 @@ speak HTTP directly rather than through vendor SDKs
 | `errors.js` | `LLMRequestError` and the status→kind classification behind it. |
 | `http.js` | The one place a request is issued and a failure is mapped. `fetch` is injected. |
 | `registry.js` | The only list of which providers exist. Resolves an id to an adapter. |
-| `providers/openai.js` | OpenAI chat completions and model listing. |
-| `providers/anthropic.js` | Anthropic Messages API and model listing. |
+| `providers/openaiWire.js` | The OpenAI chat-completions wire format, shared by the two adapters that speak it. |
+| `providers/openai.js` | OpenAI proper: sends message `name`, filters the account-wide model list. |
+| `providers/anthropic.js` | Anthropic Messages API. |
+| `providers/google.js` | Google Gemini `generateContent`. |
+| `providers/ollama.js` | Local Ollama: `/api/chat` and `/api/tags`. |
+| `providers/openaiCompatible.js` | Any OpenAI-shaped gateway at a supplied base URL. |
+| `providers/testProvider.js` | Canned responses for dev-mode Quick Start. No network. |
 
-The credential store and the remaining adapters (Google, Ollama,
-OpenAI-compatible) arrive in later phases; this document grows with them.
+The credential store arrives with the server wiring; this document grows with it.
 
 ## Adapter contract
 
@@ -68,8 +72,55 @@ game loop:
   image models. Those are filtered out; offering them in a DM picker would
   guarantee a confusing failure at the first turn.
 - **OpenAI constrains the message `name` field** to letters, digits, underscore,
-  and hyphen, capped at 64 characters. Anthropic has no `name` field at all, so
-  it is stripped there.
+  and hyphen, capped at 64 characters. Anthropic, Gemini, and Ollama have no
+  `name` field at all, so it is stripped for them. It is also stripped for the
+  generic compatible adapter, because a large share of gateways reject it.
+- **Gemini diverges furthest.** The model is part of the URL rather than the
+  body, messages are `contents` holding `parts`, the assistant role is called
+  `model`, the system prompt is a separate `systemInstruction`, and sampling
+  lives under `generationConfig`. Its key travels in the `x-goog-api-key` header
+  rather than the query string, where it would be captured by access logs.
+- **Ollama streams by default**, which would arrive as newline-delimited JSON
+  and fail to parse as one object, so `stream: false` is always sent. Sampling
+  parameters nest under `options`, and `maxTokens` maps to `num_predict`.
+- **The compatible adapter does not filter models by name.** OpenAI's filter
+  encodes OpenAI's naming; a gateway may legitimately serve a chat model called
+  `tts-tuned-mistral`, and guessing would hide a working model.
+- **A gateway with no `/models` endpoint degrades to an empty list**, not an
+  error, because some minimal servers implement only `/chat/completions`. The
+  player then types the model name themselves, which works. An authentication
+  failure still propagates, because that is something they can act on.
+
+### Model listing and empty results
+
+An empty model list means different things per provider, and the adapters
+preserve the distinction rather than flattening it:
+
+| Provider | Empty list means | Unreachable means |
+|---|---|---|
+| OpenAI, Anthropic, Google | The key can reach no models — unusual, worth showing | An error the player must fix |
+| Ollama | Nothing has been pulled onto the machine yet — normal | An error: the daemon is not running |
+| OpenAI-compatible | Either no catalogue endpoint, or genuinely none | Auth errors propagate; a 404 degrades to empty |
+
+The Ollama case is the one worth stating: an empty dropdown and a dead server
+are very different problems, so `listModels` reports the unreachable instance as
+a failure instead of returning `[]`.
+
+## Test Mode
+
+`providers/testProvider.js` returns pre-written DM responses from
+`server/data/testLLMResponses.json`, so the whole game loop — JSON parsing, HP
+and inventory application, music and SFX cues — can be exercised without
+spending tokens. It makes no network request.
+
+It is registered like any other provider but hidden from `listProviders()`
+unless `{ includeTest: true }` is passed, which the server does only in dev
+mode: offering it on a public instance would look like a broken game rather than
+a free one. It stays resolvable by id, so a lobby already configured for it
+keeps working.
+
+Its randomness is injected (`random`), as is its response file (`responses`),
+which is what makes its selection logic testable at all.
 
 ## Configuration contract
 

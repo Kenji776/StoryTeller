@@ -48,7 +48,46 @@ for (const [label, value] of [["null", null], ["undefined", undefined], ["an emp
 test("listProviders describes every registered provider", () => {
 	const ids = listProviders().map(p => p.id).sort();
 
-	assert.deepEqual(ids, ["anthropic", "openai"]);
+	assert.deepEqual(ids, ["anthropic", "google", "ollama", "openai", "openai-compatible"]);
+});
+
+test("listProviders hides the canned-response provider by default", () => {
+	// Test Mode is a development affordance. Offering it on a public instance
+	// would look like a broken game rather than a free one.
+	assert.equal(listProviders().some(p => p.id === "test"), false);
+});
+
+test("listProviders includes the test provider when dev mode asks for it", () => {
+	assert.equal(listProviders({ includeTest: true }).some(p => p.id === "test"), true);
+});
+
+test("getProvider resolves the test provider regardless of listing policy", () => {
+	// A lobby already configured for Test Mode must keep working even though
+	// the provider is hidden from the picker.
+	assert.equal(getProvider("test").id, "test");
+});
+
+test("every registered provider exposes the full adapter contract", () => {
+	for (const { id } of listProviders({ includeTest: true })) {
+		const provider = getProvider(id);
+		assert.equal(typeof provider.chat, "function", `${id} must implement chat`);
+		assert.equal(typeof provider.listModels, "function", `${id} must implement listModels`);
+		assert.equal(typeof provider.label, "string", `${id} must have a label`);
+		assert.equal(typeof provider.requiresApiKey, "boolean", `${id} must declare requiresApiKey`);
+		assert.equal(typeof provider.requiresBaseUrl, "boolean", `${id} must declare requiresBaseUrl`);
+		assert.equal(typeof provider.supportsImages, "boolean", `${id} must declare supportsImages`);
+	}
+});
+
+test("a provider that requires a base URL either supplies a default or demands one", () => {
+	// Otherwise normalizeLLMConfig would reject every config for it.
+	for (const p of listProviders({ includeTest: true })) {
+		if (p.requiresBaseUrl) continue;
+		assert.ok(
+			p.defaultBaseUrl === null || typeof p.defaultBaseUrl === "string",
+			`${p.id} has a malformed defaultBaseUrl`
+		);
+	}
 });
 
 test("listProviders exposes what the configuration UI needs", () => {
@@ -73,9 +112,10 @@ test("listProviders omits the adapter functions so the result is serialisable", 
 });
 
 test("listProviders returns a fresh array that callers cannot use to mutate the registry", () => {
+	const before = listProviders().length;
 	listProviders().pop();
 
-	assert.equal(listProviders().length, 2);
+	assert.equal(listProviders().length, before);
 });
 
 // ── resolveLLMConfig ────────────────────────────────────────────────────────
