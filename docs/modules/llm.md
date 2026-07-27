@@ -15,9 +15,61 @@ speak HTTP directly rather than through vendor SDKs
 | `config.js` | Validates and canonicalises an untrusted AI configuration; redacts it for logging. |
 | `errors.js` | `LLMRequestError` and the status→kind classification behind it. |
 | `http.js` | The one place a request is issued and a failure is mapped. `fetch` is injected. |
+| `registry.js` | The only list of which providers exist. Resolves an id to an adapter. |
+| `providers/openai.js` | OpenAI chat completions and model listing. |
+| `providers/anthropic.js` | Anthropic Messages API and model listing. |
 
-Provider adapters, the registry, and the credential store are being added in
-subsequent phases; this document grows with them.
+The credential store and the remaining adapters (Google, Ollama,
+OpenAI-compatible) arrive in later phases; this document grows with them.
+
+## Adapter contract
+
+Every provider exports one descriptor. Adding a provider means writing one file
+and adding a line to `registry.js` — nothing else in the system needs to change.
+
+```js
+{
+	id, label,                    // identity
+	requiresApiKey,               // drives config validation and the UI
+	requiresBaseUrl,
+	defaultBaseUrl,               // pre-filled, overridable
+	supportsImages,               // eligible as an image provider
+	keyUrl,                       // where a player obtains a key
+	chat({ messages, config, model, json, temperature, maxTokens, signal, fetchImpl }),
+	listModels({ config, signal, fetchImpl }),
+}
+```
+
+`chat` resolves to `{ text, model, finishReason, usage }` and rejects with an
+`LLMRequestError`. `listModels` resolves to `[{ id, label }]`, newest first —
+this is what populates the model dropdown, replacing the hardcoded lists that
+used to be duplicated between the settings menu and the admin panel.
+
+`fetchImpl` is a parameter on both, which is what makes the adapters testable
+without a network or a key.
+
+### What the adapters normalise away
+
+The differences between providers are absorbed here rather than leaking into the
+game loop:
+
+- **Anthropic takes `system` as a top-level parameter**, not a message role, and
+  requires `max_tokens` (defaulted to 4096, matching previous behaviour).
+- **Anthropic requires alternating user/assistant turns**, which StoryTeller
+  cannot guarantee — several players can act before the DM replies, and a lobby
+  resumed from history may open on the DM's last narration. Consecutive turns
+  from one role are merged and a leading `(begin)` user turn is inserted when
+  needed, rather than letting a 400 land mid-game.
+- **Anthropic replies in content blocks.** All text blocks are concatenated;
+  taking only the first would truncate a long narration mid-sentence.
+- **`json: true` is a no-op for Anthropic**, which has no response-format
+  parameter. JSON steering for that provider lives in the prompt.
+- **OpenAI's model list is account-wide** and mixes in embeddings, audio, and
+  image models. Those are filtered out; offering them in a DM picker would
+  guarantee a confusing failure at the first turn.
+- **OpenAI constrains the message `name` field** to letters, digits, underscore,
+  and hyphen, capped at 64 characters. Anthropic has no `name` field at all, so
+  it is stripped there.
 
 ## Configuration contract
 
