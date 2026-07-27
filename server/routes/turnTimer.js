@@ -267,8 +267,8 @@ export function createTimerSystem(deps) {
 
 		io.to(room(lobbyId)).emit("toast", { type: "error", message: `${playerName} was removed from the adventure due to inactivity.` });
 		io.to(room(lobbyId)).emit("player:left", { player: playerName });
-		const { current, order } = resolveActiveTurn(lobbyId);
-		io.to(room(lobbyId)).emit("turn:update", { current, order });
+		resolveActiveTurn(lobbyId);
+		io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 
 		if (sid) {
 			const sock = io.sockets.sockets.get(sid);
@@ -374,8 +374,8 @@ export function createTimerSystem(deps) {
 		if (store.index[lobbyId]?.phase === "wiped") return;
 
 		store.nextTurn(lobbyId);
-		const { current: next, order } = resolveActiveTurn(lobbyId);
-		io.to(room(lobbyId)).emit("turn:update", { current: next, order });
+		resolveActiveTurn(lobbyId);
+		io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 		io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 		io.to(room(lobbyId)).emit("ui:unlock");
 		scheduleTimerAfterNarration(lobbyId);
@@ -481,7 +481,7 @@ export function createTimerSystem(deps) {
 
 		store.nextTurn(lobbyId);
 		const { current, order } = resolveActiveTurn(lobbyId);
-		io.to(room(lobbyId)).emit("turn:update", { current, order });
+		io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 		io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 		io.to(room(lobbyId)).emit("ui:unlock");
 		scheduleTimerAfterNarration(lobbyId);

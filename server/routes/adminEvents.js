@@ -271,12 +271,11 @@ export function registerAdminEvents(socket, deps) {
 
 				// Emit player:death BEFORE checking for TPK so clients get the
 				// individual death event before any potential wipe epilogue/game:over
-				const { current: dCurrent, order: dOrder } = store.turnInfo(lobbyId);
 				io.to(room(lobbyId)).emit("player:death", {
 					player,
 					message: reason ? `${player} has fallen: ${reason}` : `${player} has fallen (admin override)!`,
 				});
-				io.to(room(lobbyId)).emit("turn:update", { current: dCurrent, order: dOrder });
+				io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 
 				await checkAndEndIfAllDead(lobbyId);
 

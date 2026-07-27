@@ -440,7 +440,7 @@ io.on("connection", (socket) => {
 		// sheet, so no score needs passing in.
 		store.insertIntoInitiative(lobbyId, charName);
 		const { current, order } = resolveActiveTurn(lobbyId);
-		io.to(room(lobbyId)).emit("turn:update", { current, order });
+		io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 
 		if (current) startTurnTimer(lobbyId, 2 * 60 * 1000);
 
@@ -487,8 +487,7 @@ io.on("connection", (socket) => {
 
 			socket.emit("join:confirmed", { lobbyId, lobbyCode, state: store.publicState(lobbyId) });
 
-			const { current, order } = store.turnInfo(lobbyId);
-			io.to(room(lobbyId)).emit("turn:update", { current, order });
+			io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 			io.to(room(lobbyId)).emit("player:joined", { player: cleanName });
 			broadcastLobbies();
@@ -905,8 +904,8 @@ io.on("connection", (socket) => {
 
 			if (!v.tableTalk) {
 				store.nextTurn(lobbyId);
-				const { current, order } = resolveActiveTurn(lobbyId);
-				io.to(room(lobbyId)).emit("turn:update", { current, order });
+				resolveActiveTurn(lobbyId);
+				io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 				scheduleTimerAfterNarration(lobbyId);
 			}
 
@@ -1064,7 +1063,7 @@ io.on("connection", (socket) => {
 
 					const { current, order } = resolveActiveTurn(lobbyId);
 					log(`🔄 New turn order after disconnect: [${order.join(", ")}], current: ${current}`);
-					io.to(room(lobbyId)).emit("turn:update", { current, order });
+					io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 					startTurnTimer(lobbyId);
 
 					const remaining = Object.values(lobby.sockets).filter((s) => s.playerName && s !== rec);

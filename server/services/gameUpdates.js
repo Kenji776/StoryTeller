@@ -81,12 +81,11 @@ export function broadcastHPUpdates(io, store, lobbyId, updates) {
 			console.log(`💀 ${key} has died!`);
 			store.markPlayerDead(lobbyId, key);
 			store.removeFromTurnOrder(lobbyId, key);
-			const { current, order } = store.turnInfo(lobbyId);
 			io.to(lobbyId).emit("player:death", {
 				player: key,
 				message: `${key} has fallen in battle!`,
 			});
-			io.to(lobbyId).emit("turn:update", { current, order });
+			io.to(lobbyId).emit("turn:update", store.turnInfo(lobbyId));
 		}
 	}
 }
