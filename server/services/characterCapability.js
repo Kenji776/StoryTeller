@@ -206,10 +206,6 @@ export function buildCapability(lobby, playerName) {
 				max: level,
 				note: "One shared pool covering every ability, martial and magical alike. Refills only on a long rest.",
 			},
-			// Asked for explicitly and genuinely absent: no stamina, fatigue,
-			// exhaustion or encumbrance exists in the data model. Reporting a number
-			// here would be inventing a mechanic.
-			stamina: { modelled: false, value: null, note: "Not modelled by this game." },
 			gold: numberOrNull(player.gold) ?? 0,
 		},
 

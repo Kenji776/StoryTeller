@@ -104,12 +104,6 @@ test("remainingSlots treats a missing level as level one", () => {
 
 // ── Things the engine genuinely does not model ───────────────────────────────
 
-test("stamina is reported as not modelled rather than as a number", () => {
-	const cap = buildCapability(makeLobby(), "Ayla");
-	assert.equal(cap.resources.stamina.modelled, false);
-	assert.equal(cap.resources.stamina.value, null);
-});
-
 test("per-ability use counts are reported as untracked even when the ability declares one", () => {
 	// Second Wind carries details.uses = 1, but nothing in the engine decrements it.
 	const cap = buildCapability(makeLobby(), "Ayla");
