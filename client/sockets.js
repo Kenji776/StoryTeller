@@ -1,3 +1,54 @@
+// === CONNECTION STATUS BANNER ===
+// The client previously had no disconnect handling of any kind, so a player whose
+// connection dropped saw a completely normal-looking UI that had simply stopped
+// updating. This banner exists so that failure is never silent.
+
+const CONNECTION_STATES = {
+	online:       { text: "",                                  bg: "",         show: false },
+	reconnecting: { text: "⚠️ Connection lost — reconnecting…", bg: "#8a6d1f", show: true },
+	offline:      { text: "🔌 Disconnected — reconnecting…",    bg: "#8a2f2f", show: true },
+	failed:       { text: "❌ Cannot reach the server. Reload the page to rejoin.", bg: "#8a2f2f", show: true },
+};
+
+/**
+ * Shows or hides the connection banner.
+ *
+ * @description Renders into a lazily-created fixed banner so no markup change is
+ *   needed in index.html. Called from the Socket.IO lifecycle handlers; `online`
+ *   hides the banner rather than showing a reassuring message, because a permanent
+ *   "connected" badge trains players to ignore the strip entirely.
+ * @param {"online"|"reconnecting"|"offline"|"failed"} state - The connection state.
+ * @param {string} [detail] - Optional diagnostic appended in smaller text.
+ * @returns {void}
+ */
+function setConnectionStatus(state, detail) {
+	const spec = CONNECTION_STATES[state] || CONNECTION_STATES.offline;
+
+	let el = document.getElementById("connectionBanner");
+	if (!el) {
+		el = document.createElement("div");
+		el.id = "connectionBanner";
+		el.style.cssText = [
+			"position:fixed", "top:0", "left:0", "width:100%", "z-index:10000",
+			"padding:0.5em 1em", "text-align:center", "font-weight:600",
+			"color:#fff", "box-shadow:0 2px 8px rgba(0,0,0,0.4)",
+			"transition:opacity 0.2s", "pointer-events:none",
+		].join(";");
+		document.body.appendChild(el);
+	}
+
+	if (!spec.show) {
+		el.style.display = "none";
+		return;
+	}
+
+	el.style.display = "block";
+	el.style.background = spec.bg;
+	el.innerHTML = detail
+		? `${spec.text} <span style="opacity:0.7;font-weight:400;font-size:0.85em;">(${detail})</span>`
+		: spec.text;
+}
+
 function registerSocketEvents() {
 	socket.on("debug:setup", ({ raw, parsedMusic, parsedSuggestions }) => {
 		console.group("🔍 [DEBUG] Setup LLM Response");
@@ -722,11 +773,69 @@ function registerSocketEvents() {
 	socket.on("ui:lock", ({ actor, message }) => lockUI(actor, message));
 	socket.on("ui:unlock", () => unlockUI());
 
+	// === CONNECTION RESILIENCE ===
+	// Socket.IO reconnects automatically, but with a NEW socket id. Room membership
+	// and the server's socket→player mapping are both keyed to the old one, so a
+	// reconnected client is silently deaf: it receives no further lobby broadcasts
+	// and its actions come back as "Unknown player". Nothing on screen changed, so
+	// the player has no idea. Re-announcing ourselves on every reconnect is what
+	// closes that hole.
+	let _hasConnectedBefore = false;
+
+	/**
+	 * Re-establishes this socket's membership after a reconnect.
+	 *
+	 * @description Chooses the strongest re-entry the current phase allows. Mid-game
+	 *   `join:rejoin` is required because it re-registers the socket→player mapping
+	 *   that `playerBySid` needs before the player can act again; `state:request` only
+	 *   re-joins the room, which is enough to start receiving events but not enough to
+	 *   send them. Outside a running game the room is all that matters.
+	 * @returns {void}
+	 */
+	function resumeSession() {
+		if (!lobbyId) return;
+		const phase = currentState?.phase;
+		const charName = me?.name;
+		const characterId = currentState?.players?.[charName]?.characterId;
+
+		if (charName && lobbyCode && (phase === "running" || phase === "hibernating")) {
+			console.log(`🔄 Reconnected — resuming as ${charName} in ${lobbyCode}`);
+			socket.emit("join:rejoin", { lobbyCode, charName, clientId, characterId });
+		} else {
+			console.log(`🔄 Reconnected — re-requesting state for ${lobbyId}`);
+			socket.emit("state:request", { lobbyId });
+		}
+	}
+
 	// Subscribe to live lobby list updates (for landing page)
 	socket.on("connect", () => {
 		socket.emit("lobbies:watch");
+		setConnectionStatus("online");
+		if (_hasConnectedBefore) resumeSession();
+		_hasConnectedBefore = true;
 	});
 	socket.emit("lobbies:watch"); // also subscribe immediately if already connected
+
+	socket.on("disconnect", (reason) => {
+		// "io client disconnect" is our own deliberate teardown (init.js beforeunload);
+		// anything else is a real loss the player needs to know about.
+		if (reason === "io client disconnect") return;
+		console.warn(`🔌 Disconnected: ${reason}`);
+		setConnectionStatus("offline", reason);
+	});
+
+	socket.on("connect_error", (err) => {
+		setConnectionStatus("reconnecting", err?.message);
+	});
+
+	socket.io.on("reconnect_attempt", (n) => {
+		setConnectionStatus("reconnecting", `attempt ${n}`);
+	});
+
+	socket.io.on("reconnect_failed", () => {
+		// Socket.IO has exhausted its attempts and will not retry on its own.
+		setConnectionStatus("failed");
+	});
 
 	socket.on("lobbies:update", ({ lobbies }) => {
 		renderLobbiesList(lobbies);

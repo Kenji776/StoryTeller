@@ -1,8 +1,10 @@
 // Warn the player before leaving if they're mid-game (so they remember to export)
 window.addEventListener("beforeunload", (e) => {
-	if (lobbyId) {
-		socket.disconnect();
-	}
+	// Deliberately does NOT call socket.disconnect(). beforeunload also fires when the
+	// player chooses "Stay", and disconnect() sets skipReconnect on the manager, which
+	// permanently kills reconnection — leaving them on a live-looking page whose socket
+	// will never come back. A real navigation closes the transport anyway, so the server
+	// still sees the disconnect.
 
 	// Only prompt when actively playing — not on the landing page or during lobby setup
 	const inActiveGame = lobbyId && me?.name && currentState?.phase === "running";

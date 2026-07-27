@@ -172,10 +172,9 @@ export function createTimerSystem(deps) {
 				io.to(room(lobbyId)).emit("narration", { content: epilogueHtml });
 				if (music) io.to(room(lobbyId)).emit("music:change", { mood: music });
 				if (sfx.length) {
-					const { resolveSFXFiles } = await import("../services/sfxResolver.js");
-					resolveSFXFiles(sfx).then(sfxFiles => {
+					resolveSfx(sfx, ELEVEN_API_KEY).then(sfxFiles => {
 						if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
-					}).catch(() => {});
+					}).catch(err => log("⚠️ TPK SFX resolve error:", err.message));
 				}
 				await streamNarrationToClients(io, room(lobbyId), epilogueHtml, store.getNarratorVoice(lobbyId));
 			}
