@@ -32,6 +32,7 @@ import { registerAdminEvents } from "./routes/adminEvents.js";
 import { fetchVoices, streamNarrationToClients, registerTTSRoutes } from "./routes/ttsService.js";
 import { createTimerSystem } from "./routes/turnTimer.js";
 import { registerChatEvents } from "./routes/chatEvents.js";
+import { createActionGate } from "./services/actionGate.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
 
@@ -151,10 +152,26 @@ const timerSystem = createTimerSystem({
 const {
 	activeTimers, pendingTimerStarts, restVoteTimers,
 	scheduleTimerAfterNarration, startTurnTimer, cancelTurnTimer,
+	resumeTurnTimer, skipTurn,
 	handleTimerExpiry, kickPlayerForInactivity,
 	isPlayerConnected, resolveActiveTurn, checkAndEndIfAllDead,
 	handleRestResolved, sendState,
 } = timerSystem;
+
+/**
+ * Feasibility gate. Defaults to "observe": it forms a verdict and logs it but
+ * rejects nothing, so a session's real judgements can be reviewed before it starts
+ * telling players no. Set FEASIBILITY_MODE=hard or =judge to enforce.
+ */
+const actionGate = createActionGate({
+	store,
+	log,
+	mode: process.env.FEASIBILITY_MODE || "observe",
+	getLLMResponse,
+	llmOpts,
+	resumeTurnTimer,
+	skipTurn,
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -781,6 +798,18 @@ io.on("connection", (socket) => {
 			if (!v.ok) {
 				console.log("⚠️ Action rejected:", v.reason);
 				socket.emit("action:rejected", { reason: v.reason });
+				io.to(room(lobbyId)).emit("ui:unlock");
+				// The turn clock was cancelled above; put back what was left of it, or
+				// this player's turn simply never ends.
+				resumeTurnTimer(lobbyId);
+				return;
+			}
+
+			// Can this character actually attempt this? The gate owns the whole
+			// consequence chain — telling the player, spending one of their three
+			// chances, restoring the clock, forfeiting the turn on the third failure.
+			const gate = await actionGate.check({ lobbyId, socket, playerName: actor.name, text });
+			if (!gate.allow) {
 				io.to(room(lobbyId)).emit("ui:unlock");
 				return;
 			}

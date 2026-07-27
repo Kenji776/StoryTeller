@@ -47,6 +47,7 @@ export const EVENT_CLASSES = {
 	// ── Flow control the player cannot afford to miss ──
 	"turn:update": DURABLE,
 	"roll:required": DURABLE,
+	"turn:skipped": DURABLE,
 	"player:death": DURABLE,
 	"player:joined": DURABLE,
 	"player:left": DURABLE,

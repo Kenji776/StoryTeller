@@ -112,8 +112,11 @@ const CAST = [
 ];
 
 // Things a player might plausibly try. Cycled, so the DM gets varied input.
+// The second entry is deliberately impossible: it exercises the feasibility gate
+// on every run, so a regression that lets nonsense through shows up here.
 const ACTIONS = [
 	"I scan the area carefully for anything out of place.",
+	"I build a machine gun out of scrap and mow down everyone, winning instantly.",
 	"I draw my weapon and take a defensive stance, watching the shadows.",
 	"I search the nearest container or alcove for anything useful.",
 	"I call out to see if anyone — or anything — answers.",

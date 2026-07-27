@@ -207,6 +207,12 @@ export function createTimerSystem(deps) {
 		if (!current) return;
 
 		if (readingDelayMs > 0) {
+			// The turn clock has not started yet, so there is no deadline to resume to.
+			// Clearing it matters: the field would otherwise still hold the *previous*
+			// turn's deadline, which is already in the past, and resumeTurnTimer would
+			// read that as "overdue" and instantly expire this player's turn.
+			s.turnDeadlineAt = null;
+			store.persist(lobbyId);
 			log(`⏱ Timer pending for ${current} in lobby ${lobbyId} (${readingDelayMs / 1000}s reading delay)`);
 			io.to(room(lobbyId)).emit("timer:pending", { player: current, readingDelayMs, ttsActive: hasTTS() });
 			const delayTimeout = setTimeout(() => {
@@ -220,11 +226,79 @@ export function createTimerSystem(deps) {
 		const durationMs = s.timerMinutes * 60 * 1000;
 		const endsAt = Date.now() + durationMs;
 
+		// Recorded so a turn interrupted mid-flight can be resumed with the time that
+		// was actually left, rather than silently handing out a fresh budget.
+		s.turnDeadlineAt = endsAt;
+		store.persist(lobbyId);
+
 		io.to(room(lobbyId)).emit("timer:start", { player: current, endsAt, durationMs });
 		log(`⏱ Timer started for ${current} in lobby ${lobbyId} (${s.timerMinutes}m)`);
 
 		const timeout = setTimeout(() => handleTimerExpiry(lobbyId, current), durationMs);
 		activeTimers.set(lobbyId, { timeout, playerName: current });
+	}
+
+	/**
+	 * Restores a turn clock that was cancelled without the turn actually ending.
+	 *
+	 * `action:submit` cancels the timer before it validates anything, so any path that
+	 * returns early — a rejected action, a requested dice roll — leaves the lobby with
+	 * no clock at all. Nothing then skips an absent player, and the table waits
+	 * forever. This puts back only the time that remained, so a player cannot buy
+	 * themselves a fresh three minutes by submitting something impossible.
+	 *
+	 * @param {string} lobbyId - The lobby whose clock should resume.
+	 * @returns {void}
+	 */
+	function resumeTurnTimer(lobbyId) {
+		const s = store.index[lobbyId];
+		if (!s || !s.timerEnabled || !s.timerMinutes || s.phase !== "running") return;
+
+		const { current } = store.turnInfo(lobbyId);
+		if (!current) return;
+
+		const remainingMs = Number(s.turnDeadlineAt) - Date.now();
+		if (!Number.isFinite(remainingMs)) return startTurnTimer(lobbyId, 0);
+
+		// Already overdue: treat it as the expiry that never got to fire.
+		if (remainingMs <= 0) return handleTimerExpiry(lobbyId, current);
+
+		cancelTurnTimer(lobbyId);
+		io.to(room(lobbyId)).emit("timer:start", { player: current, endsAt: s.turnDeadlineAt, durationMs: remainingMs });
+		log(`⏱ Timer resumed for ${current} in lobby ${lobbyId} (${Math.round(remainingMs / 1000)}s left)`);
+
+		const timeout = setTimeout(() => handleTimerExpiry(lobbyId, current), remainingMs);
+		activeTimers.set(lobbyId, { timeout, playerName: current });
+	}
+
+	/**
+	 * Forfeits the active player's turn and moves the table on.
+	 *
+	 * Used when a player has spent all three of their attempts on actions their
+	 * character cannot perform. Deliberately does not call the Dungeon Master: a
+	 * forfeited turn is a table event, not a story beat, and paying for a full DM
+	 * turn to narrate someone failing to think of anything is not worth it.
+	 *
+	 * @param {string} lobbyId - The lobby.
+	 * @param {string} playerName - The player losing their turn.
+	 * @param {string} reason - Short human-readable cause, shown to the table.
+	 * @returns {void}
+	 */
+	function skipTurn(lobbyId, playerName, reason) {
+		const s = store.index[lobbyId];
+		if (!s) return;
+
+		cancelTurnTimer(lobbyId);
+		log(`⏭️ Skipping ${playerName} in lobby ${lobbyId}: ${reason}`);
+
+		io.to(room(lobbyId)).emit("turn:skipped", { player: playerName, reason });
+		io.to(room(lobbyId)).emit("toast", { type: "warning", message: `${playerName}'s turn was skipped — ${reason}.` });
+
+		store.nextTurn(lobbyId);
+		resolveActiveTurn(lobbyId);
+		io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+		io.to(room(lobbyId)).emit("ui:unlock");
+		startTurnTimer(lobbyId, 0);
 	}
 
 	/**
@@ -506,6 +580,8 @@ export function createTimerSystem(deps) {
 		scheduleTimerAfterNarration,
 		startTurnTimer,
 		cancelTurnTimer,
+		resumeTurnTimer,
+		skipTurn,
 		handleTimerExpiry,
 		kickPlayerForInactivity,
 		isPlayerConnected,
