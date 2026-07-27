@@ -33,6 +33,8 @@ import { fetchVoices, streamNarrationToClients, registerTTSRoutes } from "./rout
 import { createTimerSystem } from "./routes/turnTimer.js";
 import { registerChatEvents } from "./routes/chatEvents.js";
 import { createActionGate } from "./services/actionGate.js";
+import { createAdvisor } from "./services/newbieAdvisor.js";
+import { buildCapability } from "./services/characterCapability.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
 
@@ -163,6 +165,8 @@ const {
  * rejects nothing, so a session's real judgements can be reviewed before it starts
  * telling players no. Set FEASIBILITY_MODE=hard or =judge to enforce.
  */
+const advisor = createAdvisor({ store, log, getLLMResponse, llmOpts, buildCapability });
+
 const actionGate = createActionGate({
 	store,
 	log,
@@ -1003,6 +1007,9 @@ io.on("connection", (socket) => {
 	// ==== Chat with DM (out-of-game Q&A) ====
 	// This may come from a separate popup window with its own socket,
 	// so we identify the player by name+lobbyId rather than socket ID.
+	// "What can I do?" — private, per-character tactical help for new players.
+	socket.on("advisor:ask", (payload) => advisor.handle(socket, payload));
+
 	socket.on("dm:chat", async ({ lobbyId, playerName, question }) => {
 		try {
 			const s = store.index[lobbyId];
