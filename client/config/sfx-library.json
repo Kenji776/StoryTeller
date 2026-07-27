@@ -1643,6 +1643,112 @@
 				"durationSec": 3,
 				"generatedAt": "2026-04-04T03:06:08.934Z"
 			}
+		},
+		{
+			"name": "Birds Chirping",
+			"file": "birds_chirping_ms2vw6c0eumd.mp3",
+			"tags": [
+				"birds",
+				"chirping"
+			],
+			"_generated": {
+				"prompt": "A sound effect of birds chirping",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:06:57.176Z"
+			}
+		},
+		{
+			"name": "Market Chatter",
+			"file": "market_chatter_ms2w2tmdyrn6.mp3",
+			"tags": [
+				"market",
+				"chatter"
+			],
+			"_generated": {
+				"prompt": "A sound effect of market chatter",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:12:07.295Z"
+			}
+		},
+		{
+			"name": "Blade Unsheathing",
+			"file": "blade_unsheathing_ms2w39rdrmhe.mp3",
+			"tags": [
+				"blade",
+				"unsheathing"
+			],
+			"_generated": {
+				"prompt": "A sound effect of blade unsheathing",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:12:28.208Z"
+			}
+		},
+		{
+			"name": "Lid Creaking",
+			"file": "lid_creaking_ms2w3ltz0vzk.mp3",
+			"tags": [
+				"lid",
+				"creaking",
+				"creak"
+			],
+			"_generated": {
+				"prompt": "A sound effect of lid creaking",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:12:43.853Z"
+			}
+		},
+		{
+			"name": "Pages Turning",
+			"file": "pages_turning_ms2w8rspidxd.mp3",
+			"tags": [
+				"pages",
+				"turning"
+			],
+			"_generated": {
+				"prompt": "A sound effect of pages turning",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:16:44.861Z"
+			}
+		},
+		{
+			"name": "Coins Jingling",
+			"file": "coins_jingling_ms2w9jgxco49.mp3",
+			"tags": [
+				"coins",
+				"jingling"
+			],
+			"_generated": {
+				"prompt": "A sound effect of coins jingling",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:17:20.725Z"
+			}
+		},
+		{
+			"name": "Lute Melody",
+			"file": "lute_melody_ms2wkr3frfjt.mp3",
+			"tags": [
+				"lute",
+				"melody"
+			],
+			"_generated": {
+				"prompt": "A sound effect of lute melody",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T07:26:03.825Z"
+			}
+		},
+		{
+			"name": "Murmurs Of Patrons",
+			"file": "murmurs_of_patrons_ms3rj9dslih3.mp3",
+			"tags": [
+				"murmurs",
+				"of",
+				"patrons"
+			],
+			"_generated": {
+				"prompt": "A sound effect of murmurs of patrons",
+				"durationSec": 3,
+				"generatedAt": "2026-07-27T21:52:42.312Z"
+			}
 		}
 	]
 }

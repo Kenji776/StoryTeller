@@ -330,10 +330,12 @@
 		<div id="storyLog" class="log"></div>
 
 		<div class="action-input-area">
+			<div id="advisorPanel" style="display:none;margin-bottom:8px;padding:0.7em;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);"></div>
 			<textarea id="actionInput" placeholder="Describe your action..." rows="4"></textarea>
 			<div class="row" style="margin-top:6px;flex-wrap:wrap;gap:6px;">
 				<button id="micBtn" class="secondary" data-sound="Crystal Activate" data-sound-hover="Magical Shimmer" title="Speak your action 🎤">🎤</button>
 				<button id="sendAction" class="primary" data-sound="Quill Scratch" data-sound-hover="Magical Shimmer">⚔️ Take Action</button>
+				<button id="advisorBtn" class="secondary" title="Ask what your character could do right now">💡 What can I do?</button>
 				<div class="row wrap" style="gap:4px;">
 					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="4" data-sound="Dice Tumble">d4</button>
 					<button class="chip die" data-sound-hover="Magical Shimmer" data-sides="6" data-sound="Dice Tumble">d6</button>

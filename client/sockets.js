@@ -8,6 +8,8 @@ const CONNECTION_STATES = {
 	reconnecting: { text: "⚠️ Connection lost — reconnecting…", bg: "#8a6d1f", show: true },
 	offline:      { text: "🔌 Disconnected — reconnecting…",    bg: "#8a2f2f", show: true },
 	failed:       { text: "❌ Cannot reach the server. Reload the page to rejoin.", bg: "#8a2f2f", show: true },
+	resyncing:    { text: "🔁 Catching up…",                    bg: "#2f5d8a", show: true },
+	degraded:     { text: "⚠️ Out of sync — reload if things look wrong.", bg: "#8a6d1f", show: true },
 };
 
 /**
@@ -49,7 +51,227 @@ function setConnectionStatus(state, detail) {
 		: spec.text;
 }
 
+/**
+ * Shows why an action was refused and how many chances are left.
+ *
+ * @description Rendered as a dismissible notice rather than a toast: a player whose
+ *   idea was just refused needs to read the reason while they rewrite it, and a
+ *   toast would vanish mid-thought. The pips make the cost concrete — three
+ *   rejections forfeit the turn, and a player who cannot see that coming will feel
+ *   ambushed by the skip.
+ * @param {string} reason - Player-facing explanation from the server.
+ * @param {number} [strikes] - Chances used so far.
+ * @param {number} [maxStrikes] - Chances allowed.
+ * @param {boolean} [retry] - Whether another attempt is still permitted.
+ * @returns {void}
+ */
+function showRejectionNotice(reason, strikes, maxStrikes, retry) {
+	let el = document.getElementById("rejectionNotice");
+	if (!el) {
+		el = document.createElement("div");
+		el.id = "rejectionNotice";
+		el.style.cssText = [
+			"margin:0.5em 0", "padding:0.7em 0.9em", "border-radius:6px",
+			"background:rgba(138,47,47,0.16)", "border-left:3px solid #c95c5c",
+			"color:#f3d6d6", "font-size:0.95em",
+		].join(";");
+		const anchor = document.getElementById("actionInput")?.parentElement;
+		anchor ? anchor.prepend(el) : document.body.appendChild(el);
+	}
+
+	const pips = Number.isFinite(strikes) && Number.isFinite(maxStrikes)
+		? Array.from({ length: maxStrikes }, (_, i) => (i < strikes ? "●" : "○")).join(" ")
+		: "";
+
+	el.innerHTML = `
+		<div style="display:flex;justify-content:space-between;gap:1em;align-items:baseline;">
+			<strong>That won't work</strong>
+			${pips ? `<span title="${strikes} of ${maxStrikes} chances used" style="letter-spacing:2px;opacity:0.85;">${pips}</span>` : ""}
+		</div>
+		<div style="margin-top:0.35em;">${reason || "Your character cannot do that."}</div>
+		<div style="margin-top:0.35em;opacity:0.8;font-size:0.9em;">${
+			retry === false
+				? "You are out of chances this turn."
+				: "Edit your action and try again — or press <em>What can I do?</em> for ideas."
+		}</div>`;
+	el.style.display = "block";
+}
+
+/**
+ * @description Hides the rejection notice once the player moves on.
+ * @returns {void}
+ */
+function clearRejectionNotice() {
+	const el = document.getElementById("rejectionNotice");
+	if (el) el.style.display = "none";
+}
+
+/**
+ * Renders the advisor's suggestions as clickable cards.
+ *
+ * @description Clicking a card writes its sentence into the action input rather than
+ *   submitting it, so the player stays the author — they can edit it, and they see
+ *   what a workable action looks like. That is the difference between a tool that
+ *   teaches and one that plays for you.
+ * @param {Array<object>} options - Suggestions from the server, already filtered.
+ * @param {string} note - Optional extra context.
+ * @param {object} capability - The player's headline numbers.
+ * @returns {void}
+ */
+function renderAdvisorOptions(options, note, capability) {
+	const panel = document.getElementById("advisorPanel");
+	if (!panel) return;
+	panel.style.display = "block";
+
+	const risk = { low: "#5c9c5c", medium: "#b8912f", high: "#c95c5c" };
+	const head = capability
+		? `<div style="opacity:0.8;font-size:0.85em;margin-bottom:0.6em;">
+				HP ${capability.hp ?? "?"}/${capability.maxHp ?? "?"} ·
+				${capability.slotsRemaining ?? 0} of ${capability.slotsMax ?? 0} ability uses left
+				${capability.conditions?.length ? ` · ${capability.conditions.join(", ")}` : ""}
+				${capability.isMyTurn ? "" : " · not your turn yet"}
+			</div>`
+		: "";
+
+	if (!options?.length) {
+		panel.innerHTML = `${head}<div style="opacity:0.85;">${note || "No suggestions right now."}</div>`;
+		return;
+	}
+
+	panel.innerHTML = head + options.map((o, i) => `
+		<button class="advisor-option" data-action="${String(o.action).replace(/"/g, "&quot;")}"
+			style="display:block;width:100%;text-align:left;margin-bottom:0.5em;padding:0.6em 0.75em;
+			       border-radius:6px;border:1px solid rgba(255,255,255,0.12);
+			       border-left:3px solid ${risk[o.risk] || "#777"};background:rgba(255,255,255,0.04);
+			       color:inherit;cursor:pointer;">
+			<div style="font-weight:600;">${i + 1}. ${o.title}</div>
+			<div style="opacity:0.9;margin-top:0.2em;">"${o.action}"</div>
+			<div style="opacity:0.7;font-size:0.85em;margin-top:0.25em;">
+				costs: ${o.cost}${o.check ? ` · ${o.check.plain}` : ""}
+			</div>
+			<div style="opacity:0.65;font-size:0.85em;font-style:italic;margin-top:0.2em;">${o.why}</div>
+		</button>`).join("")
+		+ (note ? `<div style="opacity:0.75;font-size:0.9em;margin-top:0.4em;">${note}</div>` : "");
+
+	panel.querySelectorAll(".advisor-option").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const input = document.getElementById("actionInput");
+			if (!input) return;
+			input.value = btn.dataset.action;
+			input.focus();
+			panel.style.display = "none";
+		});
+	});
+}
+
+// === SEQUENCE TRACKING AND GAP RECOVERY ===
+// Every state-bearing broadcast now arrives with a third argument:
+//   { lid, seq, epoch, ts }
+// Holding a watermark lets this client notice it missed something — the failure
+// that was previously invisible — and ask for exactly the events it lacks.
+
+let syncSeq = 0;      // highest sequence applied
+let syncEpoch = 0;    // which server process those numbers belong to
+let _resyncTimer = null;
+let _resyncInFlight = false;
+
+/**
+ * Requests whatever this client missed, debounced.
+ *
+ * @description Debounced because a burst of missed events should produce one
+ *   request, not one per event. The server answers through an acknowledgement
+ *   callback rather than an event, so replayed events never pass back through the
+ *   gap detector that asked for them.
+ * @param {string} why - Diagnostic reason, logged only.
+ * @returns {void}
+ */
+function scheduleResync(why) {
+	if (_resyncTimer || _resyncInFlight || !lobbyId) return;
+	_resyncTimer = setTimeout(() => {
+		_resyncTimer = null;
+		_resyncInFlight = true;
+		setConnectionStatus("resyncing");
+		console.warn(`🔁 Resyncing (${why}) from seq ${syncSeq}`);
+
+		socket.emit("sync:request", { lobbyId, haveSeq: syncSeq, haveEpoch: syncEpoch }, (res) => {
+			_resyncInFlight = false;
+			if (!res || res.mode === "denied") {
+				console.error("❌ Resync denied:", res?.reason);
+				setConnectionStatus("degraded");
+				return;
+			}
+
+			if (res.mode === "snapshot") {
+				syncEpoch = res.epoch;
+				syncSeq = res.seq;
+				console.log(`📦 Resynced by snapshot at seq ${res.seq}`);
+				if (typeof renderState === "function" && res.state) {
+					currentState = res.state;
+					renderState(res.state);
+					renderLogs(res.state);
+				}
+			} else {
+				console.log(`⏪ Replaying ${res.events.length} missed event(s)`);
+				applyReplay(res.events);
+				syncEpoch = res.epoch;
+			}
+			setConnectionStatus("online");
+		});
+	}, 150);
+}
+
+/**
+ * Re-runs missed events through their normal handlers.
+ *
+ * @description Dispatches to the already-registered listeners directly rather than
+ *   re-emitting, so a replayed event cannot re-enter `onAny` and be mistaken for
+ *   another gap. Safe to re-apply because every replayable event carries its
+ *   absolute post-value — `hp:update` sends `hp`, not a delta — so applying one
+ *   twice lands on the same number.
+ * @param {Array<{name: string, payload: object, meta: object}>} events - Missed events.
+ * @returns {void}
+ */
+function applyReplay(events) {
+	for (const e of events || []) {
+		try {
+			for (const fn of socket.listeners(e.name)) fn(e.payload, { ...e.meta, replay: true });
+			if (e.meta?.seq > syncSeq) syncSeq = e.meta.seq;
+		} catch (err) {
+			console.warn(`⚠️ Replay of ${e.name} failed:`, err.message);
+		}
+	}
+}
+
+/**
+ * Watches every inbound frame for a break in the sequence.
+ *
+ * @description Registered before the named handlers so the watermark is current by
+ *   the time one runs. A gapped event is still applied — it is genuinely newer than
+ *   what we hold — and the replay that lands a moment later fills in what came
+ *   between.
+ * @returns {void}
+ */
+function installGapDetection() {
+	socket.onAny((event, payload, meta) => {
+		if (!meta || typeof meta.seq !== "number") return;   // ephemeral or targeted
+		if (meta.lid && lobbyId && meta.lid !== lobbyId) return;
+		if (meta.replay) return;
+
+		if (syncEpoch && meta.epoch !== syncEpoch) return scheduleResync("server restarted");
+		if (!syncEpoch) syncEpoch = meta.epoch;
+
+		if (meta.seq <= syncSeq) return;                     // already seen
+		if (meta.seq === syncSeq + 1) { syncSeq = meta.seq; return; }
+
+		const missed = meta.seq - syncSeq - 1;
+		syncSeq = meta.seq;
+		scheduleResync(`missed ${missed} event(s)`);
+	});
+}
+
 function registerSocketEvents() {
+	installGapDetection();
+
 	socket.on("debug:setup", ({ raw, parsedMusic, parsedSuggestions }) => {
 		console.group("🔍 [DEBUG] Setup LLM Response");
 		console.log("Raw response:", raw);
@@ -227,9 +449,30 @@ function registerSocketEvents() {
 		}
 	});
 
-	socket.on("action:rejected", ({ reason }) => {
+	socket.on("action:rejected", ({ reason, strikes, maxStrikes, retry }) => {
 		appendLog(`[REJECTED] ${reason}\n`);
 		window.UISounds?.deny();
+
+		// Give the player their sentence back. handleSendAction clears the input the
+		// moment it sends, so without this a rejection costs them the wording as well
+		// as one of their three chances — and retyping it is exactly the friction a
+		// first-time player does not need.
+		if (window._lastSubmittedAction && els.actionInput && !els.actionInput.value.trim()) {
+			els.actionInput.value = window._lastSubmittedAction;
+			els.actionInput.focus();
+			els.actionInput.select?.();
+		}
+
+		showRejectionNotice(reason, strikes, maxStrikes, retry);
+	});
+
+	socket.on("advisor:reply", ({ options, note, capability }) => {
+		renderAdvisorOptions(options, note, capability);
+	});
+
+	socket.on("turn:skipped", ({ player, reason }) => {
+		appendActionLog(`⏭️ <strong>${player}</strong>'s turn was skipped — ${reason}.`, "system");
+		if (me.name === player) showToast(`Your turn was skipped — ${reason}.`, "warning", 6000);
 	});
 
 	socket.on("toast", ({ type, message }) => {
@@ -791,6 +1034,7 @@ function registerSocketEvents() {
 			sessionStorage.setItem("st.sessionToken", token);
 			sessionStorage.setItem("st.sessionLobby", id || "");
 			sessionStorage.setItem("st.syncSeq", String(seq ?? 0));
+			syncSeq = seq ?? 0; syncEpoch = epoch ?? 0;
 			sessionStorage.setItem("st.syncEpoch", String(epoch ?? 0));
 		} catch { /* private browsing — resume degrades to the explicit rejoin path */ }
 	});
@@ -800,6 +1044,7 @@ function registerSocketEvents() {
 			console.log(`🔄 Session resumed as ${res.playerName} (seq ${res.seq})`);
 			try {
 				sessionStorage.setItem("st.syncSeq", String(res.seq ?? 0));
+				syncSeq = res.seq ?? 0; syncEpoch = res.epoch ?? 0;
 				sessionStorage.setItem("st.syncEpoch", String(res.epoch ?? 0));
 			} catch { /* ignore */ }
 			setConnectionStatus("online");

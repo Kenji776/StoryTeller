@@ -158,6 +158,43 @@ export function createLobbyBus({ io, journal, epoch, buildSnapshot }) {
 		},
 
 		/**
+		 * @description Wraps a Socket.IO server so that `.to(lobbyId).emit(...)` is
+		 *   sequenced while everything else behaves exactly as before.
+		 *
+		 *   This exists so the ~90 existing `io.to(room(lobbyId)).emit(...)` call sites
+		 *   gain sequencing by changing which object they are called on, rather than by
+		 *   rewriting every one of them. Rewriting each site by hand would be a large
+		 *   mechanical diff across files another agent is working in, and every missed
+		 *   site would be an unsequenced durable event — a silent hole in exactly the
+		 *   mechanism being built.
+		 *
+		 *   Targeted emits (`io.to(socketId)`) pass straight through unsequenced, which
+		 *   is required for correctness: a per-socket event like `player:levelup`
+		 *   carries one player's private state, and journaling it under a socket id
+		 *   would both corrupt the lobby's sequence and risk replaying it to the room.
+		 * @param {import('socket.io').Server} realIo - The server to wrap.
+		 * @param {function(string): boolean} isLobby - Reports whether a target names a
+		 *   lobby rather than a socket or a non-game room.
+		 * @returns {object} An io-compatible facade.
+		 */
+		wrapIo(realIo, isLobby) {
+			const self = this;
+			return new Proxy(realIo, {
+				get(target, prop, receiver) {
+					if (prop === "to") {
+						return (destination) => (
+							isLobby(destination)
+								? { emit: (event, payload) => self.emit(destination, event, payload) }
+								: target.to(destination)
+						);
+					}
+					const value = Reflect.get(target, prop, receiver);
+					return typeof value === "function" ? value.bind(target) : value;
+				},
+			});
+		},
+
+		/**
 		 * @description Forgets a deleted lobby's journal.
 		 * @param {string} lobbyId - The lobby being torn down.
 		 * @returns {void}

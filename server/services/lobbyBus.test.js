@@ -301,3 +301,46 @@ test("lobbies do not share a sequence counter", () => {
 	bus.emit("lob1", "hp:update", {});
 	assert.equal(bus.emit("lob2", "hp:update", {}).seq, 1);
 });
+
+// ── The io wrapper ───────────────────────────────────────────────────────────
+
+test("the wrapper sequences a broadcast aimed at a lobby", () => {
+	const { bus, sent } = makeBus();
+	const wrapped = bus.wrapIo({ to: () => ({ emit: () => { throw new Error("must not reach the raw io"); } }) }, (id) => id === "lob1");
+	wrapped.to("lob1").emit("hp:update", { player: "Ayla" });
+	assert.equal(sent[0].args[2].seq, 1, "a lobby broadcast must be stamped");
+});
+
+test("the wrapper passes a targeted emit straight through to the real io", () => {
+	const { bus } = makeBus();
+	const direct = [];
+	const wrapped = bus.wrapIo({ to: (t) => ({ emit: (e, p) => direct.push({ t, e, p }) }) }, (id) => id === "lob1");
+	wrapped.to("some-socket-id").emit("player:levelup", { newLevel: 3 });
+	assert.deepEqual(direct, [{ t: "some-socket-id", e: "player:levelup", p: { newLevel: 3 } }]);
+});
+
+test("a targeted emit consumes no sequence number", () => {
+	const { bus } = makeBus();
+	const wrapped = bus.wrapIo({ to: () => ({ emit: () => {} }) }, (id) => id === "lob1");
+	wrapped.to("a-socket").emit("player:levelup", {});
+	assert.equal(bus.seqOf("lob1"), 0);
+});
+
+test("the wrapper still exposes the rest of the io surface", () => {
+	const { bus } = makeBus();
+	const realIo = {
+		to: () => ({ emit: () => {} }),
+		sockets: { sockets: new Map([["s1", {}]]) },
+		socketsLeave() { return "left"; },
+	};
+	const wrapped = bus.wrapIo(realIo, () => false);
+	assert.equal(wrapped.sockets.sockets.has("s1"), true);
+	assert.equal(wrapped.socketsLeave(), "left");
+});
+
+test("the wrapper does not sequence ephemeral events even for a lobby", () => {
+	const { bus, sent } = makeBus();
+	const wrapped = bus.wrapIo({ to: () => ({ emit: () => {} }) }, (id) => id === "lob1");
+	wrapped.to("lob1").emit("sfx:play", { effects: [] });
+	assert.equal(sent[0].args.length, 2, "ephemeral events stay unstamped");
+});

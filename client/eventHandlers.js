@@ -240,10 +240,33 @@ async function handleSendAction() {
 	const text = els.actionInput.value.trim();
 	if (!text) return;
 	appendLog(`> ${me.name}: ${text}\n`);
+	// Remembered so a rejection can hand the wording back instead of making the
+	// player retype it — see the action:rejected handler.
+	window._lastSubmittedAction = text;
 	els.actionInput.value = "";
+	if (typeof clearRejectionNotice === "function") clearRejectionNotice();
 	// Stop the DM narration so the player's action can be read on its own channel
 	await stopDMNarration();
 	socket.emit("action:submit", { lobbyId, text });
+}
+
+/**
+ * Asks the server what this character could do right now.
+ *
+ * @description Deliberately asks the server rather than reasoning in the browser:
+ *   the answer has to agree with the same capability model the feasibility gate
+ *   uses, and only the server holds that. Shows a placeholder immediately, because
+ *   the reply involves a model call and silence would read as a broken button.
+ * @returns {void}
+ */
+function handleAskAdvisor() {
+	if (!lobbyId || !me?.name) return;
+	const panel = document.getElementById("advisorPanel");
+	if (panel) {
+		panel.style.display = "block";
+		panel.innerHTML = '<div style="opacity:0.75;">Thinking about what you could do…</div>';
+	}
+	socket.emit("advisor:ask", { lobbyId, playerName: me.name });
 }
 
 // === Action Input KeyDown ===
@@ -832,6 +855,7 @@ safeAddEvent(els.saveSheet, "click", handleSaveCharacterSheet);
 safeAddEvent(els.chatBtn, "click", handleOpenChat);
 safeAddEvent(els.randomCharBtn, "click", handleRandomizeCharacter);
 safeAddEvent(els.sendAction, "click", handleSendAction);
+safeAddEvent(document.getElementById("advisorBtn"), "click", handleAskAdvisor);
 safeAddEvent(els.actionInput, "keydown", handleActionInputKey);
 safeAddEvent(".die", "click", handleDiceRoll);
 safeAddEvent(document.getElementById("quickActionSelect"), "change", handleQuickActionSelect);

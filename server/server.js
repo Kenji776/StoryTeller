@@ -85,6 +85,22 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const store = new LobbyStore();
 
+/**
+ * Reconnection layer. The journal and bus give every state-bearing broadcast a
+ * per-lobby sequence number, so a client can tell it missed something and ask for
+ * exactly the events it lacks. `busIo` is an io-compatible facade: broadcasts aimed
+ * at a lobby are sequenced, everything else passes through untouched.
+ */
+const eventJournal = new EventJournal();
+const lobbyBus = createLobbyBus({
+	io,
+	journal: eventJournal,
+	epoch: Date.now(),
+	buildSnapshot: (id) => store.publicState(id),
+});
+const busIo = lobbyBus.wrapIo(io, (target) => !!store.index[target]);
+const playerSessions = new PlayerSessions();
+
 const args = process.argv.slice(2);
 const devMode = args.includes("--devmode") || process.env.DEV_MODE?.toUpperCase() === "TRUE";
 if (devMode) log("🧩 Developer mode enabled — skipping ElevenLabs TTS.");
@@ -150,7 +166,7 @@ let graceCheck = () => false;
 
 // Timer system (creates closures over all game-loop helpers)
 const timerSystem = createTimerSystem({
-	io, store, room, log, devMode, ELEVEN_API_KEY, serviceStatus,
+	io: busIo, store, room, log, devMode, ELEVEN_API_KEY, serviceStatus,
 	LLM_TIMEOUT_MS, HISTORY_SUMMARIZE_THRESHOLD, MAX_SUMMARY_LENGTH,
 	getLLMResponse, llmOpts, parseDMJson,
 	streamNarrationToClients: (ioRef, rm, text, voiceId, pn) => streamNarrationToClients(ioRef, rm, text, voiceId, pn, ttsDeps),
@@ -176,23 +192,10 @@ const {
  * rejects nothing, so a session's real judgements can be reviewed before it starts
  * telling players no. Set FEASIBILITY_MODE=hard or =judge to enforce.
  */
-/**
- * Reconnection layer. The journal and bus give every state-bearing broadcast a
- * per-lobby sequence number so a client can tell it missed something; the session
- * registry gives a player an identity that outlives their socket id.
- */
-const eventJournal = new EventJournal();
-const lobbyBus = createLobbyBus({
-	io,
-	journal: eventJournal,
-	epoch: Date.now(),
-	buildSnapshot: (id) => store.publicState(id),
-});
-const playerSessions = new PlayerSessions();
 graceCheck = (lobbyId, playerName) => playerSessions.byPlayer(lobbyId, playerName)?.state === "grace";
 
 const sessionSystem = createSessionSystem({
-	io, store, room, log,
+	io: busIo, store, room, log,
 	sessions: playerSessions,
 	bus: lobbyBus,
 	resolveActiveTurn, startTurnTimer, cancelTurnTimer, broadcastLobbies,
@@ -289,7 +292,7 @@ function getPublicLobbies() {
 }
 
 function broadcastLobbies() {
-	io.to("lobbies:list").emit("lobbies:update", { lobbies: getPublicLobbies() });
+	busIo.to("lobbies:list").emit("lobbies:update", { lobbies: getPublicLobbies() });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -416,7 +419,7 @@ io.on("connection", (socket) => {
 		if (!store.startRestVote(lobbyId, actor.name, type)) return socket.emit("toast", { type: "error", message: "A vote is already in progress." });
 
 		const state = store.getVoteState(lobbyId);
-		io.to(room(lobbyId)).emit("rest:vote:start", state);
+		busIo.to(room(lobbyId)).emit("rest:vote:start", state);
 
 		const result = store.checkVoteResolved(lobbyId);
 		if (result) {
@@ -432,7 +435,7 @@ io.on("connection", (socket) => {
 				store.castVote(lobbyId, name, "no");
 			}
 			const finalState = store.getVoteState(lobbyId);
-			if (finalState) io.to(room(lobbyId)).emit("rest:vote:update", finalState);
+			if (finalState) busIo.to(room(lobbyId)).emit("rest:vote:update", finalState);
 			const finalResult = store.checkVoteResolved(lobbyId);
 			if (finalResult) await handleRestResolved(lobbyId, finalResult, type, actor.name);
 		}, 120_000);
@@ -444,7 +447,7 @@ io.on("connection", (socket) => {
 		if (!actor) return;
 		const state = store.castVote(lobbyId, actor.name, vote);
 		if (!state) return;
-		io.to(room(lobbyId)).emit("rest:vote:update", state);
+		busIo.to(room(lobbyId)).emit("rest:vote:update", state);
 		const result = store.checkVoteResolved(lobbyId);
 		if (result) await handleRestResolved(lobbyId, result, state.type, state.proposer);
 	});
@@ -454,7 +457,7 @@ io.on("connection", (socket) => {
 		if (!store.isHost(lobbyId, socket.id)) return;
 		const kickedSid = store.kickPlayer(lobbyId, playerName);
 		if (kickedSid) {
-			io.to(kickedSid).emit("player:kicked", { reason: "You were removed by the host." });
+			busIo.to(kickedSid).emit("player:kicked", { reason: "You were removed by the host." });
 			const kickedSocket = io.sockets.sockets.get(kickedSid);
 			if (kickedSocket) kickedSocket.leave(room(lobbyId));
 		}
@@ -500,7 +503,7 @@ io.on("connection", (socket) => {
 		// sheet, so no score needs passing in.
 		store.insertIntoInitiative(lobbyId, charName);
 		const { current, order } = resolveActiveTurn(lobbyId);
-		io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+		busIo.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 
 		if (current) startTurnTimer(lobbyId, 2 * 60 * 1000);
 
@@ -511,9 +514,9 @@ io.on("connection", (socket) => {
 			log(`👑 Host reconnected: ${charName} (${socket.id})`);
 		}
 
-		io.to(room(lobbyId)).emit("toast", { type: "info", message: `${charName} has returned to the adventure!` });
+		busIo.to(room(lobbyId)).emit("toast", { type: "info", message: `${charName} has returned to the adventure!` });
 		socket.emit("join:confirmed", { lobbyId, lobbyCode: lobby.code, state: store.publicState(lobbyId), isHost: isRejoiningHost });
-		io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
+		busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 		broadcastLobbies();
 	});
 
@@ -548,9 +551,9 @@ io.on("connection", (socket) => {
 
 			socket.emit("join:confirmed", { lobbyId, lobbyCode, state: store.publicState(lobbyId) });
 
-			io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
-			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
-			io.to(room(lobbyId)).emit("player:joined", { player: cleanName });
+			busIo.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+			busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
+			busIo.to(room(lobbyId)).emit("player:joined", { player: cleanName });
 			broadcastLobbies();
 
 			const raceStr = sheet?.race || "unknown race";
@@ -569,9 +572,9 @@ io.on("connection", (socket) => {
 			}
 
 			store.appendDM(lobbyId, narration);
-			io.to(room(lobbyId)).emit("narration", { content: narration });
-			await streamNarrationToClients(io, room(lobbyId), narration, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
-			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
+			busIo.to(room(lobbyId)).emit("narration", { content: narration });
+			await streamNarrationToClients(busIo, room(lobbyId), narration, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+			busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 
 		} catch (err) {
 			console.error("💥 player:join:game error:", err);
@@ -586,7 +589,7 @@ io.on("connection", (socket) => {
 				return socket.emit("toast", { type: "error", message: "Only host can change phase" });
 			}
 			store.setPhase(lobbyId, phase);
-			io.to(room(lobbyId)).emit("toast", { type: "info", message: `Phase → ${phase}` });
+			busIo.to(room(lobbyId)).emit("toast", { type: "info", message: `Phase → ${phase}` });
 			log(`🔄 Phase for ${lobbyId} set to "${phase}"`);
 			sendState(lobbyId);
 		} catch (err) {
@@ -630,7 +633,7 @@ io.on("connection", (socket) => {
 				socket.emit("toast", { type: "info", message: `${result.unequipped.name} returned to inventory.` });
 			}
 			sendState(lobbyId);
-			broadcastPartyState(io, store, lobbyId);
+			broadcastPartyState(busIo, store, lobbyId);
 		} catch (err) {
 			log("💥 Error equipping item:", err);
 			socket.emit("toast", { type: "error", message: "Failed to equip item." });
@@ -652,7 +655,7 @@ io.on("connection", (socket) => {
 			log(`🔄 ${playerName} unequipped "${result.unequipped.name}" from ${slot} (lobby ${lobbyId})`);
 			socket.emit("toast", { type: "success", message: `Unequipped ${result.unequipped.name}.` });
 			sendState(lobbyId);
-			broadcastPartyState(io, store, lobbyId);
+			broadcastPartyState(busIo, store, lobbyId);
 		} catch (err) {
 			log("💥 Error unequipping item:", err);
 			socket.emit("toast", { type: "error", message: "Failed to unequip item." });
@@ -688,7 +691,7 @@ io.on("connection", (socket) => {
 		socket.emit("player:levelup:confirm", { newStats, newLevel, hpGained, newAbility: newAbility || null });
 		log(`⬆️ ${playerName} leveled up to ${newLevel} (+${hpGained} HP)${newAbility ? ` — gained: ${newAbility.name}` : ""}`);
 
-		broadcastPartyState(io, store, lobbyId);
+		broadcastPartyState(busIo, store, lobbyId);
 
 		if (store.checkLevelUp(lobbyId, playerName)) {
 			const nextLevel = newLevel + 1;
@@ -718,11 +721,11 @@ io.on("connection", (socket) => {
 
 			log(`🚀 Game starting for lobby ${lobbyId}`);
 			console.log('Game starting event dispatched to lobby: ' + lobbyId);
-			io.to(room(lobbyId)).emit("game:starting", { message: "✨ The Dungeon Master is preparing your tale..." });
+			busIo.to(room(lobbyId)).emit("game:starting", { message: "✨ The Dungeon Master is preparing your tale..." });
 			const initiativeRolls = store.startGame(lobbyId);
 			sendState(lobbyId);
 			broadcastLobbies();
-			broadcastPartyState(io, store, lobbyId);
+			broadcastPartyState(busIo, store, lobbyId);
 
 			// Show the party how the order was decided. Turn order used to be socket
 			// registration order, which players had no way to understand or predict.
@@ -730,9 +733,9 @@ io.on("connection", (socket) => {
 				const summary = initiativeRolls
 					.map((r, i) => `${i + 1}. ${r.name} — ${r.roll}${r.dexMod >= 0 ? "+" : ""}${r.dexMod} = ${r.total}`)
 					.join("<br>");
-				io.to(room(lobbyId)).emit("narration", { content: `<p><strong>⚔️ Initiative</strong><br>${summary}</p>` });
+				busIo.to(room(lobbyId)).emit("narration", { content: `<p><strong>⚔️ Initiative</strong><br>${summary}</p>` });
 				const { current, order, round } = store.turnInfo(lobbyId);
-				io.to(room(lobbyId)).emit("turn:update", { current, order, round });
+				busIo.to(room(lobbyId)).emit("turn:update", { current, order, round });
 				log(`🎲 Initiative for ${lobbyId}: ${initiativeRolls.map((r) => `${r.name}=${r.total}`).join(", ")}`);
 			}
 
@@ -764,30 +767,30 @@ io.on("connection", (socket) => {
 					cleanText = openingRaw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 				}
 			}
-			io.to(room(lobbyId)).emit("debug:setup", { raw: openingRaw, parsedMusic: setupMusic, parsedSuggestions: setupSuggestions });
+			busIo.to(room(lobbyId)).emit("debug:setup", { raw: openingRaw, parsedMusic: setupMusic, parsedSuggestions: setupSuggestions });
 
 			const adventureName = typeof adventureNameRaw === "string" ? adventureNameRaw.trim().replace(/^["']|["']$/g, "") : "Untitled Adventure";
 			store.setAdventureName(lobbyId, adventureName);
-			io.to(room(lobbyId)).emit("adventure:name", { name: adventureName });
+			busIo.to(room(lobbyId)).emit("adventure:name", { name: adventureName });
 
 			// Store raw JSON in history so the LLM sees JSON format in prior turns
 			store.appendDM(lobbyId, typeof openingRaw === "string" ? openingRaw.trim() : cleanText);
-			io.to(room(lobbyId)).emit("narration", { content: cleanText });
+			busIo.to(room(lobbyId)).emit("narration", { content: cleanText });
 
 			const openingMood = setupMusic || "exploration";
 			store.setCurrentMusic(lobbyId, openingMood);
-			io.to(room(lobbyId)).emit("music:change", { mood: openingMood });
-			if (setupSuggestions.length) io.to(room(lobbyId)).emit("suggestions:update", { suggestions: setupSuggestions });
+			busIo.to(room(lobbyId)).emit("music:change", { mood: openingMood });
+			if (setupSuggestions.length) busIo.to(room(lobbyId)).emit("suggestions:update", { suggestions: setupSuggestions });
 
 			if (setupSfx.length) {
 				resolveSfx(setupSfx, ELEVEN_API_KEY).then(sfxFiles => {
-					if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+					if (sfxFiles.length) busIo.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
 				}).catch(err => log("⚠️ SFX resolve error:", err.message));
 			}
 
-			await streamNarrationToClients(io, room(lobbyId), cleanText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+			await streamNarrationToClients(busIo, room(lobbyId), cleanText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 
-			io.to(room(lobbyId)).emit("game:ready");
+			busIo.to(room(lobbyId)).emit("game:ready");
 			scheduleTimerAfterNarration(lobbyId);
 			log(`📜 Opening narration sent for lobby ${lobbyId}`);
 
@@ -803,7 +806,7 @@ io.on("connection", (socket) => {
 					facing: null,
 					status: null,
 				}));
-				updateMap(io, store, lobbyId, initialChars, { type: "plains", features: [] });
+				updateMap(busIo, store, lobbyId, initialChars, { type: "plains", features: [] });
 			} catch (err) {
 				console.error("💥 Failed to generate initial map:", err);
 			}
@@ -811,8 +814,8 @@ io.on("connection", (socket) => {
 			log("💥 Error starting game:", err);
 			console.error(err);
 			try { store.setPhase(lobbyId, "waiting"); } catch (_) {}
-			io.to(room(lobbyId)).emit("game:failed", { message: "The Dungeon Master ran into a problem. Please try again." });
-			io.to(room(lobbyId)).emit("toast", { type: "error", message: `Failed to start game: ${err.message || "unknown error"}` });
+			busIo.to(room(lobbyId)).emit("game:failed", { message: "The Dungeon Master ran into a problem. Please try again." });
+			busIo.to(room(lobbyId)).emit("toast", { type: "error", message: `Failed to start game: ${err.message || "unknown error"}` });
 			sendState(lobbyId);
 		}
 	});
@@ -839,13 +842,13 @@ io.on("connection", (socket) => {
 
 			cancelTurnTimer(lobbyId);
 			store.resetMissedTurns(lobbyId, actor.name);
-			io.to(room(lobbyId)).emit("ui:lock", { actor: actor.name });
+			busIo.to(room(lobbyId)).emit("ui:lock", { actor: actor.name });
 
 			const v = store.validateAction(lobbyId, socket.id, text);
 			if (!v.ok) {
 				console.log("⚠️ Action rejected:", v.reason);
 				socket.emit("action:rejected", { reason: v.reason });
-				io.to(room(lobbyId)).emit("ui:unlock");
+				busIo.to(room(lobbyId)).emit("ui:unlock");
 				// The turn clock was cancelled above; put back what was left of it, or
 				// this player's turn simply never ends.
 				resumeTurnTimer(lobbyId);
@@ -857,13 +860,13 @@ io.on("connection", (socket) => {
 			// chances, restoring the clock, forfeiting the turn on the third failure.
 			const gate = await actionGate.check({ lobbyId, socket, playerName: actor.name, text });
 			if (!gate.allow) {
-				io.to(room(lobbyId)).emit("ui:unlock");
+				busIo.to(room(lobbyId)).emit("ui:unlock");
 				return;
 			}
 
 			store.appendUser(lobbyId, actor.name, text);
 			const rollPayload = store.autoRollIfNeeded(lobbyId, socket.id, text);
-			if (rollPayload) io.to(room(lobbyId)).emit("dice:result", rollPayload);
+			if (rollPayload) busIo.to(room(lobbyId)).emit("dice:result", rollPayload);
 
 			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload);
 			console.log(`🎭 Action from ${actor.name}: "${text}"`);
@@ -871,7 +874,7 @@ io.on("connection", (socket) => {
 			// Player voice narration
 			const playerVoice = actor?.sheet?.voice_id || "nVR3DsQbqULlGfUZGjwn";
 			if (playerVoice) {
-				await streamNarrationToClients(io, room(lobbyId), text, playerVoice, actor.name, ttsDeps);
+				await streamNarrationToClients(busIo, room(lobbyId), text, playerVoice, actor.name, ttsDeps);
 			} else {
 				console.warn("⚠️ No valid player voice found — skipping player narration");
 			}
@@ -886,8 +889,8 @@ io.on("connection", (socket) => {
 			console.log(`📝 [LLM raw response] lobby=${lobbyId}:\n${replyText.slice(0, 2000)}${replyText.length > 2000 ? "…(truncated)" : ""}`);
 			if (!replyText) {
 				console.warn("⚠️ Empty LLM reply");
-				io.to(room(lobbyId)).emit("toast", { type: "error", message: "DM returned an empty reply." });
-				io.to(room(lobbyId)).emit("ui:unlock");
+				busIo.to(room(lobbyId)).emit("toast", { type: "error", message: "DM returned an empty reply." });
+				busIo.to(room(lobbyId)).emit("ui:unlock");
 				return;
 			}
 
@@ -910,18 +913,18 @@ io.on("connection", (socket) => {
 
 			if (dmObj && typeof dmObj === "object") {
 				const u = dmObj.updates || {};
-				broadcastXPUpdates(io, store, lobbyId, u.xp);
-				broadcastHPUpdates(io, store, lobbyId, u.hp);
+				broadcastXPUpdates(busIo, store, lobbyId, u.xp);
+				broadcastHPUpdates(busIo, store, lobbyId, u.hp);
 				await checkAndEndIfAllDead(lobbyId);
 
 				if (store.index[lobbyId]?.phase === "wiped") {
-					io.to(room(lobbyId)).emit("ui:unlock");
+					busIo.to(room(lobbyId)).emit("ui:unlock");
 					return;
 				}
 
-				broadcastInventoryUpdates(io, store, lobbyId, u.inventory);
-				broadcastGoldUpdates(io, store, lobbyId, u.gold);
-				broadcastConditionUpdates(io, store, lobbyId, u.conditions);
+				broadcastInventoryUpdates(busIo, store, lobbyId, u.inventory);
+				broadcastGoldUpdates(busIo, store, lobbyId, u.gold);
+				broadcastConditionUpdates(busIo, store, lobbyId, u.conditions);
 				if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
 				if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 
@@ -937,38 +940,38 @@ io.on("connection", (socket) => {
 					}
 				}
 
-				broadcastPartyState(io, store, lobbyId);
-				updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
-				io.to(room(lobbyId)).emit("suggestions:update", {
+				broadcastPartyState(busIo, store, lobbyId);
+				updateMap(busIo, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
+				busIo.to(room(lobbyId)).emit("suggestions:update", {
 					suggestions: Array.isArray(dmObj.suggestions) ? dmObj.suggestions : [],
 				});
 				if (dmObj.music) {
 					store.setCurrentMusic(lobbyId, dmObj.music);
-					io.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
+					busIo.to(room(lobbyId)).emit("music:change", { mood: dmObj.music });
 				}
 				if (Array.isArray(dmObj.sfx) && dmObj.sfx.length) {
 					resolveSfx(dmObj.sfx, ELEVEN_API_KEY).then(sfxFiles => {
-						if (sfxFiles.length) io.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
+						if (sfxFiles.length) busIo.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
 					}).catch(err => log("⚠️ SFX resolve error:", err.message));
 				}
 			} else {
 				console.warn("⚠️ LLM reply not structured or parse failed");
 				console.log("Raw reply text:", replyText);
 				// Clear stale suggestions when parse fails
-				io.to(room(lobbyId)).emit("suggestions:update", { suggestions: [] });
+				busIo.to(room(lobbyId)).emit("suggestions:update", { suggestions: [] });
 			}
 
 			// Store the full raw LLM reply in history so future calls see their
 			// own JSON-formatted responses and maintain the expected format.
 			store.appendDM(lobbyId, replyText);
-			io.to(room(lobbyId)).emit("debug:llm", { raw: replyText, parsed: dmObj ?? null, narrationText });
-			io.to(room(lobbyId)).emit("narration", { content: narrationText });
-			await streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+			busIo.to(room(lobbyId)).emit("debug:llm", { raw: replyText, parsed: dmObj ?? null, narrationText });
+			busIo.to(room(lobbyId)).emit("narration", { content: narrationText });
+			await streamNarrationToClients(busIo, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 
 			if (dmObj?.roll?.sides) {
-				io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
-				io.to(room(lobbyId)).emit("ui:unlock");
-				io.to(room(lobbyId)).emit("roll:required", {
+				busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
+				busIo.to(room(lobbyId)).emit("ui:unlock");
+				busIo.to(room(lobbyId)).emit("roll:required", {
 					player: actor.name,
 					sides: Number(dmObj.roll.sides),
 					stats: Array.isArray(dmObj.roll.stats) ? dmObj.roll.stats : [],
@@ -981,12 +984,12 @@ io.on("connection", (socket) => {
 			if (!v.tableTalk) {
 				store.nextTurn(lobbyId);
 				resolveActiveTurn(lobbyId);
-				io.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+				busIo.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
 				scheduleTimerAfterNarration(lobbyId);
 			}
 
-			io.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
-			io.to(room(lobbyId)).emit("ui:unlock");
+			busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
+			busIo.to(room(lobbyId)).emit("ui:unlock");
 
 			if (store.needsSummarization(lobbyId, HISTORY_SUMMARIZE_THRESHOLD)) {
 				store.autoSummarize(lobbyId, getLLMResponse, llmOpts(lobbyId), 10, MAX_SUMMARY_LENGTH).catch(() => {});
@@ -994,7 +997,7 @@ io.on("connection", (socket) => {
 		} catch (err) {
 			console.error("💥 Error processing action:", err);
 			socket.emit("toast", { type: "error", message: "The DM stumbled on that one. Try again." });
-			io.to(room(lobbyId)).emit("ui:unlock");
+			busIo.to(room(lobbyId)).emit("ui:unlock");
 		}
 	});
 
@@ -1004,7 +1007,7 @@ io.on("connection", (socket) => {
 			const actor = store.playerBySid(lobbyId, socket.id);
 			if (!actor) return;
 			const text = `${actor.name} rolls a ${kind} and gets ${value}!`;
-			io.to(room(lobbyId)).emit("action:log", { player: actor.name, text, timestamp: Date.now() });
+			busIo.to(room(lobbyId)).emit("action:log", { player: actor.name, text, timestamp: Date.now() });
 			store.appendUser(lobbyId, actor.name, text);
 			const messages = store.composeMessages(lobbyId, actor.name, text);
 			getLLMResponse(messages, llmOpts(lobbyId)).then(async (dm) => {
@@ -1012,8 +1015,8 @@ io.on("connection", (socket) => {
 				const dmObj = await parseDMJson(replyText, { getLLMResponse, llmOpts: llmOpts(lobbyId) });
 				const narrationText = (dmObj && typeof dmObj === "object") ? (dmObj.text || dmObj.prompt || replyText) : replyText;
 				store.appendDM(lobbyId, replyText);
-				io.to(room(lobbyId)).emit("narration", { content: narrationText });
-				streamNarrationToClients(io, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
+				busIo.to(room(lobbyId)).emit("narration", { content: narrationText });
+				streamNarrationToClients(busIo, room(lobbyId), narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 				sendState(lobbyId);
 			});
 		} catch (err) {
@@ -1028,7 +1031,7 @@ io.on("connection", (socket) => {
 		if (!s || s.phase !== "running") return;
 		store.setPhase(lobbyId, "completed");
 		cancelTurnTimer(lobbyId);
-		io.to(room(lobbyId)).emit("game:over", { reason: "completed" });
+		busIo.to(room(lobbyId)).emit("game:over", { reason: "completed" });
 		broadcastLobbies();
 		log(`🏆 Campaign completed for lobby ${lobbyId}`);
 	});
@@ -1040,7 +1043,7 @@ io.on("connection", (socket) => {
 			const prompt = store.composeSummaryPrompt(lobbyId);
 			const s = await getLLMResponse([{ role: "system", content: prompt }, ...store.tail(lobbyId, 8)], llmOpts(lobbyId));
 			store.summarize(lobbyId, s);
-			io.to(room(lobbyId)).emit("narration", { content: `[Summary]\n${s}` });
+			busIo.to(room(lobbyId)).emit("narration", { content: `[Summary]\n${s}` });
 			sendState(lobbyId);
 		} catch (err) {
 			log("💥 Error summarizing:", err);
@@ -1116,8 +1119,8 @@ io.on("connection", (socket) => {
 
 				if (lobby.phase === "waiting" && lobby.hostSid === socket.id) {
 					log(`🗑️ Host disconnected from waiting lobby ${lobbyId} — removing lobby`);
-					io.to(room(lobbyId)).emit("toast", { type: "error", message: "The host has left. This lobby has been closed." });
-					io.to(room(lobbyId)).emit("lobby:closed");
+					busIo.to(room(lobbyId)).emit("toast", { type: "error", message: "The host has left. This lobby has been closed." });
+					busIo.to(room(lobbyId)).emit("lobby:closed");
 					for (const sid of Object.keys(lobby.sockets)) {
 						if (sid !== socket.id) {
 							const otherSocket = io.sockets.sockets.get(sid);
@@ -1165,7 +1168,7 @@ io.on("connection", (socket) => {
 				delete lobby.sockets[socket.id];
 				store.persist(lobbyId);
 				sendState(lobbyId);
-				broadcastPartyState(io, store, lobbyId);
+				broadcastPartyState(busIo, store, lobbyId);
 				broadcastLobbies();
 				log(`📤 Post-disconnect state broadcast for lobby ${lobbyId}`);
 			}
