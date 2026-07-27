@@ -18,6 +18,7 @@ import { playerMethods } from "./lobby/lobbyPlayers.js";
 import { combatMethods } from "./lobby/lobbyCombat.js";
 import { progressionMethods } from "./lobby/lobbyProgression.js";
 import { settingsMethods } from "./lobby/lobbySettings.js";
+import { turnAttemptMethods } from "./lobby/turnAttempts.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -225,4 +226,5 @@ Object.assign(
 	combatMethods,
 	progressionMethods,
 	settingsMethods,
+	turnAttemptMethods,
 );

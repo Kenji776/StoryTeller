@@ -292,6 +292,14 @@ test("nextTurn on an empty order reports no current player rather than throwing"
 	assert.equal(r.current, null);
 });
 
+test("advancing the turn clears the previous player's rejected attempts", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }, { name: "Brom" }]);
+	store.rollInitiative(lobbyId, scriptedD20([20, 10]));
+	store.index[lobbyId].turnAttempts = { player: "Ayla", count: 2 };
+	store.nextTurn(lobbyId);
+	assert.equal(store.index[lobbyId].turnAttempts, null, "strikes must not follow the turn to the next player");
+});
+
 test("turnInfo reports the round alongside the order", () => {
 	const { store, lobbyId } = makeStore([{ name: "Ayla" }, { name: "Brom" }]);
 	store.rollInitiative(lobbyId, scriptedD20([20, 10]));

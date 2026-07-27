@@ -121,6 +121,9 @@ export const combatMethods = {
 		const roundAdvanced = next <= s.turnIndex;
 		s.turnIndex = next;
 		s.round = (s.round || 1) + (roundAdvanced ? 1 : 0);
+		// Rejected-action strikes belong to the turn that earned them. Carrying them
+		// forward would skip the next player for someone else's impossible ideas.
+		s.turnAttempts = null;
 		this.persist(lobbyId);
 
 		return { current: s.initiative[next] || null, order: s.initiative, round: s.round, roundAdvanced };
