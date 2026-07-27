@@ -3,6 +3,47 @@
 import { normalizeName } from "../helpers/utils.js";
 import { getAbilityForLevel } from "../helpers/classProgression.js";
 
+/**
+ * Where dropped updates are reported. Configured once at startup, following the
+ * same pattern as `assetDownloads.configure`.
+ *
+ * A dropped update is the worst kind of failure this system has: the Dungeon
+ * Master narrates that a player took nine damage, the name it used matches no
+ * character, and the update vanishes. The player watches their HP not change and
+ * has no idea why. A console warning on the server helps nobody who is playing.
+ */
+let incidents = null;
+
+/**
+ * @description Supplies the incident log used to report dropped updates.
+ * @param {object} deps - Configuration.
+ * @param {object} deps.incidents - An incident log from `createIncidentLog`.
+ * @returns {void}
+ */
+export function configureUpdates({ incidents: log } = {}) {
+	incidents = log ?? null;
+}
+
+/**
+ * @description Reports an update that could not be applied because the character it
+ *   named does not exist in the lobby.
+ * @param {string} lobbyId - The lobby.
+ * @param {string} event - Which update was lost, e.g. `"hp:update"`.
+ * @param {string} named - The name the Dungeon Master used.
+ * @param {string[]} known - The character names that do exist, to make the mismatch obvious.
+ * @returns {void}
+ */
+function reportDropped(lobbyId, event, named, known) {
+	console.warn(`[${event}] Player not found: ${named}`);
+	incidents?.raise(lobbyId, {
+		kind: "update_dropped",
+		severity: "error",
+		message: `${event} was discarded: the DM referred to "${named}", who is not in this game.`,
+		detail: { event, named, known },
+		suggestedFix: `Apply the change by hand to the intended character, then check whether the DM is using a stale name.`,
+	});
+}
+
 
 // === XP UPDATES ===
 /**
@@ -23,7 +64,7 @@ export function broadcastXPUpdates(io, store, lobbyId, updates) {
 		if (!x?.player || isNaN(amount)) continue;
 
 		const key = store.findPlayerKey(lobbyId, normalizeName(x.player));
-		if (!key) { console.warn(`[xp:update] Player not found: ${x.player}`); continue; }
+		if (!key) { reportDropped(lobbyId, "xp:update", x.player, Object.keys(store.index[lobbyId]?.players || {})); continue; }
 
 		const newXP = store.addXP(lobbyId, key, amount);
 
@@ -66,7 +107,7 @@ export function broadcastHPUpdates(io, store, lobbyId, updates) {
 		if (!h?.player || isNaN(delta)) continue;
 
 		const key = store.findPlayerKey(lobbyId, normalizeName(h.player));
-		if (!key) { console.warn(`[hp:update] Player not found: ${h.player}`); continue; }
+		if (!key) { reportDropped(lobbyId, "hp:update", h.player, Object.keys(store.index[lobbyId]?.players || {})); continue; }
 
 		const hpNow = store.applyHPChange(lobbyId, key, delta);
 
@@ -109,7 +150,7 @@ export function broadcastInventoryUpdates(io, store, lobbyId, updates) {
 		if (!it?.player || !it?.item || isNaN(change)) continue;
 
 		const key = store.findPlayerKey(lobbyId, normalizeName(it.player));
-		if (!key) { console.warn(`[inventory:update] Player not found: ${it.player}`); continue; }
+		if (!key) { reportDropped(lobbyId, "inventory:update", it.player, Object.keys(store.index[lobbyId]?.players || {})); continue; }
 
 		const newCount = store.applyInventoryChange(lobbyId, key, it.item, change, it.description || "", it.attributes || {});
 
@@ -143,7 +184,7 @@ export function broadcastGoldUpdates(io, store, lobbyId, updates) {
 		if (!g?.player || isNaN(delta)) continue;
 
 		const key = store.findPlayerKey(lobbyId, normalizeName(g.player));
-		if (!key) { console.warn(`[gold:update] Player not found: ${g.player}`); continue; }
+		if (!key) { reportDropped(lobbyId, "gold:update", g.player, Object.keys(store.index[lobbyId]?.players || {})); continue; }
 
 		const goldNow = store.applyGoldChange(lobbyId, key, delta);
 
@@ -173,7 +214,7 @@ export function broadcastConditionUpdates(io, store, lobbyId, updates) {
 		if (!c?.player) continue;
 
 		const key = store.findPlayerKey(lobbyId, normalizeName(c.player));
-		if (!key) { console.warn(`[conditions:update] Player not found: ${c.player}`); continue; }
+		if (!key) { reportDropped(lobbyId, "conditions:update", c.player, Object.keys(store.index[lobbyId]?.players || {})); continue; }
 
 		const conds = store.applyConditions(lobbyId, key, c.add || [], c.remove || []);
 

@@ -104,6 +104,8 @@ export function registerAdminEvents(socket, deps) {
 		findSfxMatch,
 		ELEVEN_API_KEY,
 		getAbilityForLevel,
+		incidents,
+		repairs,
 	} = deps;
 
 	/**
@@ -176,8 +178,13 @@ export function registerAdminEvents(socket, deps) {
 			return socket.emit("toast", { type: "error", message: "Lobby not found" });
 		}
 		socket.join(room(lobbyId));
+		// A separate room from the game itself, so incident traffic reaches admins
+		// watching this lobby without being broadcast to the players in it.
+		socket.join(`admin:${lobbyId}`);
 		const state = store.publicState(lobbyId);
 		socket.emit("admin:connected", state);
+		socket.emit("admin:incidents", incidents?.list(lobbyId) ?? []);
+		socket.emit("admin:repairs", repairs?.catalogue() ?? []);
 		log(`✅ ADMIN connected to lobby ${lobbyId} (${code}) with ${Object.keys(state.players).length} players`);
 	});
 
@@ -343,6 +350,32 @@ export function registerAdminEvents(socket, deps) {
 		}
 
 		log(`🧙‍♂️ Admin triggered ${type} for ${payload.player}`);
+	});
+
+	// ===== MANUAL REPAIRS =====
+	// Everything the server cannot put right on its own. Absolute operations rather
+	// than deltas: correcting a wrong number should not require an admin to work out
+	// the difference, least of all when the number is wrong because something was
+	// applied twice.
+	socket.on("admin:repair", ({ code, type, payload }) => {
+		if (!isSocketAdmin(code)) return socket.emit("toast", { type: "error", message: "Not authorized" });
+		const lobbyId = store.findLobbyByCode(code);
+		if (!lobbyId) return socket.emit("toast", { type: "error", message: "Lobby not found" });
+
+		const result = repairs.apply(lobbyId, type, payload || {});
+		socket.emit("admin:repair:result", { type, ...result });
+		socket.emit("toast", {
+			type: result.ok ? "success" : "error",
+			message: result.ok ? `Repaired: ${result.detail}` : result.reason,
+		});
+	});
+
+	socket.on("admin:incident:resolve", ({ code, id, resolution }) => {
+		if (!isSocketAdmin(code)) return socket.emit("toast", { type: "error", message: "Not authorized" });
+		const lobbyId = store.findLobbyByCode(code);
+		if (!lobbyId) return;
+		incidents.resolve(lobbyId, id, resolution || "handled by an admin");
+		socket.emit("admin:incidents", incidents.list(lobbyId));
 	});
 
 	socket.on("admin:phase", ({ code, phase }) => {

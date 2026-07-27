@@ -84,3 +84,39 @@ Two things that must stay true, both learned by breaking them:
 replayed events never re-enter the client's own gap detector.
 
 _Last verified: 2026-07-27 against branch `Refactor`._
+
+## Incidents and manual repair
+
+`incidents.js` records anything the server cannot heal itself, per lobby, and pushes
+it live to admins watching that lobby (`admin:<lobbyId>` room — separate from the game
+room, so incident traffic never reaches players).
+
+The case that motivated it: the Dungeon Master narrates that a player took nine
+damage, the name it used matches no character, `findPlayerKey` returns null, and the
+update is discarded. The only trace was a `console.warn`. The player watches their HP
+not change and has no way to find out why.
+
+Identical incidents collapse into one record with a count, so a fault recurring every
+turn reads as one ongoing problem rather than fifty. Resolution marks rather than
+deletes, keeping the history of what went wrong and what was done.
+
+`adminRepairs.js` is the other half — the fixes, driven from a catalogue the admin UI
+renders, so a repair added server-side appears in the panel without a matching UI
+change:
+
+| Repair | Why it exists |
+|---|---|
+| `player:revive` | Nothing else can clear the `dead` flag |
+| `hp:set` | Absolute, unlike the delta-only admin events |
+| `slots:set` | Nothing else refills ability uses outside a long rest |
+| `conditions:set` | Replaces the list; conditions otherwise clear only on a long rest |
+| `turn:set` | Hand the turn to a named player |
+| `order:rebuild` | Recovery when the order is empty, duplicated, or holds someone gone |
+| `ui:unlock` | Frees a table stuck behind a lock that was never lifted |
+| `resync:force` | Pushes fresh state to every client |
+
+They are **absolute operations, not deltas**, deliberately: correcting a wrong number
+should not require an admin to compute a difference — least of all when the number is
+wrong because something was applied twice, which is exactly when that arithmetic
+cannot be trusted. Every repair ends with a state broadcast, because a fix players
+cannot see has only corrected the server's record, not their experience.

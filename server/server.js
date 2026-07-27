@@ -40,6 +40,9 @@ import { EventJournal } from "./services/eventJournal.js";
 import { createLobbyBus } from "./services/lobbyBus.js";
 import { PlayerSessions } from "./services/playerSessions.js";
 import { createSessionSystem } from "./routes/sessionEvents.js";
+import { createIncidentLog } from "./services/incidents.js";
+import { createRepairs } from "./services/adminRepairs.js";
+import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability } from "./services/characterCapability.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -102,6 +105,22 @@ const lobbyBus = createLobbyBus({
 });
 const busIo = lobbyBus.wrapIo(io, (target) => !!store.index[target]);
 const playerSessions = new PlayerSessions();
+
+/**
+ * Anything the server cannot heal by itself is recorded here and pushed live to any
+ * admin watching that lobby, so a silently-dropped update stops being invisible.
+ */
+const incidents = createIncidentLog({
+	notify: (lobbyId, incident) => io.to(`admin:${lobbyId}`).emit("admin:incident", incident),
+});
+configureUpdates({ incidents });
+
+const repairs = createRepairs({
+	store,
+	log,
+	emitToLobby: (lobbyId, event, payload) => busIo.to(lobbyId).emit(event, payload),
+	broadcastPartyState: (lobbyId) => broadcastPartyState(busIo, store, lobbyId),
+});
 
 const args = process.argv.slice(2);
 const devMode = args.includes("--devmode") || process.env.DEV_MODE?.toUpperCase() === "TRUE";
@@ -377,6 +396,7 @@ io.on("connection", (socket) => {
 		parseCookie: adminAuth.parseCookie,
 		cleanExpired: adminAuth.cleanExpired,
 		sendState, broadcastLobbies, broadcastPartyState,
+		incidents, repairs,
 		cancelTurnTimer, resolveActiveTurn, startTurnTimer, checkAndEndIfAllDead,
 		resolveSfx, findSfxMatch, ELEVEN_API_KEY, getAbilityForLevel,
 	});

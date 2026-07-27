@@ -768,6 +768,104 @@ function refreshPlayerCell(name, updates) {
 	});
 })();
 
+// ═══ INCIDENTS AND MANUAL REPAIRS ═══
+
+/**
+ * Renders the incident list.
+ *
+ * @description Unresolved incidents come first: an admin opening this panel is
+ *   looking for what still needs doing, not a history. A repeated incident shows a
+ *   count rather than repeating, so one recurring fault reads as one problem.
+ * @param {Array<object>} incidents - Incidents from the server.
+ * @returns {void}
+ */
+function renderIncidents(incidents) {
+	const box = document.getElementById("incidentList");
+	if (!box) return;
+
+	if (!incidents?.length) {
+		box.innerHTML = '<div class="event-feed-empty">No incidents.</div>';
+		return;
+	}
+
+	const order = { error: 0, warning: 1, info: 2 };
+	const sorted = [...incidents].sort((a, b) =>
+		(a.resolved - b.resolved) || (order[a.severity] - order[b.severity]) || (b.lastAt - a.lastAt));
+
+	box.innerHTML = sorted.map((i) => {
+		const colour = i.severity === "error" ? "#c95c5c" : i.severity === "warning" ? "#b8912f" : "#5c8ac9";
+		return `<div class="event-entry" style="border-left:3px solid ${colour};padding-left:0.5em;opacity:${i.resolved ? 0.45 : 1};">
+			<div style="display:flex;justify-content:space-between;gap:0.5em;">
+				<strong>${esc(i.kind)}</strong>
+				<span style="opacity:0.7;">${i.count > 1 ? `×${i.count}` : ""}</span>
+			</div>
+			<div>${esc(i.message)}</div>
+			${i.suggestedFix ? `<div style="opacity:0.7;font-size:0.85em;margin-top:0.2em;">→ ${esc(i.suggestedFix)}</div>` : ""}
+			${i.resolved
+				? `<div style="opacity:0.7;font-size:0.85em;">resolved: ${esc(i.resolution || "")}</div>`
+				: `<button class="secondary incident-resolve" data-id="${i.id}" style="margin-top:0.3em;font-size:0.8em;">Mark handled</button>`}
+		</div>`;
+	}).join("");
+
+	box.querySelectorAll(".incident-resolve").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			socket.emit("admin:incident:resolve", { code: currentLobby, id: btn.dataset.id });
+		});
+	});
+}
+
+/**
+ * Builds a form per available repair from the server's catalogue.
+ *
+ * @description Driven by the catalogue rather than hardcoded, so a repair added
+ *   server-side appears here without a matching UI change — and the two cannot drift.
+ * @param {Array<object>} catalogue - Repair descriptors from the server.
+ * @returns {void}
+ */
+function renderRepairForms(catalogue) {
+	const box = document.getElementById("repairForms");
+	if (!box) return;
+
+	box.innerHTML = (catalogue || []).map((r) => `
+		<div style="margin-bottom:0.6em;padding:0.5em;border:1px solid rgba(255,255,255,0.1);border-radius:5px;">
+			<div style="font-weight:600;">${esc(r.label)}</div>
+			<div style="opacity:0.7;font-size:0.82em;margin:0.2em 0 0.4em;">${esc(r.note || "")}</div>
+			<div class="row" style="gap:4px;flex-wrap:wrap;">
+				${(r.fields || []).map((f) => `<input class="repair-field" data-type="${r.type}" data-field="${f}"
+					placeholder="${f}" style="max-width:130px;" />`).join("")}
+				<button class="secondary repair-run" data-type="${r.type}">Apply</button>
+			</div>
+		</div>`).join("");
+
+	box.querySelectorAll(".repair-run").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			const type = btn.dataset.type;
+			const payload = {};
+			box.querySelectorAll(`.repair-field[data-type="${type}"]`).forEach((input) => {
+				const raw = input.value.trim();
+				if (!raw) return;
+				// "conditions" is the one list-valued field; everything else is a scalar,
+				// and a numeric-looking value is sent as a number so the server does not
+				// have to guess.
+				payload[input.dataset.field] = input.dataset.field === "conditions"
+					? raw.split(",").map((c) => c.trim()).filter(Boolean)
+					: (raw !== "" && !Number.isNaN(Number(raw)) ? Number(raw) : raw);
+			});
+			socket.emit("admin:repair", { code: currentLobby, type, payload });
+		});
+	});
+}
+
+socket.on("admin:incidents", renderIncidents);
+socket.on("admin:incident", () => {
+	// A live incident arrived; ask for the full list so counts and ordering stay right.
+	if (currentLobby) socket.emit("admin:connect", { code: currentLobby });
+});
+socket.on("admin:repairs", renderRepairForms);
+socket.on("admin:repair:result", ({ type, ok, detail, reason }) => {
+	feedEvent("sys", ok ? `Repair ${type}: ${detail}` : `Repair ${type} refused: ${reason}`);
+});
+
 // ═══ UTIL ═══
 function esc(str) {
 	const d = document.createElement("div");
