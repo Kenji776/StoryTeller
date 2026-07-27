@@ -11,11 +11,54 @@ The adapter shape deliberately mirrors `services/llm/`
 
 | File | Responsibility |
 |---|---|
+| `registry.js` | The only list of which providers exist, plus the selection policy. |
+| `narrate.js` | Turns a provider's frame stream into Socket.IO events. Knows no engine. |
 | `wavTiming.js` | Reads a RIFF/WAVE header; approximates word timings from a clip duration. |
 | `providers/localServer.js` | Self-hosted OpenAI-compatible server: `/health`, `/voices`, `/v1/audio/speech`. |
+| `providers/elevenLabs.js` | ElevenLabs `stream/with-timestamps`, with an on-disk voice cache. |
 
-The ElevenLabs adapter, the registry, and the emission layer arrive with the
-later phases of this work; this document grows with them.
+Server wiring and the lobby setting arrive with the next phase of this work.
+
+## Emission
+
+`narrate.js` broadcasts four events, and the ordering matters to the client:
+
+| Event | When |
+|---|---|
+| `narration:start` | Once, before any audio. Carries `speaker`, `streamId`, `format`. |
+| `narration:audio` | Zero or more; base64 in `data`. |
+| `narration:alignment` | Zero or more; word timings. |
+| `narration:audio:end` | Always, exactly once. |
+
+**The end frame is load-bearing.** The client answers it with `narration:done`,
+which is what starts the turn timer. Every path through `streamNarrationToClients`
+emits one — including dev mode, no configured provider, empty text, a resolver
+that throws, and a provider that dies mid-stream. Failing to emit it does not
+merely lose audio, it stalls the game. `narrate.js` never rejects, for the same
+reason.
+
+When there will be no audio, `narration:start` carries
+`status: REJECTED_REQUEST_STATUS` (204) and the client skips straight to done. No
+`narration` frame is ever emitted from here: callers have already broadcast the
+prose, and a second frame with `content: null` makes the game client print an
+empty "DM:" line and the admin feed stringify it to `"null"`.
+
+`streamNarrationToClients` takes a bare `lobbyId` and applies `deps.room` itself.
+The previous implementation was called with an already-mapped room *and* mapped it
+again; that was invisible only because `room` is currently `(id) => id`.
+
+## Choosing a provider
+
+Selection is per lobby, host-controlled, stored as `ttsProvider` in lobby state.
+`normalizeProviderId` is the boundary check: an id that is unknown, or that names a
+provider which is no longer reachable, degrades to the default rather than leaving
+the lobby mute. A lobby persisted while the local server was running therefore
+still narrates after it is switched off.
+
+The local server's URL is **not** a lobby setting — it comes from `LOCAL_TTS_URL`
+in the server environment. The server, not the browser, issues the request, so a
+host-editable field would let a lobby host aim it at any address the server can
+reach. ADR 0005 records the reasoning.
 
 ## Adapter contract
 
