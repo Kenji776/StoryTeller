@@ -436,8 +436,9 @@ io.on("connection", (socket) => {
 			store.persist(lobbyId);
 		}
 
-		const dex = Number(lobby.players[charName]?.stats?.dex) || 8;
-		store.insertIntoInitiative(lobbyId, charName, dex);
+		// Rolls a fresh initiative and places them by it; DEX is read from the stored
+		// sheet, so no score needs passing in.
+		store.insertIntoInitiative(lobbyId, charName);
 		const { current, order } = resolveActiveTurn(lobbyId);
 		io.to(room(lobbyId)).emit("turn:update", { current, order });
 
@@ -482,8 +483,7 @@ io.on("connection", (socket) => {
 			store.upsertPlayer(lobbyId, socket.id, cleanName, sheet);
 			store.initializeAtLevel(lobbyId, cleanName, getAbilityForLevel);
 
-			const dexVal = Number(sheet?.stats?.dex) || 8;
-			store.insertIntoInitiative(lobbyId, cleanName, dexVal);
+			store.insertIntoInitiative(lobbyId, cleanName);
 
 			socket.emit("join:confirmed", { lobbyId, lobbyCode, state: store.publicState(lobbyId) });
 
@@ -656,10 +656,22 @@ io.on("connection", (socket) => {
 			log(`🚀 Game starting for lobby ${lobbyId}`);
 			console.log('Game starting event dispatched to lobby: ' + lobbyId);
 			io.to(room(lobbyId)).emit("game:starting", { message: "✨ The Dungeon Master is preparing your tale..." });
-			store.startGame(lobbyId);
+			const initiativeRolls = store.startGame(lobbyId);
 			sendState(lobbyId);
 			broadcastLobbies();
 			broadcastPartyState(io, store, lobbyId);
+
+			// Show the party how the order was decided. Turn order used to be socket
+			// registration order, which players had no way to understand or predict.
+			if (initiativeRolls.length) {
+				const summary = initiativeRolls
+					.map((r, i) => `${i + 1}. ${r.name} — ${r.roll}${r.dexMod >= 0 ? "+" : ""}${r.dexMod} = ${r.total}`)
+					.join("<br>");
+				io.to(room(lobbyId)).emit("narration", { content: `<p><strong>⚔️ Initiative</strong><br>${summary}</p>` });
+				const { current, order, round } = store.turnInfo(lobbyId);
+				io.to(room(lobbyId)).emit("turn:update", { current, order, round });
+				log(`🎲 Initiative for ${lobbyId}: ${initiativeRolls.map((r) => `${r.name}=${r.total}`).join(", ")}`);
+			}
 
 			await new Promise((r) => setTimeout(r, 200));
 

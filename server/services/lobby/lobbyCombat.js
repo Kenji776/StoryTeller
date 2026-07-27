@@ -5,6 +5,25 @@
 
 import { roll, d20, mod } from "../../helpers/dice.js";
 
+/**
+ * Orders two initiative entries, highest first.
+ *
+ * @description The single source of truth for turn order, shared by the opening roll
+ * and by mid-game insertion so the two can never disagree. Ties fall back to the
+ * dexterity modifier and then to the name: the name tiebreak is not flavour, it
+ * guarantees a total order, so the same rolls always produce the same seating and
+ * a rejoining player lands exactly where they were.
+ *
+ * @param {{name: string, dexMod: number, total: number}} a - First entry.
+ * @param {{name: string, dexMod: number, total: number}} b - Second entry.
+ * @returns {number} Negative if `a` acts first, positive if `b` does, 0 if identical.
+ */
+function compareInitiative(a, b) {
+	if (b.total !== a.total) return b.total - a.total;
+	if (b.dexMod !== a.dexMod) return b.dexMod - a.dexMod;
+	return a.name.localeCompare(b.name);
+}
+
 export const combatMethods = {
 	// ==== Phase / Turn ====
 	/**
@@ -20,51 +39,101 @@ export const combatMethods = {
 		this.persist(lobbyId);
 	},
 	/**
-	 * Transition a lobby into the "running" phase and build the initial turn order
-	 * from all connected sockets that have an assigned playerName.
+	 * Roll initiative for the whole party and build the turn order from the result.
+	 *
+	 * Order is `d20 + DEX modifier`, highest first — the standard 5e opening. The
+	 * total is stored on each player as `initiativeTotal`, which is what makes a
+	 * later arrival placeable: `insertIntoInitiative` compares against that same
+	 * number rather than inventing its own ordering key.
+	 *
 	 * @param {string} lobbyId - The lobby identifier.
-	 * @returns {void}
+	 * @param {function(): number} [rollFn=d20] - Die source; injected so tests are
+	 *   deterministic (`TDD-8`).
+	 * @returns {Array<{name: string, roll: number, dexMod: number, total: number}>}
+	 *   The rolls in final turn order, ready to announce to the table.
 	 */
-	startGame(lobbyId) {
+	rollInitiative(lobbyId, rollFn = d20) {
 		const s = this.index[lobbyId];
-		if (!s) return;
-		s.phase = "running";
-		const order = [];
-		for (const sid of Object.keys(s.sockets)) {
-			const pn = s.sockets[sid].playerName;
-			if (pn) order.push(pn);
-		}
-		s.initiative = [...new Set(order)];
+		if (!s) return [];
+
+		const rolls = Object.values(s.players)
+			.filter((p) => p && !p.dead)
+			.map((p) => {
+				const dexMod = mod(Number(p.stats?.dex) || 10);
+				const roll = rollFn();
+				p.initiativeTotal = roll + dexMod;
+				return { name: p.name, roll, dexMod, total: p.initiativeTotal };
+			});
+
+		rolls.sort(compareInitiative);
+
+		s.initiative = rolls.map((r) => r.name);
 		s.turnIndex = 0;
+		s.round = 1;
 		this.persist(lobbyId);
+		return rolls;
 	},
 	/**
-	 * Advance the turn index to the next living player in the initiative order,
-	 * skipping over any dead players. Guards against an all-dead infinite loop.
+	 * Transition a lobby into the "running" phase and roll the opening turn order.
+	 *
+	 * Previously the order was simply `Object.keys(s.sockets)` — whoever's socket
+	 * happened to be registered first. That made turn order an artifact of join
+	 * timing and disagreed with the rejoin path, which sorted by raw DEX.
+	 *
 	 * @param {string} lobbyId - The lobby identifier.
-	 * @returns {void}
+	 * @param {function(): number} [rollFn=d20] - Die source, forwarded to
+	 *   {@link rollInitiative}.
+	 * @returns {Array<{name: string, roll: number, dexMod: number, total: number}>}
+	 *   The initiative rolls, so the caller can announce them.
+	 */
+	startGame(lobbyId, rollFn = d20) {
+		const s = this.index[lobbyId];
+		if (!s) return [];
+		s.phase = "running";
+		const rolls = this.rollInitiative(lobbyId, rollFn);
+		this.persist(lobbyId);
+		return rolls;
+	},
+	/**
+	 * Advance to the next living player, tracking when the order wraps into a new round.
+	 *
+	 * @param {string} lobbyId - The lobby identifier.
+	 * @returns {{ current: string|null, order: string[], round: number, roundAdvanced: boolean }}
+	 *   The new turn state. `roundAdvanced` is true on the turn that begins a round,
+	 *   which is the signal for anything that should happen once per round.
 	 */
 	nextTurn(lobbyId) {
 		const s = this.index[lobbyId];
-		if (!s || !s.initiative.length) return;
+		if (!s || !s.initiative.length) {
+			return { current: null, order: s?.initiative ?? [], round: s?.round ?? 1, roundAdvanced: false };
+		}
+
 		let next = (s.turnIndex + 1) % s.initiative.length;
-		// Skip over dead players (guard against all-dead infinite loop)
+		// Skip over dead players (guard against an all-dead infinite loop)
 		for (let attempts = 0; attempts < s.initiative.length; attempts++) {
 			if (!s.players[s.initiative[next]]?.dead) break;
 			next = (next + 1) % s.initiative.length;
 		}
+
+		// Moving to an index at or before the current one means the order wrapped.
+		// A one-player table wraps on every turn, which is correct: each of their
+		// turns is a whole round.
+		const roundAdvanced = next <= s.turnIndex;
 		s.turnIndex = next;
+		s.round = (s.round || 1) + (roundAdvanced ? 1 : 0);
 		this.persist(lobbyId);
+
+		return { current: s.initiative[next] || null, order: s.initiative, round: s.round, roundAdvanced };
 	},
 	/**
-	 * Return the current active player name and the full initiative order.
+	 * Return the current active player, the full order, and the round number.
 	 * @param {string} lobbyId - The lobby identifier.
-	 * @returns {{ current: string|null, order: string[] }} Current turn name and ordered array of player names.
+	 * @returns {{ current: string|null, order: string[], round: number }} Turn state.
 	 */
 	turnInfo(lobbyId) {
 		const s = this.index[lobbyId];
-		if (!s) return { current: null, order: [] };
-		return { current: s.initiative[s.turnIndex] || null, order: s.initiative };
+		if (!s) return { current: null, order: [], round: 1 };
+		return { current: s.initiative[s.turnIndex] || null, order: s.initiative, round: s.round || 1 };
 	},
 
 	// ==== Actions / Dice ====
@@ -187,25 +256,50 @@ export const combatMethods = {
 		this.persist(lobbyId);
 	},
 	/**
-	 * Insert a new player into the initiative order based on their DEX score.
-	 * Higher DEX = earlier position. Adjusts turnIndex so the current turn is unaffected.
+	 * Roll a player into the initiative order — used for mid-game joins and rejoins.
+	 *
+	 * Compares against `initiativeTotal`, the same key {@link rollInitiative} sorts by.
+	 * The previous implementation compared the arriving player's raw DEX *score*
+	 * against other players' raw DEX scores, in a list that had never been DEX-ordered
+	 * in the first place, so an ordinary-DEX player reliably landed at index 0 and
+	 * jumped the whole party. Rejoining a game visibly reshuffled the table.
+	 *
 	 * @param {string} lobbyId - The lobby identifier.
-	 * @param {string} playerName - The display name of the player to insert.
-	 * @param {number} [dex=8] - The player's DEX score used to determine insertion position.
-	 * @returns {number} The index at which the player was inserted.
+	 * @param {string} playerName - The player to place.
+	 * @param {function(): number} [rollFn=d20] - Die source, injected for tests.
+	 * @returns {number|null} The player's rolled initiative total, or `null` if the
+	 *   lobby or player is unknown.
 	 */
-	insertIntoInitiative(lobbyId, playerName, dex = 8) {
+	insertIntoInitiative(lobbyId, playerName, rollFn = d20) {
 		const s = this.index[lobbyId];
-		if (!s) return;
+		if (!s) return null;
 
-		// Remove if somehow already present
+		const player = s.players?.[playerName];
+		if (!player) return null;
+
+		// Remove if somehow already present, so a rejoin never duplicates a seat.
 		s.initiative = s.initiative.filter((p) => p !== playerName);
 
-		// Find the first existing player whose DEX is <= the new player's DEX
+		const dexMod = mod(Number(player.stats?.dex) || 10);
+		// A player who already rolled this game keeps that seat. Re-rolling on every
+		// rejoin would both reshuffle the table under everyone and hand players a way
+		// to re-roll a bad initiative by dropping their connection. Only someone with
+		// no roll on record — a genuinely new arrival — rolls now.
+		const total = Number.isFinite(player.initiativeTotal)
+			? player.initiativeTotal
+			: rollFn() + dexMod;
+		player.initiativeTotal = total;
+
+		const entry = { name: playerName, dexMod, total };
 		let insertIdx = s.initiative.length;
 		for (let i = 0; i < s.initiative.length; i++) {
-			const pDex = s.players[s.initiative[i]]?.stats?.dex ?? 8;
-			if (dex >= pDex) {
+			const other = s.players[s.initiative[i]];
+			const otherEntry = {
+				name: s.initiative[i],
+				dexMod: mod(Number(other?.stats?.dex) || 10),
+				total: Number(other?.initiativeTotal ?? 0),
+			};
+			if (compareInitiative(entry, otherEntry) < 0) {
 				insertIdx = i;
 				break;
 			}
@@ -213,14 +307,12 @@ export const combatMethods = {
 
 		s.initiative.splice(insertIdx, 0, playerName);
 
-		// If inserted at or before current position, shift turnIndex forward
-		// so the same player retains their turn
-		if (insertIdx <= s.turnIndex && s.initiative.length > 1) {
-			s.turnIndex++;
-		}
+		// Keep whoever is mid-turn on their turn: inserting ahead of them shifts
+		// their index, so compensate.
+		if (insertIdx <= s.turnIndex && s.initiative.length > 1) s.turnIndex++;
 
 		this.persist(lobbyId);
-		return insertIdx;
+		return total;
 	},
 
 	// ==== Death / TPK ====

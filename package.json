@@ -19,5 +19,8 @@
     "openai": "^4.58.1",
     "pino-pretty": "^13.1.2",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.5"
   }
 }

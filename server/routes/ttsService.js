@@ -143,8 +143,12 @@ export async function streamNarrationToClients(io, lobbyId, text, voiceId, playe
 	const streamId = randomUUID();
 	try {
 		if (devMode) {
-			io.to(room(lobbyId)).emit("narration", { content: null, status: REJECTED_REQUEST_STATUS });
-
+			// No contentless `narration` frame here. Every caller has already emitted the
+			// real narration before invoking this, so a second frame with `content: null`
+			// only causes harm: the game client runs `appendLog("DM: " + (content||""))`
+			// and prints an empty DM line, and the admin feed stringifies it to "null".
+			// The `status: 204` on narration:start below is what actually tells the client
+			// there is no audio coming.
 			io.to(room(lobbyId)).emit("narration:start", {
 				speaker: playerName || "DM",
 				streamId,

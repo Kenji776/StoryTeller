@@ -288,8 +288,11 @@ socket.on("turn:update", ({ current, order }) => {
 	feedEvent("turn", `Turn: ${current} | Order: ${(order || []).join(", ")}`);
 });
 socket.on("narration", ({ content }) => {
-	const text = typeof content === "string" ? content : JSON.stringify(content);
-	feedEvent("dm", text.substring(0, 300) + (text.length > 300 ? "..." : ""));
+	// The TTS path used to emit a contentless twin of every narration; guard anyway,
+	// because rendering it printed a bare "null" line in the feed for every DM beat.
+	if (typeof content !== "string" || !content.trim()) return;
+	const text = plainText(content);
+	feedEvent("dm", text.length > 300 ? text.slice(0, 300) + "…" : text);
 });
 socket.on("player:death", ({ player, message }) => {
 	feedEvent("death", message || `${player} has died!`);
@@ -770,4 +773,24 @@ function esc(str) {
 	const d = document.createElement("div");
 	d.textContent = str;
 	return d.innerHTML;
+}
+
+/**
+ * Renders DM narration as readable plain text for the event feed.
+ *
+ * @description The DM returns markup — `<p>` paragraphs, `<em>` for speech — which
+ *   the game client renders with innerHTML. The admin feed escapes everything it
+ *   prints (see `feedEvent`), so the tags would otherwise appear literally in the
+ *   transcript. Parsed rather than regex-stripped so entities like `&amp;` decode
+ *   correctly, and read back via textContent so nothing from the model is ever
+ *   interpreted as markup here.
+ * @param {string} html - Narration markup from the DM.
+ * @returns {string} Whitespace-collapsed plain text.
+ */
+function plainText(html) {
+	const d = document.createElement("div");
+	d.innerHTML = String(html);
+	// Keep paragraph boundaries legible once the tags are gone.
+	d.querySelectorAll("p, br, div").forEach((el) => el.append(" "));
+	return (d.textContent || "").replace(/\s+/g, " ").trim();
 }
