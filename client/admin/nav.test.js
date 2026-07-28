@@ -70,12 +70,20 @@ test("groupSections handles an empty or absent list", () => {
 
 test("an admin sees every group", () => {
 	const groups = groupSections(filterSections(ROLES.ADMIN, SECTIONS));
-	assert.deepEqual(groups.map((g) => g.group), ["All lobbies", "Play", "Operate", "Inspect", "Tools"]);
+	assert.deepEqual(groups.map((g) => g.group), ["All lobbies", "Play", "Operate", "Inspect", "Server", "Tools"]);
 });
 
 test("a host sees the game groups but not the ones that reach past their lobby", () => {
 	const groups = groupSections(filterSections(ROLES.HOST, SECTIONS));
 	assert.deepEqual(groups.map((g) => g.group), ["Play", "Operate", "Inspect"]);
+});
+
+test("a host is never offered the provider configuration", () => {
+	// The API keys under Server pay for every game on the instance, not just this
+	// host's. `routes/providerAdmin.js` refuses a host token independently, so this
+	// is the second of two locks rather than the only one.
+	const sections = filterSections(ROLES.HOST, SECTIONS);
+	assert.equal(sections.some((s) => s.id === "providers"), false);
 });
 
 test("resolveView honours a route that is allowed and has what it needs", () => {

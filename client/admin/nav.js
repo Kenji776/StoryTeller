@@ -35,6 +35,8 @@ export const SECTIONS = Object.freeze([
 	{ id: "model", label: "AI Model", group: "Inspect", scope: "lobby", requires: CAP.INSPECT },
 	{ id: "raw", label: "Raw State", group: "Inspect", scope: "lobby", requires: CAP.INSPECT },
 
+	{ id: "providers", label: "Providers", group: "Server", scope: "global", requires: CAP.SERVER_CONFIG },
+
 	{ id: "toolbox", label: "Character Files", group: "Tools", scope: "global", requires: CAP.CHAR_FILES },
 ]);
 

@@ -22,6 +22,7 @@ import { model } from "./model.js";
 import { campaign } from "./campaign.js";
 import { raw } from "./raw.js";
 import { toolbox } from "./toolbox.js";
+import { providers } from "./providers.js";
 
 /**
  * Renderers by section id. Every id in `nav.js` must appear here, which
@@ -41,6 +42,7 @@ const RENDERERS = {
 	model,
 	raw,
 	toolbox,
+	providers,
 };
 
 /**

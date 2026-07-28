@@ -71,10 +71,42 @@ or another section.**
 by any of this. A host holding a lobby-scoped token who hand-crafts a socket frame
 is stopped by the server, not by the absence of a button.
 
+`CAP.SERVER_CONFIG` is where that distinction matters most. It gates the Providers
+section, which holds the API keys that pay for **every** game on the instance —
+not something a host of one game may touch. Removing it from `capabilities.js`
+would hide the section, not open it: `server/routes/providerAdmin.js` never reads
+a host token at all. Two locks, and the one in this file is the cosmetic one.
+
 The host view (`?host=1&lobby=…&charId=…`, opened from
 `client/eventHandlers.js`) is this same shell with the host capability set: no
 lobby browser, no character-file tool, no logout. The old panel achieved that by
 deleting DOM nodes after render.
+
+## Providers
+
+`sections/providers.js` — the operator's credential surface: who pays for chat,
+narration and images, per provider. Its logic is in `core/providers.js` and is
+unit tested; the renderer only arranges elements.
+
+It is **the one section that talks to REST rather than the socket bridge**.
+`/api/admin/providers` is gated on a password admin session, which the socket is
+not, and a credential has no business travelling over a channel every lobby
+shares. `core/socket.js` remains the only module that knows socket.io exists, and
+this section does not use it.
+
+Three behaviours worth knowing:
+
+- **Only the policies a provider can actually take are offered.** Ollama gets
+  "local" and "off"; OpenAI gets "shared", "byok" and "off". Offering all four
+  everywhere would let an operator pick "shared" for a self-hosted model and then
+  hunt for a key field that never appears.
+- **The controls follow the policy.** The allowlist and call cap appear only for
+  `shared`, the address only for `local` — mirroring the server, which discards
+  fields that do not apply.
+- **A key goes in and never comes back.** The field is a password input; the line
+  beside it shows only `····a1B2 · working`. No response from the API carries key
+  material, including failure responses, where a provider may have echoed the
+  submitted key back inside its own error text.
 
 ## Testing
 
@@ -125,4 +157,4 @@ distributed across `sections/`, and the decision record is
 
 Rendering remains unverified by automated tests — see `docs/testing.md`.
 
-_Last verified: 2026-07-27 against branch `Refactor` (239340d)._
+_Last verified: 2026-07-27 against branch `Refactor` (aa42c8c)._

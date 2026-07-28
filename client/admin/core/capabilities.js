@@ -23,6 +23,7 @@ export const CAP = Object.freeze({
 	PLAY: "play",
 	OPERATE: "operate",
 	INSPECT: "inspect",
+	SERVER_CONFIG: "server:config",
 });
 
 /**
@@ -32,6 +33,11 @@ export const CAP = Object.freeze({
  * they get the tools for running that game and none of the tools for reaching past
  * it. They have no password session to end, either — logging out would clear a
  * cookie they did not obtain here.
+ *
+ * `SERVER_CONFIG` is the sharpest line: it covers the API keys that pay for every
+ * game on the instance, which is emphatically not something a host of one game may
+ * touch. The server agrees independently — `routes/providerAdmin.js` never reads a
+ * host token — so removing it here would hide the section, not open it.
  */
 const BY_ROLE = Object.freeze({
 	[ROLES.ADMIN]: Object.freeze([
@@ -42,6 +48,7 @@ const BY_ROLE = Object.freeze({
 		CAP.PLAY,
 		CAP.OPERATE,
 		CAP.INSPECT,
+		CAP.SERVER_CONFIG,
 	]),
 	[ROLES.HOST]: Object.freeze([CAP.PLAY, CAP.OPERATE, CAP.INSPECT]),
 });
