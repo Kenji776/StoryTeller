@@ -15,12 +15,24 @@
 		.then(d => { if (d.authenticated) window.location.href = "/admin/admin.html"; })
 		.catch(() => {});
 
+	// `crypto.subtle` exists only in a secure context — HTTPS or localhost. Served
+	// over plain HTTP on a LAN address it is undefined, and this failed with
+	// "cannot read properties of undefined (reading 'digest')", locking an
+	// operator out of the console entirely. The fallback is a real SHA-256 checked
+	// against Node's in core/sha256.test.js.
+	//
+	// Not a downgrade: the challenge-response crosses the same plain HTTP either
+	// way. The answer to that is TLS, which ADR 0001 records as a deployment
+	// requirement — not a browser API deciding whether login works at all.
 	async function sha256(message) {
-		const msgBuffer = new TextEncoder().encode(message);
-		const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-		return Array.from(new Uint8Array(hashBuffer))
-			.map(b => b.toString(16).padStart(2, "0"))
-			.join("");
+		if (globalThis.crypto?.subtle?.digest) {
+			const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(message));
+			return Array.from(new Uint8Array(hashBuffer))
+				.map(b => b.toString(16).padStart(2, "0"))
+				.join("");
+		}
+		const { sha256Hex } = await import("./core/sha256.js");
+		return sha256Hex(message);
 	}
 
 	async function doLogin() {

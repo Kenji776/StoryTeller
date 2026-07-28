@@ -282,13 +282,25 @@ reaching a milestone. Leave it empty when nothing like that happened.
 		// Only mentioned when the lobby has switched illustrations on. A model told
 		// about a field it must never populate will populate it anyway, eventually,
 		// and every one of those costs seconds and possibly money.
+		// The wording scales with the setting. A host who chose "whenever it wants"
+		// being told in the same breath that "most turns are not one of these" is
+		// why a six-turn live run produced no illustrations at all: the mode said
+		// yes and the prompt said no.
+		const ILLUSTRATION_GUIDANCE = {
+			"key-moments": `Use it ONLY at a genuinely memorable beat — a hard-won victory, a first sight of somewhere `
+				+ `extraordinary, a character's defining moment, a devastating loss. Most turns are not one of these; set it to null.`,
+			generous: `Use it at any notable beat — a fight turning, an arrival somewhere striking, a character doing `
+				+ `something worth remembering. Set it to null for quiet turns like conversation or searching a room.`,
+			"every-scene": `Use it freely, whenever the scene has something worth seeing — a fight, an arrival, a discovery, `
+				+ `a character acting decisively. Set it to null only when nothing visual is happening at all.`,
+		};
+
 		const illustrationInstruction = (s?.illustrationMode && s.illustrationMode !== "off")
-			? `\nUse the "illustrate" field ONLY at a genuinely memorable beat — a hard-won victory, a `
-				+ `first sight of somewhere extraordinary, a character's defining moment, a devastating loss. `
-				+ `Most turns are not one of these; set it to null. When you do use it: put what is HAPPENING `
-				+ `in "moment" (never what anyone looks like — their appearance is already known), list the `
-				+ `exact party member names in frame in "characters", and give a one-word "mood". For a place, `
-				+ `creature or object with no party member in it, use "subject" instead and leave "characters" empty.`
+			? `\nThe "illustrate" field asks for a picture of this moment. `
+				+ `${ILLUSTRATION_GUIDANCE[s.illustrationMode] ?? ILLUSTRATION_GUIDANCE["key-moments"]} `
+				+ `When you use it: put what is HAPPENING in "moment" (never what anyone looks like — their appearance is `
+				+ `already known), list the exact party member names in frame in "characters", and give a one-word "mood". `
+				+ `For a place, creature or object with no party member in it, use "subject" instead and leave "characters" empty.`
 			: `\nDo not use the "illustrate" field. Always set it to null.`;
 
 		const settingInstruction = `\nWorld setting: ${this._settingInstruction(s?.campaignSetting ?? "standard")}`;

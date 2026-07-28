@@ -151,3 +151,4 @@ test("setNarratorVoice is a no-op for a lobby that does not exist", () => {
 	assert.doesNotThrow(() => store.setNarratorVoice("nope", "House", "House"));
 	assert.deepEqual(store.persisted, []);
 });
+

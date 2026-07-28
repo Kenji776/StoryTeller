@@ -152,3 +152,52 @@ test("no line ever contains undefined or NaN", () => {
 	const line = describePartyForDM(lobbyWith({ stats: undefined, level: undefined, abilities: undefined }));
 	assert.ok(!/undefined|NaN/.test(line), line);
 });
+
+// ── The illustration instruction scales with the mode ────────────────────────
+
+import { promptMethods } from "./lobbyPrompts.js";
+
+/**
+ * @description Builds the DM system message for a lobby in one illustration mode.
+ * @param {string} illustrationMode - The lobby's setting.
+ * @returns {string} The system prompt text.
+ */
+function systemPromptFor(illustrationMode) {
+	const store = Object.create(promptMethods);
+	store.index = {
+		L1: {
+			lobbyId: "L1", illustrationMode, abilitySlotsBase: 3,
+			players: { Brannor: { name: "Brannor", class: "Fighter", level: 1, stats: { hp: 12, max_hp: 12 } } },
+			history: [], enemies: {},
+		},
+	};
+	// composeMessages leans on several sibling mixins. Stubbed to the minimum that
+	// lets the system prompt be built, since the prompt text is what is under test.
+	store.tail = () => [];
+	store.describeParty = () => "";
+	store.enemyRoster = () => "";
+	store.describeEnemies = () => "";
+	store.storyContext = () => "";
+	store.recentHistory = () => [];
+	const messages = store.composeMessages("L1", "Brannor", "I swing", null);
+	return messages.map((m) => m.content).join("\n");
+}
+
+test("a sparing mode tells the DM that most turns do not warrant a picture", () => {
+	const text = systemPromptFor("key-moments");
+	assert.match(text, /illustrate/);
+	assert.match(text, /most turns are not one of these/i);
+});
+
+test("the freest mode does not simultaneously tell the DM to hold back", () => {
+	// The host has asked for pictures whenever the DM likes. Telling it "most turns
+	// are not one of these" in the same breath is why the first live run produced
+	// no illustrations at all across six turns.
+	const text = systemPromptFor("every-scene");
+	assert.match(text, /illustrate/);
+	assert.doesNotMatch(text, /most turns are not one of these/i);
+});
+
+test("illustrations off tell the DM never to populate the field", () => {
+	assert.match(systemPromptFor("off"), /Do not use the "illustrate" field/);
+});

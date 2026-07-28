@@ -220,8 +220,11 @@ export function registerAdminAuth(app, { store, charPublicKey, log }) {
 	app.use("/admin", (req, res, next) => {
 		// Root → login page
 		if (req.path === "/") return res.redirect("/admin/login.html");
-		// Allow the login page and its JS without auth
-		const allowed = ["/login.html", "/login.js"];
+		// Allow the login page and what it needs to run, without auth. sha256.js is
+		// on this list because the login page imports it when `crypto.subtle` is
+		// unavailable — over plain HTTP it always is — and gating it would 401 the
+		// one file needed to authenticate at all.
+		const allowed = ["/login.html", "/login.js", "/core/sha256.js"];
 		if (allowed.includes(req.path)) return next();
 		// Everything else requires admin password auth OR a valid host token
 		if (!isAdminAuthenticated(req) && !isHostToken(req)) {

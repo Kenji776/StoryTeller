@@ -41,6 +41,11 @@ const NO_ACT = argv.includes("--noact");
 const PERSONAS_ON = argv.includes("--personas");
 const BRUTALITY = Number(arg("brutality", 5));
 const DIFFICULTY = arg("difficulty", "standard");
+// How freely the DM may illustrate, and whether to draw portraits first.
+// Portraits matter: without a stored likeness a character cannot be posed, so
+// an illustration of them degrades to a scene with somebody else's face.
+const ILLUSTRATE = arg("illustrate", "off");
+const PORTRAITS = argv.includes("--portraits");
 const PROVIDER = arg("provider", "openai");
 const MODEL = arg("model", "gpt-4o");   // observe only: nobody acts, so the turn timer must do the work      // pause after lobby creation so a spectator can attach
 const LOG_DIR = path.join(process.cwd(), "server", "logs");
@@ -402,6 +407,25 @@ async function run() {
 	}
 	log("RUN", "sheets submitted");
 
+	// Portraits register each character's likeness on the image server, which is
+	// what later scene art poses from. Done here rather than mid-game so the first
+	// illustration already has faces to work with.
+	if (PORTRAITS) {
+		for (const p of players) {
+			try {
+				const res = await fetch(`${URL}/api/character-image`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ lobbyId: p.lobbyId, playerName: p.name, sheet: makeSheet(p.spec) }),
+				});
+				const body = await res.json().catch(() => ({}));
+				log("RUN", res.ok ? `portrait drawn for ${p.short} -> ${body.url ?? "(no url)"}` : `portrait FAILED for ${p.short}: ${body.error ?? res.status}`);
+			} catch (err) {
+				log("RUN", `portrait FAILED for ${p.short}: ${err.message}`);
+			}
+		}
+	}
+
 	for (const p of players) {
 		p.socket.emit("player:ready", { lobbyId: p.lobbyId, ready: true });
 		await sleep(80);
@@ -422,7 +446,7 @@ async function run() {
 	// ── Start ──
 	// A short timer so an expiry is observable; the store clamps below one minute.
 	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3, abilitySlotsBase: Number(arg("slots", 3)),
-		brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, lootGenerosity: "fair",
+		brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, lootGenerosity: "fair", illustrationMode: ILLUSTRATE,
 		// Named explicitly rather than inherited from the server's DEFAULT_LLM_PROVIDER.
 		// A run once opened against whichever provider the deployment happened to
 		// default to, found an invalid key, and played on for turns with
