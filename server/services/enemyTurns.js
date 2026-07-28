@@ -18,6 +18,10 @@
  */
 
 import { d20, roll, mod } from "../helpers/dice.js";
+// One armour class, computed in one place. Held separately here and in
+// `characterCapability.js`, the two disagreed, so the number a player was quoted was
+// not the number the enemies rolled against.
+import { armourClass } from "./armourClass.js";
 
 /**
  * Damage dice by challenge rating, as `[count, sides]`.
@@ -42,8 +46,6 @@ const PROFICIENCY_BY_CR = [
 	{ upTo: Infinity, bonus: 5 },
 ];
 
-/** Armour class assumed for a character wearing nothing and dodging on instinct. */
-const UNARMOURED_BASE = 10;
 
 /**
  * @description Reads a challenge rating, which arrives as "1/4", "1", or a number.
@@ -67,18 +69,6 @@ function crValue(cr) {
  */
 function byCR(table, cr) {
 	return table.find((row) => cr <= row.upTo) ?? table[table.length - 1];
-}
-
-/**
- * @description A character's armour class: what they are wearing, else their
- *   reflexes.
- * @param {object} player - The character sheet.
- * @returns {number} The armour class.
- */
-function armourClass(player) {
-	const worn = Number(player?.armor?.ac);
-	if (Number.isFinite(worn) && worn > 0) return worn;
-	return UNARMOURED_BASE + mod(Number(player?.stats?.dex) || 10);
 }
 
 /**

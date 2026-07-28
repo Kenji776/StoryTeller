@@ -19,6 +19,7 @@
  */
 
 import classProgression from "../../client/config/classProgression.json" with { type: "json" };
+import { armourClass } from "./armourClass.js";
 
 /** Display sentinels that appear in condition strings but are not conditions. */
 const CONDITION_SENTINELS = new Set(["none", "dead", "healthy", "alive", ""]);
@@ -253,7 +254,11 @@ export function buildCapability(lobby, playerName) {
 			weapon: player.weapon?.name ? safeCopy(player.weapon) : null,
 			armor: player.armor?.name ? safeCopy(player.armor) : null,
 			trinket: player.trinket?.name ? safeCopy(player.trinket) : null,
-			armorClass: numberOrNull(player.armor?.ac),
+			// The same function the enemies roll against. This used to report the bare
+			// number printed on the armour, so a player was told AC 11 while combat used
+			// 14 — or, before the dexterity rules landed, told 11 while being hit as 11
+			// when going unarmoured would have made them 13.
+			armorClass: armourClass(player),
 		},
 
 		conditions,

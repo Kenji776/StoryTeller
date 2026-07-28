@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { buildCapability, remainingSlots, slotCapacity } from "./characterCapability.js";
+import { armourClass } from "./armourClass.js";
 
 /**
  * Builds a lobby containing one player, merged over a realistic baseline.
@@ -168,8 +169,23 @@ test("maximum hit points are reported as null rather than picking one of the exi
 	assert.equal(buildCapability(makeLobby({ stats: { hp: 5 } }), "Ayla").health.maxHp, null);
 });
 
-test("armour class is reported as null when nothing is equipped", () => {
-	assert.equal(buildCapability(makeLobby({ armor: null }), "Ayla").equipped.armorClass, null);
+test("an unarmoured character still has an armour class", () => {
+	// This used to assert null, from when the field meant "the number printed on your
+	// armour". It now means what the enemies roll against, and an unarmoured character
+	// has one — Ayla's DEX 12 gives +1 over the base 10. Reporting null told a player
+	// they had no armour class while combat was hitting them at 11.
+	assert.equal(buildCapability(makeLobby({ armor: null }), "Ayla").equipped.armorClass, 11);
+});
+
+test("the armour class reported to a player is the one combat rolls against", () => {
+	// Held in two places these drifted, which is why `armourClass.js` exists. Leather
+	// is 11 in the catalogue and Ayla's DEX 12 adds 1, so the answer is 12 — not the
+	// bare 11 this used to report.
+	const armor = { name: "Leather Armor", ac: 11, type: "light" };
+	const cap = buildCapability(makeLobby({ armor }), "Ayla");
+
+	assert.equal(cap.equipped.armorClass, 12);
+	assert.equal(cap.equipped.armorClass, armourClass({ stats: { dex: 12 }, armor }));
 });
 
 test("an unequipped weapon is null rather than undefined", () => {
