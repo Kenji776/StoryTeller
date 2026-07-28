@@ -248,7 +248,7 @@ Schema: {
   "updates": {
     "xp": [{ "player": string, "amount": number, "reason": string }],
     "hp": [{ "player": string, "delta": number, "reason": string, "new_total": number }],
-    "inventory": [{ "player": string, "item": string, "change": number, "description": string, "change_type": "add" | "remove", "attributes": { "item_type"?: "weapon" | "armor" | "trinket" | "consumable", "damage"?: string, "damage_type"?: string, "range"?: string, "ac"?: number, "armor_type"?: string, ...any } }],
+    "inventory": [{ "player": string, "item": string, "change": number, "description": string, "change_type": "add" | "remove", "attributes": { "item_type"?: "weapon" | "armor" | "trinket" | "consumable" | "quest", "damage"?: string, "damage_type"?: string, "range"?: string, "ac"?: number, "armor_type"?: string, ...any } }],
     "gold": [{ "player": string, "delta": number }],
     "conditions": [{ "player": string, "add": string[], "remove": string[] }],
     "abilities": [{ "player": string, "change_type": "add" | "remove", "name": string, "description": string, "attributes": object }],
@@ -401,7 +401,10 @@ EQUIPPABLE ITEMS: When you give a player a weapon, armor, or trinket (ring, amul
 - Armor: { "item_type": "armor", "ac": 15, "armor_type": "medium" }
 - Trinkets: { "item_type": "trinket", ...any special properties }
 - Consumables: { "item_type": "consumable", ...any properties }
-The player can then choose to equip weapons, armor, and trinkets from their inventory. Always include realistic D&D stats when giving equipment.`,
+- Quest items: { "item_type": "quest" } — letters, keys, maps, documents, tokens, anything carried for the story rather than worn or wielded. Use this type for them. There is ONE trinket slot, so a sealed letter typed as a trinket competes with the amulet the player actually wants to wear.
+The player can then choose to equip weapons, armor, and trinkets from their inventory. Always include realistic D&D stats when giving equipment.
+
+COINS GO IN THE "gold" UPDATE, NEVER IN "inventory". A purse, pouch, coffer or sack of coins is a "gold" update for its value and nothing else. Do not also add it as an item — the player banks the coins and is then left carrying the empty bag forever. Name a gem, jewel or art object as an item only when it is meant to be kept or sold as an object rather than spent as money.`,
 			},
 			{
 				role: "system",

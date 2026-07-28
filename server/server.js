@@ -58,6 +58,7 @@ import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
 import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./services/enemyTurns.js";
+import { reconcileCurrency } from "./services/lootNormalize.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -1341,8 +1342,12 @@ io.on("connection", (socket) => {
 					return;
 				}
 
-				broadcastInventoryUpdates(busIo, store, lobbyId, u.inventory);
-				broadcastGoldUpdates(busIo, store, lobbyId, u.gold);
+				// Coins the model paid through both channels are banked once. Left alone, a
+				// pouch arrives as `+6 gold` *and* as a permanent inventory entry named
+				// after the bag it came in.
+				const treasure = reconcileCurrency(u.inventory, u.gold);
+				broadcastInventoryUpdates(busIo, store, lobbyId, treasure.inventory);
+				broadcastGoldUpdates(busIo, store, lobbyId, treasure.gold);
 				broadcastConditionUpdates(busIo, store, lobbyId, u.conditions);
 				broadcastAbilityUpdates(busIo, store, lobbyId, u.abilities);
 				if (Array.isArray(u.enemies)) {

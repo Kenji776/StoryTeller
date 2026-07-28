@@ -78,33 +78,19 @@ async function getTemplate(path) {
  * @param {string} containerId - ID of the target <div>
  * @param {Array} items - Array of { name, count, description }
  */
-/** Detect whether an inventory item is equippable, and which slot it fits. */
+/**
+ * Detect whether an inventory item is equippable, and which slot it fits.
+ *
+ * The decision lives in `/itemSlots.js`, a pure module the unit tier covers;
+ * `index.html` attaches it to `window`. Kept as a wrapper so a render pass during
+ * the brief window before the module script runs degrades to "not equippable"
+ * rather than throwing.
+ *
+ * @param {object} item - An inventory item.
+ * @returns {"weapon"|"armor"|"trinket"|null} The slot, or null.
+ */
 function _detectEquipSlot(item) {
-	const a = item.attributes || {};
-	const type = (a.item_type || "").toLowerCase();
-
-	// 1. Explicit item_type from LLM or admin tool (authoritative)
-	if (type === "weapon")  return "weapon";
-	if (type === "armor")   return "armor";
-	if (type === "trinket" || type === "ring" || type === "amulet" || type === "necklace" || type === "bracelet" || type === "cloak") return "trinket";
-
-	// 2. Mechanical attributes imply slot
-	if (a.damage || a.damage_type) return "weapon";
-	if (a.ac || a.armor_type)      return "armor";
-
-	// 3. Name keyword heuristics
-	const n = (item.name || "").toLowerCase();
-	const weaponWords = ["sword", "axe", "bow", "dagger", "mace", "staff", "spear", "hammer", "blade", "crossbow", "halberd", "flail", "rapier", "scimitar", "warhammer", "greataxe", "greatsword", "glaive", "trident", "whip", "javelin", "sling", "wand", "club", "morningstar", "pike", "lance", "scythe"];
-	const armorWords  = ["armor", "shield", "mail", "plate", "leather armor", "chainmail", "breastplate", "splint", "studded", "half plate", "scale mail", "padded armor", "hide armor", "buckler"];
-	const trinketWords = ["ring", "amulet", "necklace", "bracelet", "cloak", "pendant", "brooch", "circlet", "charm", "talisman", "torc", "cape", "mantle", "crown", "tiara", "belt", "sash", "orb", "gem", "jewel"];
-	if (weaponWords.some(w => n.includes(w))) return "weapon";
-	if (armorWords.some(w => n.includes(w)))  return "armor";
-	if (trinketWords.some(w => n.includes(w))) return "trinket";
-
-	// 4. If the item has a consumable type, it's not equippable
-	if (type === "consumable") return null;
-
-	return null;
+	return window.equipSlotFor ? window.equipSlotFor(item) : null;
 }
 
 async function drawInventoryComponent(containerId, items = [], canAdd = false, equipped = {}) {

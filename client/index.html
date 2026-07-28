@@ -769,6 +769,12 @@
 		import { startGate, panelRows } from "/aiPanel.js";
 		window.__aiPanel = { startGate, panelRows };
 	</script>
+	<!-- Equipment slot detection is a pure module so it can be unit tested; the
+	     inventory renderer below is a classic script. Same bridge as above. -->
+	<script type="module">
+		import { equipSlotFor } from "/itemSlots.js";
+		window.equipSlotFor = equipSlotFor;
+	</script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>
 	<script src="/charBuilder.js" defer></script>
