@@ -179,3 +179,32 @@ export function describeAttacks(attacks) {
 
 	return `ENEMY ACTIONS THIS ROUND (already resolved — narrate exactly these outcomes, do not change them and do not add "hp" updates for them):\n${lines.join("\n")}`;
 }
+
+/**
+ * Removes damage the DM issued for a round the server had already resolved.
+ *
+ * @description The prompt tells the model plainly not to add `hp` updates for
+ *   attacks it has been handed. It does anyway. In a live game Sylvie went 12 to 7
+ *   ("Struck in combat", the rolled damage) and then to 2 ("Goblin attack", the DM's
+ *   own entry for the same blow): five points applied twice, and a character two hit
+ *   points from a death that had not really happened.
+ *
+ *   An instruction is not a mechanism. On a round the server resolved, damage is the
+ *   server's; healing is still the DM's, so a potion drunk in the same turn survives.
+ *   Traps and falls keep working on every turn without an enemy round, which is when
+ *   the model is the only thing that knows about them.
+ * @param {*} updates - The DM's `updates.hp` array.
+ * @param {boolean} resolved - Whether an enemy round was resolved this turn.
+ * @returns {Array<object>} The updates that should still be applied.
+ */
+export function stripResolvedDamage(updates, resolved) {
+	if (!Array.isArray(updates)) return [];
+	if (!resolved) return updates;
+
+	return updates.filter((u) => {
+		const delta = Number(u?.delta);
+		// Only unambiguous damage is dropped. A zero or unreadable delta is left for
+		// the normal path to reject, rather than guessed at here.
+		return !(Number.isFinite(delta) && delta < 0);
+	});
+}

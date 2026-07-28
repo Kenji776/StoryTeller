@@ -52,7 +52,7 @@ import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
-import { resolveEnemyAttacks, describeAttacks } from "./services/enemyTurns.js";
+import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./services/enemyTurns.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -1175,7 +1175,10 @@ io.on("connection", (socket) => {
 			if (dmObj && typeof dmObj === "object") {
 				const u = dmObj.updates || {};
 				broadcastXPUpdates(busIo, store, lobbyId, u.xp);
-				broadcastHPUpdates(busIo, store, lobbyId, u.hp);
+				// Damage for a round the server already resolved is dropped: told not to
+				// add its own hp updates for those attacks, the model does it anyway, and
+				// the character was being wounded twice for one blow.
+				broadcastHPUpdates(busIo, store, lobbyId, stripResolvedDamage(u.hp, enemyTurn.attacks.length > 0));
 				await checkAndEndIfAllDead(lobbyId);
 
 				if (store.index[lobbyId]?.phase === "wiped") {

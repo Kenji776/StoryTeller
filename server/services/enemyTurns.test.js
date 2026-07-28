@@ -16,7 +16,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveEnemyAttacks, describeAttacks } from "./enemyTurns.js";
+import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./enemyTurns.js";
 
 /** A die that returns a scripted sequence, so every test is exact (`TDD-8`). */
 const scripted = (...values) => { let i = 0; return () => values[i++ % values.length]; };
@@ -192,4 +192,49 @@ test("nothing to describe yields an empty string, not a heading with no content"
 test("the description states the damage so the DM cannot invent a different number", () => {
 	const result = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, str: 12, cr: "1/4", status: "active" } }, players: party(), rollD20: scripted(20), rollDamage: () => 5 });
 	assert.match(describeAttacks(result.attacks), new RegExp(String(result.attacks[0].damage)));
+});
+
+// ── The DM double-wounding people ────────────────────────────────────────────
+//
+// Told plainly not to add hp updates for attacks the server had already resolved,
+// the model did it anyway. In a live game Sylvie went 12 -> 7 ("Struck in combat",
+// the rolled damage) -> 2 ("Goblin attack", the DM's own entry for the same blow):
+// five points of damage applied twice. A prompt instruction is not a mechanism.
+
+test("the DM's own damage is discarded on a round the server already resolved", () => {
+	const kept = stripResolvedDamage([{ player: "Sylvie", delta: -5, reason: "Goblin attack" }], true);
+	assert.deepEqual(kept, []);
+});
+
+test("healing survives a resolved round", () => {
+	// Only damage is the server's during combat. A potion drunk on the same turn is
+	// still the DM's to narrate and must not be swallowed.
+	const kept = stripResolvedDamage([{ player: "Sylvie", delta: 5, reason: "Healing potion" }], true);
+	assert.equal(kept.length, 1);
+});
+
+test("the DM keeps its damage on a turn with no enemy round", () => {
+	// Traps, falls and poison are still its business.
+	const updates = [{ player: "Orrin", delta: -3, reason: "Stepped on a dart trap" }];
+	assert.deepEqual(stripResolvedDamage(updates, false), updates);
+});
+
+test("a mixed batch keeps the healing and drops the damage", () => {
+	const kept = stripResolvedDamage([
+		{ player: "Sylvie", delta: -5, reason: "Goblin attack" },
+		{ player: "Brannor", delta: 4, reason: "Second Wind" },
+		{ player: "Orrin", delta: -2, reason: "Goblin attack" },
+	], true);
+	assert.deepEqual(kept.map((u) => u.player), ["Brannor"]);
+});
+
+test("a zero or unreadable delta is left alone rather than guessed at", () => {
+	const updates = [{ player: "A", delta: 0 }, { player: "B", delta: "x" }, { player: "C" }];
+	assert.deepEqual(stripResolvedDamage(updates, true), updates);
+});
+
+test("a missing or malformed batch yields an empty list rather than throwing", () => {
+	for (const bad of [null, undefined, "hp", 7, {}]) {
+		assert.deepEqual(stripResolvedDamage(bad, true), []);
+	}
 });
