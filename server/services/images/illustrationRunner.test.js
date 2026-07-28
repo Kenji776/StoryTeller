@@ -19,7 +19,7 @@ const PARTY = [
  * @param {object} [options] - Overrides.
  * @returns {object} The runner and everything it touched.
  */
-function makeRunner({ mode = "key-moments", lastAt = null, scene, image, now = () => T0 } = {}) {
+function makeRunner({ mode = "key-moments", lastAt = null, scene, image, ensure, party = PARTY, now = () => T0 } = {}) {
 	const emitted = [];
 	const saved = [];
 	const lobby = { illustrationMode: mode, lastIllustrationAt: lastAt };
@@ -28,8 +28,9 @@ function makeRunner({ mode = "key-moments", lastAt = null, scene, image, now = (
 		gateway: {
 			generateCharacterScene: scene ?? (async () => ({ b64: PNG, model: "krea2" })),
 			generateImage: image ?? (async () => ({ b64: PNG, model: "krea2" })),
+			ensureCharacterImage: ensure ?? (async () => ({ characterId: "chr_new", b64: PNG })),
 		},
-		partyOf: () => PARTY,
+		partyOf: () => party,
 		settingsOf: () => lobby,
 		markIllustrated: (id, at) => { lobby.lastIllustrationAt = at; },
 		saveImage: async (name, b64) => { saved.push({ name, b64 }); return `/character-images/${name}.png`; },
@@ -299,4 +300,74 @@ test("one lobby drawing does not block another", async () => {
 		"a second lobby was blocked by the first lobby's illustration");
 	release();
 	await first;
+});
+
+// ── The opening scene, which is not the DM's to decline ──────────────────────
+
+test("the adventure opens with every party member drawn", async () => {
+	const { runner, emitted } = makeRunner();
+
+	await runner.openingScene(LOBBY);
+
+	const ready = emitted.find((e) => e.event === "illustration:ready");
+	assert.deepEqual(ready.payload.images.map((i) => i.name), ["Brannor Ironfoot", "Kaeda Ashfall"]);
+});
+
+test("the opening ignores the cooldown, because it is not the DM asking", async () => {
+	const { runner, emitted } = makeRunner({ lastAt: T0 });
+
+	await runner.openingScene(LOBBY);
+	assert.ok(emitted.some((e) => e.event === "illustration:pending"));
+});
+
+test("the opening still respects illustrations being switched off", async () => {
+	// Off is the host's explicit choice, and overriding it would be the one
+	// setting in the game that does not mean what it says.
+	const { runner, emitted } = makeRunner({ mode: "off" });
+
+	assert.equal(await runner.openingScene(LOBBY), null);
+	assert.deepEqual(emitted, []);
+});
+
+test("a character with no likeness yet has one made for the opening", async () => {
+	const created = [];
+	const { runner, emitted } = makeRunner({
+		party: [{ name: "Brannor Ironfoot", imageCharacterId: "chr_1" }, { name: "Nim", imageCharacterId: null, sheet: { race: "Halfling" } }],
+		ensure: async ({ name }) => { created.push(name); return { characterId: "chr_new", b64: PNG }; },
+	});
+
+	await runner.openingScene(LOBBY);
+
+	assert.deepEqual(created, ["Nim"], "a party member without a likeness was left out of the opening");
+	assert.equal(emitted.find((e) => e.event === "illustration:ready").payload.images.length, 2);
+});
+
+test("the opening caption says what it is", async () => {
+	const { runner, emitted } = makeRunner();
+	await runner.openingScene(LOBBY);
+
+	assert.match(emitted.find((e) => e.event === "illustration:pending").payload.caption, /adventure begins|the party/i);
+});
+
+test("an opening for a lobby with nobody in it draws nothing", async () => {
+	const { runner, emitted } = makeRunner({ party: [] });
+
+	assert.equal(await runner.openingScene(LOBBY), null);
+	assert.deepEqual(emitted, []);
+});
+
+test("the opening marks the cooldown, so the first turn does not immediately draw again", async () => {
+	const { runner, lobby } = makeRunner();
+	await runner.openingScene(LOBBY);
+	assert.equal(lobby.lastIllustrationAt, T0);
+});
+
+test("a failure to make one likeness does not lose the rest of the party", async () => {
+	const { runner, emitted } = makeRunner({
+		party: [{ name: "Brannor Ironfoot", imageCharacterId: "chr_1" }, { name: "Nim", imageCharacterId: null }],
+		ensure: async () => { throw new Error("image server busy"); },
+	});
+
+	await runner.openingScene(LOBBY);
+	assert.equal(emitted.find((e) => e.event === "illustration:ready").payload.images.length, 1);
 });

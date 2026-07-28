@@ -314,6 +314,17 @@ const illustrations = createIllustrationRunner({
 		return `/character-images/${filename}`;
 	},
 	emit: (lobbyId, event, payload) => busIo.to(room(lobbyId)).emit(event, payload),
+	// A party member who never generated a portrait still appears in the opening
+	// picture, drawn from their sheet.
+	appearanceOf: (player) => player?.imageAppearance || buildAppearance(player?.sheet ?? player) || player?.name,
+	onCharacterCreated: (lobbyId, name, made) => {
+		const key = store.findPlayerKey(lobbyId, name);
+		const record = key ? store.index[lobbyId]?.players[key] : null;
+		if (!record || !made?.characterId) return;
+		record.imageCharacterId = made.characterId;
+		record.imageAppearance = made.appearance;
+		store.persist(lobbyId);
+	},
 	log,
 });
 
@@ -979,6 +990,10 @@ io.on("connection", (socket) => {
 			console.log('Game starting event dispatched to lobby: ' + lobbyId);
 			busIo.to(room(lobbyId)).emit("game:starting", { message: "✨ The Dungeon Master is preparing your tale..." });
 			const initiativeRolls = store.startGame(lobbyId);
+
+			// Every adventure opens on a picture of the party. Not the DM's to
+			// decline, and not awaited — the game begins while it draws.
+			illustrations.openingScene(lobbyId);
 			sendState(lobbyId);
 			broadcastLobbies();
 			broadcastPartyState(busIo, store, lobbyId);

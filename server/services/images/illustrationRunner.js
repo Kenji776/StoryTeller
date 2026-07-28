@@ -15,6 +15,18 @@
 
 import { parseIllustration, illustrationGate } from "./illustration.js";
 
+/**
+ * The moment every adventure opens on.
+ *
+ * Fixed rather than model-authored: this one is not the Dungeon Master's to
+ * decline, so there is nothing for it to decide. Phrased as a scene — what is
+ * happening — for the same reason every other scene is: the stored appearance is
+ * prepended by the server, and restating any of it here makes faces drift.
+ */
+const OPENING_MOMENT = "at the very start of their adventure, gear shouldered, setting out";
+const OPENING_MOOD = "expectant";
+const OPENING_CAPTION = "The adventure begins";
+
 /** Portrait, matching what the character adapter draws by default. */
 const SCENE_SIZE = Object.freeze({ width: 896, height: 1152 });
 
@@ -45,6 +57,10 @@ function safeMessage(err) {
  * @param {Function} options.markIllustrated - `(lobbyId, at)` records the cooldown.
  * @param {Function} options.saveImage - `(name, b64)` → the url it can be served from.
  * @param {Function} options.emit - `(lobbyId, event, payload)`.
+ * @param {Function} [options.appearanceOf] - `(player)` → what is permanently
+ *   true of them, for a party member who has no likeness yet.
+ * @param {Function} [options.onCharacterCreated] - `(lobbyId, name, result)`,
+ *   so a likeness made for the opening is stored rather than lost.
  * @param {Function} [options.now] - Clock returning epoch milliseconds.
  * @param {Function} [options.log] - Logger.
  * @returns {{consider: Function}} The runner.
@@ -56,6 +72,8 @@ export function createIllustrationRunner({
 	markIllustrated,
 	saveImage,
 	emit,
+	appearanceOf = (player) => player?.imageAppearance ?? player?.name ?? "an adventurer",
+	onCharacterCreated = () => {},
 	now = () => Date.now(),
 	log = () => {},
 }) {
@@ -104,6 +122,88 @@ export function createIllustrationRunner({
 	}
 
 	return {
+		/**
+		 * Draws the party as their adventure opens.
+		 *
+		 * @description Not a directive and not the DM's to decline — a game starting
+		 *   always gets this picture. It therefore ignores the cooldown, which exists
+		 *   to pace the DM's own enthusiasm and has nothing to say about an event that
+		 *   happens once per game.
+		 *
+		 *   It does still respect `off`. That is the host's explicit choice, and
+		 *   overriding it would make the one setting in the game that does not mean
+		 *   what it says.
+		 *
+		 *   A party member with no likeness yet has one made first, so nobody is left
+		 *   out of the opening picture for not having clicked "generate portrait".
+		 * @param {string} lobbyId - The lobby whose game is starting.
+		 * @returns {Promise<object|null>} The placeholder id, or null when nothing was drawn.
+		 */
+		async openingScene(lobbyId) {
+			let party;
+			try {
+				const settings = settingsOf(lobbyId) ?? {};
+				if (!settings.illustrationMode || settings.illustrationMode === "off") return null;
+
+				party = (partyOf(lobbyId) ?? []).filter((p) => p?.name);
+				if (!party.length) return null;
+			} catch (err) {
+				log(`⚠️ Opening illustration could not be prepared: ${safeMessage(err)}`);
+				return null;
+			}
+
+			if (drawing.has(lobbyId)) return null;
+
+			const id = `ill_open_${now()}`;
+			try {
+				markIllustrated(lobbyId, now());
+			} catch (err) {
+				log(`⚠️ Could not record the illustration cooldown: ${safeMessage(err)}`);
+			}
+
+			drawing.add(lobbyId);
+			emit(lobbyId, "illustration:pending", { id, caption: OPENING_CAPTION, expected: party.length });
+
+			try {
+				const images = [];
+				for (const player of party) {
+					try {
+						let characterId = player.imageCharacterId;
+						if (!characterId) {
+							// Nobody is left out for not having drawn a portrait first.
+							const made = await gateway.ensureCharacterImage({
+								lobbyId,
+								record: player,
+								name: player.name,
+								appearance: appearanceOf(player),
+							});
+							characterId = made?.characterId;
+							if (made?.characterId) onCharacterCreated(lobbyId, player.name, made);
+						}
+						if (!characterId) continue;
+
+						images.push(await drawCharacter(lobbyId, { moment: OPENING_MOMENT, mood: OPENING_MOOD }, { ...player, imageCharacterId: characterId }));
+					} catch (err) {
+						log(`⚠️ Opening illustration failed for ${player.name}: ${safeMessage(err)}`);
+					}
+				}
+
+				if (!images.length) {
+					emit(lobbyId, "illustration:failed", { id, error: "The opening illustration could not be drawn." });
+					return { id, caption: OPENING_CAPTION, drawn: 0 };
+				}
+
+				log(`🖼️ Drew the opening scene for ${lobbyId} (${images.length}/${party.length})`);
+				emit(lobbyId, "illustration:ready", { id, caption: OPENING_CAPTION, images, failures: [] });
+				return { id, caption: OPENING_CAPTION, drawn: images.length };
+			} catch (err) {
+				emit(lobbyId, "illustration:failed", { id, error: safeMessage(err) });
+				return { id, caption: OPENING_CAPTION, drawn: 0 };
+			} finally {
+				drawing.delete(lobbyId);
+			}
+		},
+
 		/**
 		 * Looks at a DM reply and draws what it asked for, if anything.
 		 *
