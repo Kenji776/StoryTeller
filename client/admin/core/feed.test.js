@@ -259,7 +259,7 @@ test("a pending illustration reports what is being drawn and how many", () => {
 
 	assert.equal(kind, "image");
 	assert.match(text, /over the slain troll/);
-	assert.match(text, /3/);
+	assert.equal(entry.pending, 3);
 });
 
 test("a finished illustration names who was drawn", () => {
@@ -309,7 +309,7 @@ test("a finished illustration carries the pictures, not just a sentence about th
 
 test("an illustration with no usable urls carries no image list", () => {
 	const entry = toFeedEntry("illustration:ready", { id: "i1", caption: "x", images: [{ name: "A", url: null }] });
-	assert.equal(entry.images, undefined);
+	assert.deepEqual(entry.images, []);
 });
 
 test("an ordinary entry carries no image list at all", () => {

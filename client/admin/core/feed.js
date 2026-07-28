@@ -143,9 +143,16 @@ const FORMATTERS = Object.freeze({
 	// Illustrations arrive in two beats — a placeholder, then the picture — because
 	// drawing takes seconds. Both are shown, so a spectator sees the wait rather
 	// than a picture appearing from nowhere.
+	// The id travels so the finished pictures can replace this line rather than
+	// appearing as a second one further down, by which time the placeholder has
+	// scrolled away and nothing connects them.
 	"illustration:pending": (p) => {
 		const count = Number(p.expected) || 1;
-		return ["image", `Illustrating${p.caption ? ` "${p.caption}"` : ""}… (${count} image${count === 1 ? "" : "s"})`];
+		return [
+			"image",
+			`Illustrating${p.caption ? ` "${p.caption}"` : ""}…`,
+			{ illustrationId: p.id, pending: count },
+		];
 	},
 
 	"illustration:ready": (p) => {
@@ -159,11 +166,14 @@ const FORMATTERS = Object.freeze({
 		return [
 			"image",
 			`Illustrated ${subject}${caption}`,
-			images.filter((i) => i?.url).map((i) => ({ url: i.url, alt: i.name || p.caption || "Scene illustration" })),
+			{
+				illustrationId: p.id,
+				images: images.filter((i) => i?.url).map((i) => ({ url: i.url, alt: i.name || p.caption || "Scene illustration" })),
+			},
 		];
 	},
 
-	"illustration:failed": (p) => ["image", `Illustration failed: ${p.error || "unknown reason"}`],
+	"illustration:failed": (p) => ["image", `Illustration failed: ${p.error || "unknown reason"}`, { illustrationId: p.id }],
 
 	"roll:required": (p) => ["roll", `${p.player} must roll d${p.sides} (${list(p.stats, "no stat")})`],
 
@@ -252,9 +262,10 @@ export function toFeedEntry(event, payload = {}, deps = {}) {
 	const result = format(payload ?? {}, { toText });
 	if (!result) return null;
 
-	// A formatter may return a third element carrying pictures. Most do not.
-	const [type, message, images] = result;
-	return { type, message, at: now(), ...(images?.length ? { images } : {}) };
+	// A formatter may return a third element carrying extras — pictures, or the
+	// illustration id a later line replaces. Most return nothing.
+	const [type, message, extras] = result;
+	return { type, message, at: now(), ...(extras ?? {}) };
 }
 
 /**

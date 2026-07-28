@@ -21,6 +21,16 @@ export function activity(ctx) {
 	/** How many feed entries have been rendered, so only new ones are appended. */
 	let rendered = 0;
 
+	/**
+	 * Placeholder lines, by illustration id.
+	 *
+	 * A picture takes up to half a minute. Appending the result as a *second* line
+	 * means the placeholder has scrolled away by the time it arrives and nothing
+	 * connects the two, so the finished pictures replace the line that promised
+	 * them.
+	 */
+	const illustrationLines = new Map();
+
 	/** Entries hidden by the filter rather than absent, so changing it is instant. */
 	let filter = "all";
 
@@ -46,11 +56,15 @@ export function activity(ctx) {
 			h("span.feed-message", entry.message),
 			// Illustrations carry their pictures. Reading that an image was drawn is
 			// not the same as seeing it, and this is where a spectator watches.
+			// While one is still drawing, empty frames stand in — a picture that takes
+			// half a minute needs to announce itself, or it looks like nothing happened.
 			entry.images?.length
 				? h("div.feed-images", ...entry.images.map((image) =>
 					h("a", { href: image.url, target: "_blank", rel: "noopener noreferrer" },
 						h("img.feed-image", { src: image.url, alt: image.alt, loading: "lazy" }))))
-				: null,
+				: entry.pending
+					? h("div.feed-images", ...Array.from({ length: entry.pending }, () => h("div.feed-image-pending")))
+					: null,
 		);
 		el.hidden = !matchesFilter(entry, filter);
 		return el;
@@ -67,6 +81,7 @@ export function activity(ctx) {
 		// count stops growing; a shrunken or reset feed means a full redraw.
 		if (feed.length < rendered) {
 			rendered = 0;
+			illustrationLines.clear();
 			fill(listHost);
 		}
 
@@ -76,6 +91,7 @@ export function activity(ctx) {
 			return;
 		}
 		if (rendered === 0) {
+			illustrationLines.clear();
 			fill(listHost);
 			// What happened before this console was watching. Marked as such rather
 			// than dressed up as live traffic.
@@ -86,7 +102,17 @@ export function activity(ctx) {
 			}
 		}
 
-		for (const entry of feed.slice(rendered)) listHost.append(line(entry));
+		for (const entry of feed.slice(rendered)) {
+			const existing = entry.illustrationId ? illustrationLines.get(entry.illustrationId) : null;
+			const el = line(entry);
+
+			if (existing && existing.isConnected !== false) {
+				existing.replaceWith(el);
+			} else {
+				listHost.append(el);
+			}
+			if (entry.illustrationId) illustrationLines.set(entry.illustrationId, el);
+		}
 		rendered = feed.length;
 
 		if (autoScroll.checked) listHost.scrollTop = listHost.scrollHeight;

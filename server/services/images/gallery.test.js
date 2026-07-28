@@ -198,3 +198,34 @@ test("a gallery never carries anything credential-shaped", () => {
 	// an operator may share.
 	assert.ok(!JSON.stringify(fsImpl.files).includes("sk-ant-api03-SHOULDNOTBEHERE"));
 });
+
+test("narration is stored as plain text, not the DM's markup", () => {
+	// The DM narrates in HTML and the record is data, not a document. Stored raw,
+	// it renders as literal "<p>" in the gallery page.
+	const { gallery } = makeGallery();
+	gallery.record(LOBBY, {
+		...ENTRY,
+		narration: "<p>That's <strong>Orrin's</strong> voice — the wizard surges <em>forward</em>.</p>",
+	});
+
+	const [stored] = gallery.read(LOBBY).entries;
+	assert.doesNotMatch(stored.narration, /<[a-z/]/i);
+	assert.match(stored.narration, /Orrin's voice/);
+	assert.match(stored.narration, /surges forward/);
+});
+
+test("a paragraph break becomes a space rather than running words together", () => {
+	const { gallery } = makeGallery();
+	gallery.record(LOBBY, { ...ENTRY, narration: "<p>First line.</p><p>Second line.</p>" });
+
+	assert.match(gallery.read(LOBBY).entries[0].narration, /First line\. Second line\./);
+});
+
+test("an HTML entity in narration is decoded rather than shown raw", () => {
+	const { gallery } = makeGallery();
+	gallery.record(LOBBY, { ...ENTRY, narration: "<p>the seal &amp; the page &mdash; broken</p>" });
+
+	const stored = gallery.read(LOBBY).entries[0].narration;
+	assert.match(stored, /the seal & the page/);
+	assert.doesNotMatch(stored, /&amp;|&mdash;/);
+});

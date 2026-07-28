@@ -30,6 +30,29 @@ const NARRATION_MAX = 700;
  */
 const CREDENTIAL_PREFIXES = /(sk-[A-Za-z0-9-]+|ghp_\S+|github_pat_\S+|xoxb-\S+|AKIA\S+)/g;
 
+/** The few entities the DM's narration actually produces. */
+const ENTITIES = Object.freeze({
+	"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'", "&apos;": "'",
+	"&mdash;": "—", "&ndash;": "–", "&nbsp;": " ", "&hellip;": "…",
+});
+
+/**
+ * @description Reduces the DM's narration markup to plain text.
+ *
+ *   The record is data, not a document. Stored raw it renders as a literal "<p>"
+ *   in the gallery, and escaping it at render time would mean every consumer had
+ *   to know whether that had already happened. Block tags become a space so
+ *   paragraphs do not run together into one word.
+ * @param {string} html - The narration.
+ * @returns {string} Plain text.
+ */
+function stripMarkup(html) {
+	return html
+		.replace(/<\s*(br|\/p|\/div|\/li|\/h[1-6])\s*\/?>/gi, " ")
+		.replace(/<[^>]*>/g, "")
+		.replace(/&[a-z#0-9]+;/gi, (entity) => ENTITIES[entity.toLowerCase()] ?? entity);
+}
+
 /**
  * @description Trims, scrubs and clamps a piece of text bound for the record.
  * @param {*} value - The candidate.
@@ -38,7 +61,7 @@ const CREDENTIAL_PREFIXES = /(sk-[A-Za-z0-9-]+|ghp_\S+|github_pat_\S+|xoxb-\S+|A
  */
 function clean(value, max) {
 	if (typeof value !== "string") return "";
-	return value
+	return stripMarkup(value)
 		.replace(CREDENTIAL_PREFIXES, "***")
 		.replace(/\S{32,}/g, "***")
 		.replace(/\s+/g, " ")
