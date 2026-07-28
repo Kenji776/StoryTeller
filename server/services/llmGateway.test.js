@@ -316,6 +316,8 @@ test("an image is generated through the configured provider", async () => {
 	const { gateway } = makeGateway({
 		fetchImpl,
 		policy: { image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.50:8189" } } },
+		// Self-hosted, but still token-gated: the operator holds it, not the player.
+		vaultKeys: { "local-image": SERVER_KEY },
 	});
 
 	const result = await gateway.generateImage({ prompt: "a dwarf", lobbyId: LOBBY });

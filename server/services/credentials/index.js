@@ -42,6 +42,7 @@ const ENV_KEYS = Object.freeze([
 	{ providerId: "openai", vars: ["OPENAI_API_KEY"] },
 	{ providerId: "anthropic", vars: ["ANTHROPIC_API_KEY", "CLAUDE_API_KEY"] },
 	{ providerId: "elevenlabs", vars: ["ELEVENLABS_API_KEY", "ELEVEN_API_KEY"] },
+	{ providerId: "local-image", vars: ["LOCAL_IMAGE_API_KEY"] },
 ]);
 
 /**

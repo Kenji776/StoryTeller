@@ -46,7 +46,7 @@ test("listing carries what the policy layer and the UI need to decide", () => {
 
 	assert.equal(local.isLocal, true);
 	assert.equal(local.requiresBaseUrl, true);
-	assert.equal(local.requiresApiKey, false);
+	assert.equal(local.requiresApiKey, true);
 	assert.ok(Array.isArray(local.styles));
 });
 
@@ -88,9 +88,20 @@ test("a provider needing no key declares no place to obtain one", () => {
 	}
 });
 
-test("a provider needing a key says where to get one", () => {
+test("a hosted provider needing a key says where to get one", () => {
+	// Only hosted ones. A self-hosted service can require a token and still have
+	// no page to send anyone to — the operator issued it themselves — so demanding
+	// a URL there would be demanding a link that cannot exist.
 	assert.ok(IMAGE_PROVIDERS.length > 0);
 	for (const provider of IMAGE_PROVIDERS) {
-		if (provider.requiresApiKey) assert.match(provider.keyUrl ?? "", /^https:\/\//, `${provider.id} needs a key but says nothing about where to get one`);
+		if (provider.requiresApiKey && !provider.isLocal) {
+			assert.match(provider.keyUrl ?? "", /^https:\/\//, `${provider.id} needs a key but says nothing about where to get one`);
+		}
 	}
+});
+
+test("a self-hosted provider needing a token is allowed to have no key URL", () => {
+	const local = IMAGE_PROVIDERS.find((p) => p.isLocal && p.requiresApiKey);
+	assert.ok(local, "expected a self-hosted provider that takes a token");
+	assert.equal(local.keyUrl, null);
 });

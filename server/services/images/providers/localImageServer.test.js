@@ -298,8 +298,183 @@ test("the styles the adapter offers are declared for the UI", () => {
 
 // ── Descriptor ───────────────────────────────────────────────────────────────
 
-test("the adapter declares itself local and needing an address but no key", () => {
+test("the adapter declares itself local, and needing both an address and a token", () => {
+	// Self-hosted and credentialed are not opposites. The token is the operator's,
+	// issued for their own LAN, and travels with the address as their configuration
+	// rather than as something a player brings.
 	assert.equal(localImageProvider.isLocal, true);
-	assert.equal(localImageProvider.requiresApiKey, false);
+	assert.equal(localImageProvider.requiresApiKey, true);
 	assert.equal(localImageProvider.requiresBaseUrl, true);
+});
+
+// ── Authentication ───────────────────────────────────────────────────────────
+
+const TOKEN = "test-token-DO-NOT-USE-image";
+const authed = { ...config, apiKey: TOKEN };
+
+test("the access token travels as a header, never in the query string", async () => {
+	const fetchImpl = makeFetch();
+	await localImageProvider.generate({ prompt: "a dwarf", config: authed, fetchImpl });
+
+	assert.equal(fetchImpl.calls[0].init.headers["X-API-Key"], TOKEN);
+	assert.ok(!fetchImpl.calls[0].url.includes(TOKEN), "the token was put in a URL, where access logs capture it");
+});
+
+test("the adapter declares that it needs a token", () => {
+	assert.equal(localImageProvider.requiresApiKey, true);
+	assert.equal(localImageProvider.isLocal, true, "it is still a self-hosted service, token or not");
+});
+
+test("a rejected token is reported as an authentication failure", async () => {
+	await assert.rejects(
+		() => localImageProvider.generate({ prompt: "x", config: authed, fetchImpl: makeFetch({ status: 401, body: { error: "bad token" } }) }),
+		(err) => { assert.equal(err.kind, "auth"); return true; },
+	);
+});
+
+// ── Characters: the continuity mechanism ─────────────────────────────────────
+
+test("creating a character stores its appearance and returns the id to keep", async () => {
+	const fetchImpl = makeFetch({ body: { id: "chr_38f96d0e", image: FAKE_PNG_B64 } });
+
+	const result = await localImageProvider.createCharacter({
+		name: "Kaeda Ashfall",
+		appearance: "a lean half-elf woman, dark braided hair",
+		config: authed, fetchImpl,
+	});
+
+	assert.equal(fetchImpl.calls[0].url, `${BASE_URL}/characters`);
+	assert.equal(fetchImpl.calls[0].payload.name, "Kaeda Ashfall");
+	assert.equal(result.id, "chr_38f96d0e");
+	assert.equal(result.b64, FAKE_PNG_B64);
+});
+
+test("creating a character refuses a blank appearance, which is what continuity rests on", async () => {
+	await assert.rejects(
+		() => localImageProvider.createCharacter({ name: "K", appearance: "  ", config: authed, fetchImpl: makeFetch() }),
+		/appearance/i,
+	);
+});
+
+test("creating a character refuses a blank name", async () => {
+	await assert.rejects(
+		() => localImageProvider.createCharacter({ name: "", appearance: "a dwarf", config: authed, fetchImpl: makeFetch() }),
+		/name/i,
+	);
+});
+
+test("re-posing a character sends only the scene", async () => {
+	const fetchImpl = makeFetch({ body: { images: [FAKE_PNG_B64], seed: 1, model: "krea2" } });
+
+	await localImageProvider.generateForCharacter({
+		characterId: "chr_38f96d0e",
+		scene: "kicking down a door, torchlight behind her",
+		config: authed, fetchImpl,
+	});
+
+	assert.equal(fetchImpl.calls[0].url, `${BASE_URL}/characters/chr_38f96d0e/generate`);
+	assert.equal(fetchImpl.calls[0].payload.scene, "kicking down a door, torchlight behind her");
+	assert.equal(Object.hasOwn(fetchImpl.calls[0].payload, "prompt"), false, "a prompt alongside a scene is what causes faces to drift");
+});
+
+test("identity strength is sent only when the caller tunes it", async () => {
+	const plain = makeFetch({ body: { images: [FAKE_PNG_B64] } });
+	await localImageProvider.generateForCharacter({ characterId: "c1", scene: "s", config: authed, fetchImpl: plain });
+	assert.equal(Object.hasOwn(plain.calls[0].payload, "identity_strength"), false);
+
+	const tuned = makeFetch({ body: { images: [FAKE_PNG_B64] } });
+	await localImageProvider.generateForCharacter({ characterId: "c1", scene: "s", identityStrength: 1.2, config: authed, fetchImpl: tuned });
+	assert.equal(tuned.calls[0].payload.identity_strength, 1.2);
+});
+
+test("an identity strength outside the useful range is refused", async () => {
+	for (const value of [0.2, 2.5, "high"]) {
+		await assert.rejects(
+			() => localImageProvider.generateForCharacter({ characterId: "c1", scene: "s", identityStrength: value, config: authed, fetchImpl: makeFetch() }),
+			/identity/i,
+		);
+	}
+});
+
+test("re-posing an unknown character reports it as not found", async () => {
+	await assert.rejects(
+		() => localImageProvider.generateForCharacter({ characterId: "gone", scene: "s", config: authed, fetchImpl: makeFetch({ status: 404, body: { error: "no such character" } }) }),
+		(err) => { assert.equal(err.kind, "not_found"); return true; },
+	);
+});
+
+test("characters already on the server can be listed, so none is created twice", async () => {
+	const fetchImpl = makeFetch({ body: { characters: [{ id: "chr_1", name: "Kaeda" }, { id: "chr_2", name: "Brannor" }] } });
+
+	const characters = await localImageProvider.listCharacters({ config: authed, fetchImpl });
+
+	assert.equal(fetchImpl.calls[0].url, `${BASE_URL}/characters`);
+	assert.deepEqual(characters.map((c) => c.id), ["chr_1", "chr_2"]);
+});
+
+test("a server with no characters yet lists none rather than failing", async () => {
+	assert.deepEqual(await localImageProvider.listCharacters({ config: authed, fetchImpl: makeFetch({ body: {} }) }), []);
+});
+
+test("a character can be deleted", async () => {
+	const fetchImpl = makeFetch({ body: { ok: true } });
+	await localImageProvider.deleteCharacter({ characterId: "chr_1", config: authed, fetchImpl });
+
+	assert.equal(fetchImpl.calls[0].url, `${BASE_URL}/characters/chr_1/delete`);
+	assert.equal(fetchImpl.calls[0].init.method, "POST");
+});
+
+// ── Progress ─────────────────────────────────────────────────────────────────
+
+test("progress is reported so a player is not left on a blank screen", async () => {
+	const fetchImpl = makeFetch({ body: { running: true, step: 3, steps: 8, percent: 37 } });
+	const progress = await localImageProvider.progress({ config: authed, fetchImpl });
+
+	assert.equal(fetchImpl.calls[0].url, `${BASE_URL}/progress`);
+	assert.equal(progress.running, true);
+	assert.equal(progress.percent, 37);
+});
+
+test("progress on an unreachable server reports as not running rather than throwing", async () => {
+	const progress = await localImageProvider.progress({ config: authed, fetchImpl: makeFetch({ throws: new Error("ECONNREFUSED") }) });
+	assert.equal(progress.running, false);
+});
+
+// ── Health needs no token ────────────────────────────────────────────────────
+
+test("the health probe works before a token is configured", async () => {
+	const fetchImpl = makeFetch({ body: { gpu: "test" } });
+	await localImageProvider.probe({ config: { ...config, apiKey: null }, fetchImpl });
+
+	assert.equal(fetchImpl.calls[0].url, `${BASE_URL}/health`);
+	assert.equal(fetchImpl.calls[0].init.headers?.["X-API-Key"], undefined);
+});
+
+// ── Model discovery: the real response shape ─────────────────────────────────
+
+test("models keyed by id are listed, which is the shape the server actually sends", async () => {
+	// Probed against the live server: `models` is an object keyed by model id, not
+	// the array the first version assumed. That version degraded to an empty list,
+	// which looked like a server with no models rather than a parser that was wrong.
+	const fetchImpl = makeFetch({
+		body: {
+			models: {
+				krea2: { file: "krea2_turbo_fp8_scaled.safetensors", installed: true },
+				redcraft: { file: "redcraft_krea2_nsfw_fp8.safetensors", installed: true },
+			},
+			styles: ["fantasy-painterly", "fantasy-portrait", "photoreal"],
+		},
+	});
+
+	const models = await localImageProvider.listModels({ config: authed, fetchImpl });
+	assert.deepEqual(models.map((m) => m.id).sort(), ["krea2", "redcraft"]);
+});
+
+test("a model the server has not installed is left out of the keyed shape too", async () => {
+	const fetchImpl = makeFetch({
+		body: { models: { krea2: { installed: true }, ghost: { installed: false } } },
+	});
+
+	const models = await localImageProvider.listModels({ config: authed, fetchImpl });
+	assert.deepEqual(models.map((m) => m.id), ["krea2"]);
 });

@@ -173,7 +173,19 @@ export function createResolver({ vault, getPolicy, sessionKeys, providerFor }) {
 			if (!baseUrl) {
 				throw refuse("no_base_url", `${label} is configured as a local service but has no address.`);
 			}
-			return { source: "local", providerLabel: label, config: { providerId, apiKey: null, model, baseUrl } };
+
+			// `local` once meant "no credential at all". A self-hosted service can
+			// still want a token — the LAN image server does — and that token is the
+			// operator's, alongside the address, not something a player brings. So it
+			// comes from the vault while the policy stays `local`.
+			let apiKey = null;
+			if (provider.requiresApiKey) {
+				apiKey = vault.read(providerId);
+				if (!apiKey) {
+					throw refuse("no_server_key", `${label} needs an access token, and the vault holds none.`);
+				}
+			}
+			return { source: "local", providerLabel: label, config: { providerId, apiKey, model, baseUrl } };
 		}
 
 		if (entry.policy === "shared") {

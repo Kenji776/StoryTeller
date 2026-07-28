@@ -25,6 +25,9 @@ const PROVIDERS = {
 	speech: {
 		elevenlabs: { id: "elevenlabs", label: "ElevenLabs", requiresApiKey: true, requiresBaseUrl: false, defaultBaseUrl: null },
 	},
+	image: {
+		"local-image": { id: "local-image", label: "Local image server", requiresApiKey: true, requiresBaseUrl: true, defaultBaseUrl: null },
+	},
 };
 
 /**
@@ -407,4 +410,33 @@ test("the resolved provider label travels with the result for the UI", () => {
 	});
 
 	assert.equal(resolver.resolve({ lobbyId: LOBBY, capability: "chat", providerId: "openai" }).providerLabel, "OpenAI");
+});
+
+// ── A local service that also needs a token ──────────────────────────────────
+
+test("a local provider that requires a key is served the operator's, not asked of the player", () => {
+	const { resolver } = makeResolver({
+		policy: { image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.50:8189" } } },
+		vaultKeys: { "local-image": SERVER_KEY },
+	});
+
+	const resolved = resolver.resolve({ lobbyId: LOBBY, capability: "image", providerId: "local-image" });
+
+	assert.equal(resolved.source, "local");
+	assert.equal(resolved.config.apiKey, SERVER_KEY);
+	assert.equal(resolved.config.baseUrl, "http://192.168.1.50:8189");
+});
+
+test("a local provider requiring a key the vault does not hold is a misconfiguration", () => {
+	const { resolver } = makeResolver({
+		policy: { image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.50:8189" } } },
+	});
+
+	const err = captureThrow(() => resolver.resolve({ lobbyId: LOBBY, capability: "image", providerId: "local-image" }));
+	assert.equal(err.reason, "no_server_key");
+});
+
+test("a local provider needing no key still resolves without one", () => {
+	const { resolver } = makeResolver({ policy: { chat: { ollama: "local" } } });
+	assert.equal(resolver.resolve({ lobbyId: LOBBY, capability: "chat", providerId: "ollama" }).config.apiKey, null);
 });

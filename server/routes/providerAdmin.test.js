@@ -368,14 +368,27 @@ test("testing a provider that needs a key and has none is refused", async () => 
 	assert.equal(res.statusCode, 400);
 });
 
-test("a local provider is tested without any key at all", async () => {
+test("a local provider is tested with the operator's token, not a player's", async () => {
 	const fetchImpl = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ gpu: "test" }) });
 	const { routes, credentials } = makeRoutes({ fetchImpl });
+	credentials.vault.set("local-image", OPENAI_KEY);
 	credentials.setPolicy({ image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.20:8189" } } });
 	const res = makeRes();
 
 	await routes.testProvider(makeReq({ capability: "image", providerId: "local-image" }), res);
 	assert.equal(res.body.ok, true);
+});
+
+test("a local provider with no token yet is refused rather than passing on /health", async () => {
+	// The health endpoint needs no token, so a token-less test would pass and then
+	// every real generation would 401 -- the worst possible outcome for a button
+	// whose whole job is to tell an operator whether this works.
+	const { routes, credentials } = makeRoutes();
+	credentials.setPolicy({ image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.20:8189" } } });
+	const res = makeRes();
+
+	await routes.testProvider(makeReq({ capability: "image", providerId: "local-image" }), res);
+	assert.equal(res.statusCode, 400);
 });
 
 test("no failure response echoes the key back", async () => {
