@@ -82,6 +82,25 @@ function byCR(table, cr) {
 const ONE_BLOW_SHARE = 0.75;
 
 /**
+ * The most attacks one action may contain, however the model writes the stat block.
+ * A "multiattack": 50 is a typo or a joke, not a monster.
+ */
+const MAX_ATTACKS_PER_ACTION = 4;
+
+/**
+ * @description How many times a creature swings when it spends its action. One,
+ *   unless its stat block says otherwise — an NPC has the same action economy as a
+ *   player, and multiattack is the specific perk that varies it.
+ * @param {object} enemy - The roster entry.
+ * @returns {number} A whole number between 1 and `MAX_ATTACKS_PER_ACTION`.
+ */
+function attacksPerAction(enemy) {
+	const stated = Math.floor(Number(enemy?.multiattack ?? enemy?.attacks));
+	if (!Number.isFinite(stated) || stated < 1) return 1;
+	return Math.min(MAX_ATTACKS_PER_ACTION, stated);
+}
+
+/**
  * @description The most damage one attack may deal to a character.
  * @param {object} player - The character sheet.
  * @returns {number} The cap, or Infinity when the sheet states no maximum — inventing
@@ -119,7 +138,7 @@ function isStanding(player) {
  *   made, and the total damage per character. `damage` carries only characters that
  *   were actually hit, so it can be applied directly.
  */
-export function resolveEnemyAttacks({ enemies, players, difficulty, turnIndex, partySize, rollD20 = d20, rollDamage } = {}) {
+export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnIndex, partySize, rollD20 = d20, rollDamage } = {}) {
 	const { enemyAttackBonus, enemyDamageMultiplier } = difficultyModifiers(difficulty);
 	const rollDice = rollDamage ?? ((count, sides) => {
 		let total = 0;
@@ -132,32 +151,54 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, turnIndex, p
 	);
 	const targets = Object.values(players ?? {}).filter(isStanding);
 
+	// An NPC has an action and spends it once per round, exactly as a player does.
+	//
 	// This runs on every `action:submit`, so without a share-out every enemy swung on
 	// every player's turn: a party of three facing three goblins took nine goblin
-	// attacks per round against their three, and the penalty grew with party size. A
-	// live merciless run killed a level 3 fighter in three turns to two CR 1/2
-	// hobgoblins. Each enemy now acts once per full round, its slot picked by the
-	// acting player's position — so every turn still draws fire, but only its share.
+	// attacks a round against their three, and the penalty grew with party size. A
+	// live merciless run killed a level 3 fighter in three turns to two CR ½ hobgoblins.
 	//
-	// Filtered *before* the share-out, or a corpse would hold a slot and the
-	// survivors would attack less often than they should. A caller that does not know
-	// whose turn it is — the timer path, an admin-forced round — gets the whole
-	// roster, which is the old behaviour and the safe one.
-	const seats = Math.max(1, Math.floor(Number(partySize)) || 0);
-	const seat = Number.isFinite(Number(turnIndex)) ? ((Math.floor(Number(turnIndex)) % seats) + seats) % seats : null;
-	const attackers = seat === null ? living : living.filter((_, i) => i % seats === seat);
+	// The first fix sliced the living roster by the acting player's index. That got the
+	// aggregate right and the rule wrong: kill one goblin mid-round and the array
+	// reindexes, so another silently loses its turn while a third takes one it had
+	// already had. Whether a creature has acted is now recorded on the creature, and
+	// the pending ones are dealt out evenly across the turns still to come — so the
+	// bookkeeping survives anything happening to the roster mid-round.
+	//
+	// A caller that does not know the round — the timer path, an admin-forced round —
+	// gets the whole roster, which is the old behaviour and the safe one.
+	const knowsRound = Number.isFinite(Number(round));
+	let attackers = living;
 
-	if (!attackers.length || !targets.length) return { attacks: [], damage: {} };
+	if (knowsRound) {
+		const pending = living.filter((e) => Number(e.actedInRound) !== Number(round));
+		const seats = Math.max(1, Math.floor(Number(partySize)) || 1);
+		const seat = Number.isFinite(Number(turnIndex))
+			? ((Math.floor(Number(turnIndex)) % seats) + seats) % seats
+			: 0;
+		// Share what is left over the turns still to come, so the last player does not
+		// inherit everybody the earlier turns did not get to.
+		const turnsRemaining = Math.max(1, seats - seat);
+		attackers = pending.slice(0, Math.ceil(pending.length / turnsRemaining));
+	}
+
+	if (!attackers.length || !targets.length) return { attacks: [], damage: {}, acted: [] };
 
 	const attacks = [];
 	const damage = {};
 
-	attackers.forEach((enemy, index) => {
+	let swing = 0;
+	attackers.forEach((enemy) => {
+		const cr = crValue(enemy.cr);
+
+		// The exception to one-action-one-attack. A creature whose stat block says it
+		// strikes twice does so — within its single action, not as extra actions, so it
+		// still cannot come round again later in the same round.
+		for (let blow = 0; blow < attacksPerAction(enemy); blow++) {
 		// Round-robin rather than everyone piling onto one character: three goblins
 		// focusing a level-1 party member is an instant kill and reads as the engine
 		// singling somebody out.
-		const target = targets[index % targets.length];
-		const cr = crValue(enemy.cr);
+		const target = targets[swing++ % targets.length];
 
 		const bonus = mod(Number(enemy.str) || 10) + byCR(PROFICIENCY_BY_CR, cr).bonus + enemyAttackBonus;
 		const base = rollD20();
@@ -199,9 +240,13 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, turnIndex, p
 			hit,
 			damage: dealt,
 		});
+		}
 	});
 
-	return { attacks, damage };
+	// Who spent their action. The caller records it on the roster — this stays a
+	// resolver and does not write to the enemies it was handed, the same split
+	// `resolveAttack` keeps from `applyEnemyDamage`.
+	return { attacks, damage, acted: attackers.map((e) => e.name) };
 }
 
 /**

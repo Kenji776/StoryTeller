@@ -1326,11 +1326,19 @@ io.on("connection", (socket) => {
 				enemies: s.enemies,
 				players: s.players,
 				difficulty: s.difficulty,
-				// Which share of the roster swings this turn. Without these every enemy
-				// attacked on every player's turn.
+				// An NPC has one action per round, like a player. Without these every
+				// enemy attacked on every player's turn.
+				round: s.round || 1,
 				turnIndex: s.turnIndex,
 				partySize: (s.initiative || []).filter((n) => !s.players?.[n]?.dead).length,
 			});
+
+			// Record who spent their action, so they cannot come round again before the
+			// round does. The resolver reports it rather than writing to the roster
+			// itself, the same split `resolveAttack` keeps from `applyEnemyDamage`.
+			for (const name of enemyTurn.acted || []) {
+				if (s.enemies?.[name]) s.enemies[name].actedInRound = s.round || 1;
+			}
 
 			// Whether a fight ever happens was the narrator's whim, and it declined: one
 			// 120-turn game set combat_over on all 36 of its DM turns and never once

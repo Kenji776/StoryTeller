@@ -340,8 +340,9 @@ test("each enemy attacks exactly once over a full round of player turns", () => 
 
 	const swings = [];
 	for (let turnIndex = 0; turnIndex < 3; turnIndex++) {
-		const { attacks } = resolveEnemyAttacks({ enemies, players, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
-		swings.push(...attacks.map((a) => a.enemy));
+		const r = resolveEnemyAttacks({ enemies, players, round: 1, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 1;
+		swings.push(...r.attacks.map((a) => a.enemy));
 	}
 
 	assert.equal(swings.length, 3, `three enemies over three turns should swing three times, got ${swings.length}`);
@@ -351,7 +352,7 @@ test("each enemy attacks exactly once over a full round of player turns", () => 
 test("a single player faces the whole roster on their turn", () => {
 	// Their turn *is* the round, so nothing should be held back.
 	const { attacks } = resolveEnemyAttacks({
-		enemies: horde(3), players: economyParty(1), turnIndex: 0, partySize: 1, rollD20: () => 10, rollDamage: () => 1,
+		enemies: horde(3), players: economyParty(1), round: 1, turnIndex: 0, partySize: 1, rollD20: () => 10, rollDamage: () => 1,
 	});
 
 	assert.equal(attacks.length, 3);
@@ -362,8 +363,9 @@ test("more enemies than players means several act on one turn", () => {
 	const enemies = horde(6);
 	const players = economyParty(2);
 
-	const first = resolveEnemyAttacks({ enemies, players, turnIndex: 0, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
-	const second = resolveEnemyAttacks({ enemies, players, turnIndex: 1, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
+	const first = resolveEnemyAttacks({ enemies, players, round: 1, turnIndex: 0, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
+	for (const name of first.acted) enemies[name].actedInRound = 1;
+	const second = resolveEnemyAttacks({ enemies, players, round: 1, turnIndex: 1, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
 
 	assert.equal(first.attacks.length, 3);
 	assert.equal(second.attacks.length, 3);
@@ -375,18 +377,24 @@ test("fewer enemies than players means some turns draw no attack", () => {
 	const enemies = horde(1);
 	const players = economyParty(3);
 
-	const counts = [0, 1, 2].map((turnIndex) =>
-		resolveEnemyAttacks({ enemies, players, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 }).attacks.length);
+	const counts = [0, 1, 2].map((turnIndex) => {
+		const r = resolveEnemyAttacks({ enemies, players, round: 1, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 1;
+		return r.attacks.length;
+	});
 
 	assert.deepEqual(counts, [1, 0, 0]);
 });
 
 test("a turn index beyond the party wraps rather than silencing the enemies", () => {
+	// Index 5 in a party of two wraps to seat 1 — the last turn of the round — so
+	// everyone still holding an action spends it. The point of the case is that a
+	// nonsense index does not silence the roster, not the exact count.
 	const { attacks } = resolveEnemyAttacks({
-		enemies: horde(2), players: economyParty(2), turnIndex: 5, partySize: 2, rollD20: () => 10, rollDamage: () => 1,
+		enemies: horde(2), players: economyParty(2), round: 1, turnIndex: 5, partySize: 2, rollD20: () => 10, rollDamage: () => 1,
 	});
 
-	assert.equal(attacks.length, 1);
+	assert.equal(attacks.length, 2);
 });
 
 test("without a turn index the whole roster acts, as it did before", () => {
@@ -404,9 +412,11 @@ test("dead enemies are skipped without stealing a living one's turn", () => {
 	enemies.E1.status = "dead";
 	enemies.E1.hp = 0;
 
-	const swings = [0, 1, 2].flatMap((turnIndex) =>
-		resolveEnemyAttacks({ enemies, players: economyParty(3), turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 })
-			.attacks.map((a) => a.enemy));
+	const swings = [0, 1, 2].flatMap((turnIndex) => {
+		const r = resolveEnemyAttacks({ enemies, players: economyParty(3), round: 1, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 1;
+		return r.attacks.map((a) => a.enemy);
+	});
 
 	assert.deepEqual(swings.sort(), ["E0", "E2"]);
 });
@@ -479,4 +489,143 @@ test("a character with no stated maximum is not shielded by a nonsense cap", () 
 	});
 
 	assert.ok(attacks[0].damage >= 1 && Number.isInteger(attacks[0].damage));
+});
+
+// ===== One action each, per round =====
+//
+// The first share-out was positional: it sliced the living roster by the acting
+// player's index. That got the aggregate right — N enemies made N attacks a round
+// instead of N×P — but it was not the rule anyone means by "action economy". Kill one
+// goblin mid-round and the list reindexes, so another goblin silently loses its turn
+// while a third gets one it had already taken.
+//
+// An NPC has an action, and spends it once per round, exactly as a player does. That
+// is tracked on the NPC, not derived from its position in an array.
+
+test("each enemy acts once per round even when the roster changes mid-round", () => {
+	const enemies = horde(3);
+	const players = economyParty(3);
+	const acted = [];
+
+	for (let turnIndex = 0; turnIndex < 3; turnIndex++) {
+		// E0 dies immediately after acting, exactly as a player would kill it.
+		if (turnIndex === 1) { enemies.E0.status = "dead"; enemies.E0.hp = 0; }
+
+		const r = resolveEnemyAttacks({ enemies, players, round: 4, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 4;
+		acted.push(...r.attacks.map((a) => a.enemy));
+	}
+
+	// E0 got its action before dying; E1 and E2 must each still get theirs.
+	assert.deepEqual([...new Set(acted)].sort(), ["E0", "E1", "E2"]);
+	assert.equal(acted.length, 3, `expected three attacks in the round, got ${acted.length}: ${acted.join(", ")}`);
+});
+
+test("an enemy cannot act twice in the same round", () => {
+	const enemies = horde(1);
+	const players = economyParty(3);
+	let total = 0;
+
+	for (let turnIndex = 0; turnIndex < 3; turnIndex++) {
+		const r = resolveEnemyAttacks({ enemies, players, round: 2, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 2;
+		total += r.attacks.length;
+	}
+
+	assert.equal(total, 1);
+});
+
+test("a new round gives everyone their action back", () => {
+	const enemies = horde(2);
+	const players = economyParty(2);
+
+	for (const round of [1, 2]) {
+		let inThisRound = 0;
+		for (let turnIndex = 0; turnIndex < 2; turnIndex++) {
+			const r = resolveEnemyAttacks({ enemies, players, round, turnIndex, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
+			for (const name of r.acted) enemies[name].actedInRound = round;
+			inThisRound += r.attacks.length;
+		}
+		assert.equal(inThisRound, 2, `round ${round} produced ${inThisRound} attacks`);
+	}
+});
+
+test("the roster is spread across the turns rather than emptied on the first", () => {
+	// Every player's turn should draw some fire. Resolving the whole roster on the
+	// first action would leave the rest of the table untouched on their own turns.
+	const enemies = horde(4);
+	const players = economyParty(4);
+
+	const perTurn = [0, 1, 2, 3].map((turnIndex) => {
+		const r = resolveEnemyAttacks({ enemies, players, round: 1, turnIndex, partySize: 4, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 1;
+		return r.attacks.length;
+	});
+
+	assert.deepEqual(perTurn, [1, 1, 1, 1]);
+});
+
+test("more enemies than players still spreads, and still acts once each", () => {
+	const enemies = horde(6);
+	const players = economyParty(2);
+
+	const perTurn = [0, 1].map((turnIndex) => {
+		const r = resolveEnemyAttacks({ enemies, players, round: 1, turnIndex, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
+		for (const name of r.acted) enemies[name].actedInRound = 1;
+		return r.attacks.length;
+	});
+
+	assert.deepEqual(perTurn, [3, 3]);
+});
+
+// ── The exception: a creature that genuinely attacks more than once ──────────
+
+test("an enemy with multiattack swings that many times in its one action", () => {
+	const ogre = { Ogre: { name: "Ogre", hp: 59, max_hp: 59, ac: 11, str: 19, cr: "7", status: "active", multiattack: 2 } };
+
+	const r = resolveEnemyAttacks({
+		enemies: ogre, players: economyParty(1), round: 1, turnIndex: 0, partySize: 1, rollD20: () => 10, rollDamage: () => 4,
+	});
+
+	assert.equal(r.attacks.length, 2);
+	assert.deepEqual(r.acted, ["Ogre"]);
+});
+
+test("multiattack is still only one action, so it does not repeat within the round", () => {
+	const ogre = { Ogre: { name: "Ogre", hp: 59, max_hp: 59, ac: 11, str: 19, cr: "7", status: "active", multiattack: 3 } };
+	const players = economyParty(3);
+	let total = 0;
+
+	for (let turnIndex = 0; turnIndex < 3; turnIndex++) {
+		const r = resolveEnemyAttacks({ enemies: ogre, players, round: 1, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 4 });
+		for (const name of r.acted) ogre[name].actedInRound = 1;
+		total += r.attacks.length;
+	}
+
+	assert.equal(total, 3, "three swings once, not three swings three times");
+});
+
+test("an absent or nonsense multiattack means one attack", () => {
+	for (const multiattack of [undefined, null, 0, -2, 1, "two", {}]) {
+		const e = { E: { name: "E", hp: 7, max_hp: 7, ac: 15, str: 10, cr: "1/4", status: "active", multiattack } };
+		const r = resolveEnemyAttacks({ enemies: e, players: economyParty(1), round: 1, turnIndex: 0, partySize: 1, rollD20: () => 10, rollDamage: () => 1 });
+
+		assert.equal(r.attacks.length, 1, `multiattack ${JSON.stringify(multiattack)} gave ${r.attacks.length}`);
+	}
+});
+
+test("an absurd multiattack is capped rather than taken at its word", () => {
+	// The model writes these. "multiattack": 50 must not be fifty swings.
+	const e = { E: { name: "E", hp: 7, max_hp: 7, ac: 15, str: 10, cr: "1/4", status: "active", multiattack: 50 } };
+	const r = resolveEnemyAttacks({ enemies: e, players: economyParty(1), round: 1, turnIndex: 0, partySize: 1, rollD20: () => 10, rollDamage: () => 1 });
+
+	assert.ok(r.attacks.length <= 4, `made ${r.attacks.length} attacks`);
+});
+
+test("without a round the whole roster acts, as the timer path expects", () => {
+	const enemies = horde(3);
+
+	const r = resolveEnemyAttacks({ enemies, players: economyParty(3), rollD20: () => 10, rollDamage: () => 1 });
+
+	assert.equal(r.attacks.length, 3);
 });
