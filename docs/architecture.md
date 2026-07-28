@@ -29,7 +29,8 @@ constraint on the system, and the reason AI credentials must live server-side:
    (`server/routes/turnTimer.js`), **or** a background summarization fires
    (`LobbyStore.autoSummarize`). The last two have no client in the loop at all.
 2. The server composes a prompt from lobby state (`lobbyPrompts.js`) and calls
-   the configured model.
+   the configured model through `services/llmGateway.js`, which resolves whose
+   credential pays — the host's, the instance's, or none for a local service.
 3. The DM's reply is expected to be JSON. `server/helpers/parseDMJson.js` parses
    it through five escalating repair stages, two of which call the model again
    to repair malformed output.
@@ -101,4 +102,4 @@ never play.
 The admin panel is no longer on this list — it was read end to end and rebuilt;
 see the module document above.
 
-_Last verified: 2026-07-27 against branch `Refactor` (0856825)._
+_Last verified: 2026-07-27 against branch `Refactor` (5fcf307)._

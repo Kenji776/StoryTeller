@@ -15,7 +15,7 @@ import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import { Server } from "socket.io";
 import { LobbyStore } from "./services/lobbyStore.js";
-import { getLLMResponse, hasLLM, hasOpenAI, hasClaude, sanitizeForLLMName, generateCharacterImage, validateLLMKeys } from "./services/llmService.js";
+import { createLLMGateway } from "./services/llmGateway.js";
 import { roll } from "./helpers/dice.js";
 import fetch from "node-fetch";
 import { randomUUID, generateKeyPairSync, createSign, createVerify, createPublicKey } from "crypto";
@@ -235,6 +235,9 @@ const ttsActiveFor = (lobbyId) => !devMode && Boolean(resolveTTS(lobbyId, null))
 // Admin auth (registers routes on app, returns shared state)
 const adminAuth = registerAdminAuth(app, { store, charPublicKey, log });
 
+/** Where the per-lobby model-call journal is written. */
+const LOG_DIR = path.join(__dirname, "logs");
+
 /**
  * Who pays for each third-party call, and where those credentials live.
  *
@@ -251,6 +254,39 @@ const credentials = createCredentialSystem({
 			? fs.readFileSync(process.env.STORYTELLER_SECRET_FILE, "utf8").trim()
 			: null),
 	log,
+});
+
+/**
+ * Every model call in the game goes through here. The signature is unchanged from
+ * the service it replaces, so the ~20 call sites did not move; what changed is
+ * that the credential now comes from the resolver rather than a module-load
+ * client built from .env. See docs/modules/credentials.md.
+ */
+const { getLLMResponse, generateImage } = createLLMGateway({
+	credentials,
+	logDir: LOG_DIR,
+	fetchImpl: fetch,
+	log,
+	onFailure: (detail) => {
+		// A missing or rejected credential is the host's to fix, so it is told to
+		// them directly rather than only landing in the incident log.
+		if (detail.lobbyId) {
+			busIo.to(detail.lobbyId).emit("ai:unavailable", {
+				capability: detail.capability,
+				provider: detail.providerId,
+				reason: detail.reason,
+				message: detail.message,
+				retryable: Boolean(detail.retryable),
+			});
+			incidents.raise(detail.lobbyId, {
+				kind: "llm_failure",
+				severity: SEVERITY.ERROR,
+				message: detail.message,
+				detail: { capability: detail.capability, provider: detail.providerId, reason: detail.reason },
+				suggestedFix: "Check this lobby's provider in Settings, or the server's Providers screen.",
+			});
+		}
+	},
 });
 
 // Operator-only. Gated on a password admin session and never on a host token —
@@ -402,6 +438,7 @@ function autoHibernateStaleGames() {
 		if (!hasConnected || isStale) {
 			lobby.phase = "hibernating";
 			store.persist(lobby.lobbyId);
+			credentials.sessionKeys.dropSecrets(lobby.lobbyId, "lobby-hibernated");
 			log(`💤 Auto-hibernated lobby ${lobby.lobbyId} — ${!hasConnected ? "no connected players" : "inactive 30+ min"}`);
 		}
 	}
@@ -409,6 +446,11 @@ function autoHibernateStaleGames() {
 
 function getPublicLobbies() {
 	autoHibernateStaleGames();
+	// A host's expiry date must fire whether or not anyone is playing (ADR 0014),
+	// which a check on the read path alone cannot deliver.
+	for (const record of credentials.sessionKeys.sweep()) {
+		busIo.to(room(record.lobbyId)).emit("ai:credential:dropped", { capability: record.capability, reason: record.reason });
+	}
 	return Object.values(store.index)
 		.filter((l) => ["waiting", "running", "hibernating", "wiped", "completed"].includes(l.phase))
 		.map((l) => ({
@@ -1344,6 +1386,7 @@ io.on("connection", (socket) => {
 		if (!s || s.phase !== "running") return;
 		store.setPhase(lobbyId, "completed");
 		cancelTurnTimer(lobbyId);
+		credentials.sessionKeys.forget(lobbyId, "game-ended");
 		busIo.to(room(lobbyId)).emit("game:over", { reason: "completed" });
 		broadcastLobbies();
 		log(`🏆 Campaign completed for lobby ${lobbyId}`);
@@ -1421,6 +1464,13 @@ io.on("connection", (socket) => {
 
 	// === CONNECTION LIFECYCLE ===
 	socket.on("disconnecting", () => {
+		// A host's credential exists only while its owner is connected (ADR 0003).
+		// The spend ledger deliberately survives, so reconnecting cannot reset a
+		// limit the host set for themselves (ADR 0014).
+		for (const record of credentials.sessionKeys.dropSecretsBySocket(socket.id, "host-disconnected")) {
+			busIo.to(room(record.lobbyId)).emit("ai:credential:dropped", { capability: record.capability, reason: record.reason });
+		}
+
 		log(`⚡ disconnecting: ${socket.id} | rooms: ${[...socket.rooms].join(", ")}`);
 		try {
 			for (const [lobbyId, lobby] of Object.entries(store.index || {})) {
@@ -1440,6 +1490,7 @@ io.on("connection", (socket) => {
 							if (otherSocket) otherSocket.leave(room(lobbyId));
 						}
 					}
+					credentials.sessionKeys.forget(lobbyId, "lobby-deleted");
 					store.deleteLobby(lobbyId);
 					broadcastLobbies();
 					continue;
@@ -1549,12 +1600,12 @@ app.post("/api/character-image", async (req, res) => {
 			log("   rejected: developer mode");
 			return res.status(REJECTED_REQUEST_STATUS).json({ message: "Character image generation disabled in developer mode." });
 		}
-		// Portraits are OpenAI-only, so check for that key specifically. hasLLM() is
-		// true for a Claude-only install, which passed this gate and then failed
-		// inside the service with a much less helpful message.
-		if (!hasOpenAI()) {
-			log("   rejected: no OpenAI key configured");
-			return res.status(503).json({ error: "Image generation unavailable — no OpenAI key configured" });
+		// Portraits were OpenAI-only and gated on that one key. Any configured image
+		// provider will now do, including a local server that needs no key at all,
+		// so the gate asks the capability view rather than a single vendor.
+		if (!credentials.describeForPlayers().image.providers.some((p) => p.ready || p.needsPlayerKey)) {
+			log("   rejected: no image provider is configured");
+			return res.status(503).json({ error: "Image generation is not available on this server." });
 		}
 
 		// The player edits the prompt before sending; the sheet is only the fallback
@@ -1563,7 +1614,7 @@ app.post("/api/character-image", async (req, res) => {
 		const finalPrompt = finalisePrompt(typeof prompt === "string" && prompt.trim() ? prompt : buildPortraitPrompt(sheet));
 
 		log(`🎨 Generating character image for ${playerName} in lobby ${lobbyId}`);
-		const { b64, model } = await generateCharacterImage(finalPrompt);
+		const { b64, model } = await generateImage({ prompt: finalPrompt, lobbyId });
 		log(`   model: ${model}`);
 
 		const safeName = playerName.replace(/[^a-zA-Z0-9]/g, "_");
@@ -1666,24 +1717,62 @@ async function probeTTS() {
 	serviceStatus.elevenlabs = ttsAvailability.elevenlabs;
 }
 
+/**
+ * Reports what this instance can do, and why.
+ *
+ * @description This used to spend two real API calls proving the keys in `.env`
+ *   worked. It no longer does, for two reasons: which providers are offered is
+ *   now a policy question rather than a which-keys-exist question, and a boot
+ *   result is stale the moment a key is revoked. Live validation moved to the
+ *   admin console's Test button, which records its outcome against the key, and
+ *   a failure mid-game now reaches the host as `ai:unavailable` with something
+ *   they can act on.
+ *
+ *   Local services are still probed, because that costs nothing and an
+ *   unreachable one is worth knowing about before anybody tries to play.
+ * @returns {Promise<void>} Resolves once availability has been reported.
+ */
 async function validateServices() {
-	log("🔑 Validating API keys...");
-	const llm = await validateLLMKeys();
-	serviceStatus.openai = llm.openai.ok;
-	serviceStatus.claude = llm.claude.ok;
-	if (llm.openai.ok)  log("  ✅ OpenAI API key is valid");
-	else                 log(`  ❌ OpenAI: ${llm.openai.error}`);
-	if (llm.claude.ok)  log("  ✅ Claude API key is valid");
-	else                 log(`  ❌ Claude: ${llm.claude.error}`);
-	await probeTTS();
+	log("🔑 Provider configuration:");
 
-	const active = [
-		serviceStatus.openai && "OpenAI",
-		serviceStatus.claude && "Claude",
-		ttsAvailability.local && "Local TTS",
-		ttsAvailability.elevenlabs && "ElevenLabs",
-	].filter(Boolean);
-	log(`🟢 Active services: ${active.length ? active.join(", ") : "none (stub mode)"}`);
+	const described = credentials.describe();
+	for (const [capability, view] of Object.entries(described)) {
+		for (const provider of view.providers) {
+			if (provider.policy === "off") continue;
+			const detail = provider.policy === "shared"
+				? (provider.key.configured ? `this server's key${provider.key.status === "rejected" ? " — last test was rejected" : ""}` : "SHARED BUT NO KEY SET")
+				: provider.policy === "byok" ? "players bring their own"
+				: "local service";
+			log(`  • ${capability}/${provider.id}: ${provider.policy} — ${detail}`);
+		}
+	}
+
+	// `/api/features` has always published these three, and the old settings window
+	// still gates on them. Populated from the vault so their meaning stays close to
+	// what it was: "this instance has a key for it".
+	serviceStatus.openai = credentials.vault.has("openai");
+	serviceStatus.claude = credentials.vault.has("anthropic");
+
+	await probeTTS();
+	credentials.setAvailability("speech", { ...ttsAvailability });
+
+	const imageProvider = credentials.providerFor("image", "local-image");
+	const imageEntry = credentials.getPolicy().image?.["local-image"];
+	if (imageProvider && imageEntry?.policy === "local") {
+		const reachable = await imageProvider.probe({
+			config: { providerId: "local-image", apiKey: null, model: null, baseUrl: imageEntry.baseUrl },
+			fetchImpl: fetch,
+		});
+		credentials.setAvailability("image", { "local-image": reachable });
+		log(reachable
+			? `  ✅ Local image server is answering at ${imageEntry.baseUrl}`
+			: `  ❌ Local image server is not reachable at ${imageEntry.baseUrl || "(no address set)"}`);
+	}
+
+	const usable = Object.entries(credentials.describeForPlayers())
+		.filter(([, view]) => view.anyUsableWithoutPlayerKey)
+		.map(([capability]) => capability);
+	log(`🟢 Playable without a player key: ${usable.length ? usable.join(", ") : "nothing — players must bring their own"}`);
 }
 
 function validateConfigFiles() {

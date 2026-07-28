@@ -16,8 +16,22 @@
  *   design fault is returning them at all, and that is recorded in ADR 0009.
  */
 
-/** The exact strings `llmService` returns in place of a reply. */
+import { AI_UNAVAILABLE_PREFIX } from "./llmGateway.js";
+
+/**
+ * The exact strings a model call returns in place of a reply.
+ *
+ * The first four came from the retired `llmService`. They are kept because a
+ * lobby's persisted history can still contain them, and a repair pass reading
+ * that history must not mistake one for narration.
+ *
+ * `AI_UNAVAILABLE_PREFIX` is the live one: `llmGateway` returns it for every
+ * failure, followed by a message written for the person who can fix it. The two
+ * modules must stay in step — a sentinel this guard does not recognise would be
+ * published to players as story, which is exactly the defect ADR 0009 records.
+ */
 const FAILURE_SENTINELS = [
+	AI_UNAVAILABLE_PREFIX,
 	"[Error: LLM unavailable or failed to respond]",
 	"[Error: no content returned]",
 	"[Stubbed LLM] No OpenAI key configured.",

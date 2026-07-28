@@ -41,7 +41,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 |---|---|
 | `server/server.js` | Express + Socket.IO entry point; core game-flow socket events |
 | `server/routes/` | Turn timer, admin auth/events, TTS HTTP routes, chat |
-| `server/services/` | Lobby store and its mixins, LLM access, map, SFX, game-state broadcasts |
+| `server/services/` | Lobby store and its mixins, the LLM gateway, map, SFX, game-state broadcasts |
 | `server/services/llm/` | Provider-agnostic AI layer — see [modules/llm.md](modules/llm.md) |
 | `server/services/tts/` | Provider-agnostic narration layer — see [modules/tts.md](modules/tts.md) |
 | `server/services/credentials/` | Operator key vault and provider policy — see [modules/credentials.md](modules/credentials.md) |
@@ -60,7 +60,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/images.md](modules/images.md) — the image generation layer
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0015 — image generation becomes a provider layer](decisions/0015-image-generation-becomes-a-provider-layer.md))
+  (newest: [0016 — the game loop moves onto the credential resolver](decisions/0016-the-game-loop-moves-onto-the-credential-resolver.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._

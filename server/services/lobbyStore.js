@@ -9,7 +9,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { getDefaultLLMSettings } from "./llmService.js";
+import { getDefaultLLMSettings } from "./llm/defaults.js";
 
 // Sub-module mixins
 import { historyMethods, MAX_PINS } from "./lobby/lobbyHistory.js";

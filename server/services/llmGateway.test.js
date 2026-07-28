@@ -1,0 +1,357 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import path from "path";
+
+import { createLLMGateway, AI_UNAVAILABLE_PREFIX } from "./llmGateway.js";
+import { createCredentialSystem } from "./credentials/index.js";
+import { isLLMFailure } from "./llmFailure.js";
+
+/** Obviously-fake credentials. Nothing here may ever reach a real provider (TDD-14). */
+const SERVER_KEY = "test-token-DO-NOT-USE-server";
+const HOST_KEY = "test-token-DO-NOT-USE-host";
+const SECRET = "test-vault-secret-DO-NOT-USE";
+
+const DATA_DIR = "/data";
+const LOG_DIR = "/logs";
+const LOBBY = "lobby-1";
+const MESSAGES = [{ role: "system", content: "You are the DM." }, { role: "user", content: "I open the door." }];
+
+/**
+ * @description Builds an in-memory filesystem double.
+ * @param {object} [seed] - Initial path→contents map.
+ * @returns {object} An fs-shaped double.
+ */
+function makeFs(seed = {}) {
+	const files = { ...seed };
+	return {
+		files,
+		existsSync: (p) => Object.hasOwn(files, p),
+		readFileSync: (p) => {
+			if (!Object.hasOwn(files, p)) throw Object.assign(new Error(`ENOENT: ${p}`), { code: "ENOENT" });
+			return files[p];
+		},
+		writeFileSync: (p, data) => { files[p] = data; },
+		appendFileSync: (p, data) => { files[p] = (files[p] ?? "") + data; },
+		mkdirSync: () => {},
+	};
+}
+
+/**
+ * @description Builds a fetch double answering a chat completion.
+ * @param {object} [options] - How the fake provider should answer.
+ * @returns {Function} A fetch-shaped function carrying a `calls` array.
+ */
+function makeFetch({ status = 200, body, throws } = {}) {
+	const calls = [];
+	const impl = async (url, init) => {
+		calls.push({ url, init, payload: init?.body ? JSON.parse(init.body) : null });
+		if (throws) throw throws;
+		const answer = body ?? { content: [{ type: "text", text: "The door creaks open." }], model: "claude-sonnet-4-6" };
+		return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(answer) };
+	};
+	impl.calls = calls;
+	return impl;
+}
+
+/**
+ * Assembles a gateway over a real credential system and fake I/O.
+ *
+ * @param {object} [options] - Overrides.
+ * @returns {object} The gateway, the credential system, and the failures reported.
+ */
+function makeGateway({ fetchImpl = makeFetch(), policy, vaultKeys = {} } = {}) {
+	const fsImpl = makeFs();
+	const credentials = createCredentialSystem({
+		fsImpl, dataDir: DATA_DIR, secret: SECRET, env: {}, log: () => {},
+		now: () => new Date("2026-07-27T12:00:00.000Z"),
+	});
+	for (const [id, key] of Object.entries(vaultKeys)) credentials.vault.set(id, key);
+	if (policy) credentials.setPolicy(policy);
+
+	const failures = [];
+	const gateway = createLLMGateway({
+		credentials,
+		fsImpl,
+		logDir: LOG_DIR,
+		fetchImpl,
+		log: () => {},
+		now: () => new Date("2026-07-27T12:00:00.000Z"),
+		onFailure: (detail) => failures.push(detail),
+	});
+	return { gateway, credentials, failures, fsImpl, fetchImpl };
+}
+
+// ── The happy path, on the existing contract ─────────────────────────────────
+
+test("a reply comes back as a plain string, as every call site already expects", async () => {
+	const { gateway } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+	assert.equal(typeof reply, "string");
+	assert.equal(reply, "The door creaks open.");
+});
+
+test("the instance's shared key is what reaches the provider", async () => {
+	const { gateway, fetchImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+	assert.equal(fetchImpl.calls[0].init.headers["x-api-key"], SERVER_KEY);
+});
+
+test("a host's own key is preferred over the instance's", async () => {
+	const { gateway, credentials, fetchImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+	credentials.sessionKeys.put(LOBBY, {
+		capability: "chat",
+		config: { providerId: "anthropic", apiKey: HOST_KEY, model: "claude-sonnet-4-6", baseUrl: null },
+		ownerSid: "socket-host",
+		consent: true,
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+	assert.equal(fetchImpl.calls[0].init.headers["x-api-key"], HOST_KEY);
+});
+
+test("the lobby's chosen model is the one requested", async () => {
+	const { gateway, fetchImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-opus-4-6", lobbyId: LOBBY });
+	assert.equal(fetchImpl.calls[0].payload.model, "claude-opus-4-6");
+});
+
+test("the legacy provider id for Anthropic still resolves", async () => {
+	const { gateway, fetchImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	// Lobbies persisted before the registry existed carry llmProvider: "claude".
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "claude", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+
+	assert.equal(isLLMFailure(reply), false, `a lobby stored as "claude" could not resolve: ${reply}`);
+	assert.equal(fetchImpl.calls.length, 1);
+});
+
+// ── Failure is a string the existing guard recognises ────────────────────────
+
+test("a provider with no credential answers with a recognised failure rather than throwing", async () => {
+	const { gateway } = makeGateway({ policy: { chat: { anthropic: "byok" } } });
+
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+
+	assert.ok(reply.startsWith(AI_UNAVAILABLE_PREFIX));
+	assert.equal(isLLMFailure(reply), true, "the failure guard did not recognise the gateway's sentinel");
+});
+
+test("the failure text tells the host what to do about it", async () => {
+	const { gateway } = makeGateway({ policy: { chat: { anthropic: "byok" } } });
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+
+	assert.match(reply, /Anthropic/);
+	assert.match(reply, /key/i);
+});
+
+test("a rejected key answers with a failure rather than throwing", async () => {
+	const { gateway } = makeGateway({
+		fetchImpl: makeFetch({ status: 401, body: { error: { message: "invalid key" } } }),
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+	assert.equal(isLLMFailure(reply), true);
+});
+
+test("an unreachable provider answers with a failure rather than throwing", async () => {
+	const { gateway } = makeGateway({
+		fetchImpl: makeFetch({ throws: new Error("ECONNREFUSED") }),
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	assert.equal(isLLMFailure(await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY })), true);
+});
+
+test("an unknown provider answers with a failure rather than throwing", async () => {
+	const { gateway } = makeGateway();
+	assert.equal(isLLMFailure(await gateway.getLLMResponse(MESSAGES, { provider: "hal9000", lobbyId: LOBBY })), true);
+});
+
+test("no failure string carries key material", async () => {
+	const { gateway } = makeGateway({
+		fetchImpl: makeFetch({ status: 401, body: { error: { message: `bad key ${SERVER_KEY}` } } }),
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY });
+	assert.ok(!reply.includes(SERVER_KEY), "a failure string echoed the key back");
+});
+
+// ── Failures are reported structurally, not only as a string ─────────────────
+
+test("a missing credential is reported to the host-facing listener", async () => {
+	const { gateway, failures } = makeGateway({ policy: { chat: { anthropic: "byok" } } });
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY });
+
+	assert.equal(failures.length, 1);
+	assert.equal(failures[0].lobbyId, LOBBY);
+	assert.equal(failures[0].capability, "chat");
+	assert.equal(failures[0].reason, "byok");
+	assert.match(failures[0].message, /Anthropic/);
+});
+
+test("a provider failure is reported with its kind, so retry can be decided", async () => {
+	const { gateway, failures } = makeGateway({
+		fetchImpl: makeFetch({ status: 429, body: { error: { message: "slow down" } } }),
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+
+	assert.equal(failures[0].kind, "rate_limit");
+	assert.equal(failures[0].retryable, true);
+});
+
+test("a successful call reports no failure", async () => {
+	const { gateway, failures } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+	assert.deepEqual(failures, []);
+});
+
+// ── The call journal ─────────────────────────────────────────────────────────
+
+test("every call is journalled under the lobby it belongs to", async () => {
+	const { gateway, fsImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+
+	const written = fsImpl.files[path.join(LOG_DIR, `llm-${LOBBY}.jsonl`)];
+	assert.ok(written, "no journal entry was written");
+	const entry = JSON.parse(written.trim());
+	assert.equal(entry.lobbyId, LOBBY);
+	assert.equal(entry.provider, "anthropic");
+	assert.equal(entry.model, "claude-sonnet-4-6");
+});
+
+test("the journal records whose credential paid", async () => {
+	const { gateway, fsImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY });
+
+	const entry = JSON.parse(fsImpl.files[path.join(LOG_DIR, `llm-${LOBBY}.jsonl`)].trim());
+	assert.equal(entry.source, "server");
+});
+
+test("the journal never contains key material", async () => {
+	const { gateway, credentials, fsImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+	credentials.sessionKeys.put(LOBBY, {
+		capability: "chat",
+		config: { providerId: "anthropic", apiKey: HOST_KEY, model: "claude-sonnet-4-6", baseUrl: null },
+		ownerSid: "socket-host",
+		consent: true,
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY });
+
+	const journal = Object.entries(fsImpl.files).filter(([p]) => p.includes("llm-")).map(([, v]) => v).join("");
+	assert.ok(!journal.includes(HOST_KEY), "the journal carried the host's key");
+	assert.ok(!journal.includes(SERVER_KEY), "the journal carried the instance's key");
+});
+
+test("a failed call is journalled too, with its error", async () => {
+	const { gateway, fsImpl } = makeGateway({
+		fetchImpl: makeFetch({ status: 500, body: { error: { message: "boom" } } }),
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY });
+
+	const entry = JSON.parse(fsImpl.files[path.join(LOG_DIR, `llm-${LOBBY}.jsonl`)].trim());
+	assert.ok(entry.error, "a failed call left no error in the journal");
+});
+
+test("a journal write failure never takes down the call", async () => {
+	const { gateway, fsImpl } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+	fsImpl.appendFileSync = () => { throw new Error("EACCES"); };
+
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", model: "claude-sonnet-4-6", lobbyId: LOBBY });
+	assert.equal(reply, "The door creaks open.");
+});
+
+// ── Images ──────────────────────────────────────────────────────────────────
+
+test("an image is generated through the configured provider", async () => {
+	const fetchImpl = makeFetch({ body: { images: ["iVBORw0KGgo="], seed: 7, model: "krea2" } });
+	const { gateway } = makeGateway({
+		fetchImpl,
+		policy: { image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.50:8189" } } },
+	});
+
+	const result = await gateway.generateImage({ prompt: "a dwarf", lobbyId: LOBBY });
+	assert.equal(result.b64, "iVBORw0KGgo=");
+	assert.equal(result.model, "krea2");
+});
+
+test("image generation with no configured provider throws, because the route reports it", async () => {
+	const { gateway } = makeGateway({ policy: { image: { "local-image": "off", openai: "off" } } });
+
+	await assert.rejects(
+		() => gateway.generateImage({ prompt: "a dwarf", lobbyId: LOBBY }),
+		/unavailable|not offered|no image/i,
+	);
+});
+
+test("image generation prefers the provider the lobby asked for", async () => {
+	const fetchImpl = makeFetch({ body: { data: [{ b64_json: "iVBORw0KGgo=" }] } });
+	const { gateway } = makeGateway({
+		fetchImpl,
+		policy: { image: { openai: "shared" } },
+		vaultKeys: { openai: SERVER_KEY },
+	});
+
+	await gateway.generateImage({ prompt: "a dwarf", lobbyId: LOBBY, provider: "openai" });
+	assert.match(fetchImpl.calls[0].url, /images\/generations/);
+});
+
+test("a lobby with no model configured fails with a message naming the problem", async () => {
+	const { gateway } = makeGateway({
+		policy: { chat: { anthropic: "shared" } },
+		vaultKeys: { anthropic: SERVER_KEY },
+	});
+
+	const reply = await gateway.getLLMResponse(MESSAGES, { provider: "anthropic", lobbyId: LOBBY });
+
+	assert.equal(isLLMFailure(reply), true);
+	assert.match(reply, /model/i);
+});

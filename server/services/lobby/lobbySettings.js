@@ -4,7 +4,7 @@
  */
 
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
-import { getDefaultLLMSettings } from "../llmService.js";
+import { getDefaultLLMSettings } from "../llm/defaults.js";
 import { TTS_PROVIDERS } from "../tts/registry.js";
 
 /** The registry is the single source of truth for which provider ids are legal. */
