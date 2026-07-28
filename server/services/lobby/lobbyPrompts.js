@@ -288,7 +288,11 @@ reaching a milestone. Leave it empty when nothing like that happened.
 		const minLevel = Math.min(...(levels.length ? levels : [1]));
 		const maxLevel = Math.max(...(levels.length ? levels : [1]));
 		const levelRange = minLevel === maxLevel ? `${avgLevel}` : `${minLevel}–${maxLevel} (avg ${avgLevel})`;
-		const encounterInstruction = `\nEncounter scaling: The party is ${partySize} player(s) at level ${levelRange}. ALL enemies, traps, hazards, and DCs MUST be appropriate for this level using D&D 5e CR guidelines. Level 1–2 parties should face CR 1/8–1 creatures (goblins, wolves, bandits, skeletons) — never dragons, liches, or high-CR threats. Level 3–5 parties can handle CR 1–5 creatures. Level 6–10 parties can face CR 3–8+ creatures. Scale enemy HP, damage output, AC, and spell levels to the party's capabilities. A single encounter should be winnable but challenging — not an instant TPK. Adjust the NUMBER of enemies rather than using single overpowered foes when possible.`;
+		const encounterInstruction = `\nEncounter scaling: The party is ${partySize} player(s) at level ${levelRange}. ALL enemies, traps, hazards, and DCs MUST be appropriate for this level using D&D 5e CR guidelines. Level 1–2 parties should face CR 1/8–1 creatures (goblins, wolves, bandits, skeletons) — never dragons, liches, or high-CR threats. Level 3–5 parties can handle CR 1–5 creatures. Level 6–10 parties can face CR 3–8+ creatures. Scale enemy HP, damage output, AC, and spell levels to the party's capabilities. A single encounter should be winnable but challenging — not an instant TPK. Adjust the NUMBER of enemies rather than using single overpowered foes when possible.
+
+A FIGHT LASTS SEVERAL ROUNDS. One player action does not end an encounter. When you introduce enemies they survive the turn that introduced them — a single attack may wound one, not wipe out the group — and they are still on the roster, still "active", when the next player acts. Give them enough hit points to take more than one blow. Encounters that begin and finish inside a single turn were making the whole adventure riskless: the party never faced a return blow, because the enemies were dead before they could strike one.
+
+Keep "combat_over" false for as long as any enemy is still standing.`;
 
 		const base = [
 			{
