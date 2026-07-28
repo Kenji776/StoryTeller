@@ -45,6 +45,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 | `server/services/llm/` | Provider-agnostic AI layer — see [modules/llm.md](modules/llm.md) |
 | `server/services/tts/` | Provider-agnostic narration layer — see [modules/tts.md](modules/tts.md) |
 | `server/services/credentials/` | Operator key vault and provider policy — see [modules/credentials.md](modules/credentials.md) |
+| `server/services/images/` | Provider-agnostic image generation — see [modules/images.md](modules/images.md) |
 | `server/services/net/` | The private-network guard for operator-supplied service addresses |
 | `server/helpers/` | Dice, DM JSON parsing/repair, class progression, asset downloads |
 | `client/` | Browser client (no build step; plain ESM and HTML fragments) |
@@ -56,9 +57,10 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/tts.md](modules/tts.md) — the narration provider layer
 - [modules/admin-console.md](modules/admin-console.md) — the operator interface
 - [modules/credentials.md](modules/credentials.md) — who pays for a third-party call
+- [modules/images.md](modules/images.md) — the image generation layer
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0014 — a host credential is consented to, bounded, and outlived by its ledger](decisions/0014-a-host-credential-is-consented-bounded-and-outlived-by-its-ledger.md))
+  (newest: [0015 — image generation becomes a provider layer](decisions/0015-image-generation-becomes-a-provider-layer.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._
