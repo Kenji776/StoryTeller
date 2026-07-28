@@ -3,4 +3,9 @@ npm-debug.log
 .DS_Store
 .git
 .gitignore
+# Every .env, at any depth. The bare `.env` below matched only the context
+# root, so server/.env was being baked into the image -- and into every
+# tarball shipped to a deploy target -- with live API keys in plaintext.
+**/.env
+**/.env.*
 .env
