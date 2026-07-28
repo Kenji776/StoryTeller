@@ -15,6 +15,21 @@ const ESCAPES = Object.freeze({
 	"'": "&#39;",
 });
 
+/** Matches every character in {@link ESCAPES}. */
+const ESCAPABLE = /[&<>"']/g;
+
+/** Any run of whitespace, including the newlines DM markup arrives with. */
+const WHITESPACE = /\s+/g;
+
+/**
+ * @description Renders a value as a string, treating absence as empty.
+ * @param {*} value - Any value.
+ * @returns {string} The rendered text; `""` for null and undefined.
+ */
+function asString(value) {
+	return value === null || value === undefined ? "" : String(value);
+}
+
 /**
  * @description Escapes a value for interpolation into HTML.
  *
@@ -26,7 +41,7 @@ const ESCAPES = Object.freeze({
  * @returns {string} The escaped text.
  */
 export function esc(value) {
-	return "";
+	return asString(value).replace(ESCAPABLE, (char) => ESCAPES[char]);
 }
 
 /**
@@ -35,16 +50,23 @@ export function esc(value) {
  * @returns {string} The collapsed text.
  */
 export function collapseWhitespace(value) {
-	return "";
+	return asString(value).replace(WHITESPACE, " ").trim();
 }
 
 /**
  * @description Shortens text to a maximum length, marking that it was cut.
+ *
+ *   The ellipsis is counted against the maximum rather than added to it, so a
+ *   caller budgeting a fixed number of characters gets one.
  * @param {*} value - Any value; non-strings are stringified first.
  * @param {number} max - Longest permitted result *including* the ellipsis.
  * @returns {string} The original text, or a shortened form ending in `…`.
  * @throws {RangeError} When `max` is not a positive integer.
  */
 export function truncate(value, max) {
-	return "";
+	if (!Number.isInteger(max) || max < 1) {
+		throw new RangeError(`truncate needs a positive integer maximum, received ${JSON.stringify(max)}`);
+	}
+	const text = asString(value);
+	return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }

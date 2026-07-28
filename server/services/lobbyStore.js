@@ -186,6 +186,10 @@ export class LobbyStore {
 			history: s.history,
 			initiative: s.initiative,
 			turnIndex: s.turnIndex,
+			// The round is published alongside the order because `turnInfo` is only
+			// sent on a turn change, and anything rendering lobby state from
+			// `publicState` alone had no way to learn it.
+			round: s.round || 1,
 			timerEnabled: s.timerEnabled || false,
 			timerMinutes: s.timerMinutes || 5,
 			maxMissedTurns: s.maxMissedTurns || 3,

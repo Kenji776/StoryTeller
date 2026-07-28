@@ -8,7 +8,7 @@ no build step — see the Project Overrides table in `CLAUDE.md`.
 
 | Tier | Command | Contents |
 |---|---|---|
-| Unit | `npm test` | No I/O, no network, no clock. Everything under `server/` matching `*.test.js`. |
+| Unit | `npm test` | No I/O, no network, no clock. Everything under `server/` **and `client/`** matching `*.test.js`. |
 | Integration | `npm run test:integration` | Real network or filesystem. Lives in `server/test-integration/`, which is created when the first such test is written. |
 | Coverage | `npm run coverage` | Unit tier with `--experimental-test-coverage`. |
 
@@ -17,6 +17,12 @@ that make HTTP requests take `fetchImpl` as a parameter, and tests pass a fake.
 The integration directory is deliberately outside the unit runner's discovery
 path (`*.itest.js` and `test-integration/` are both invisible to `node --test
 server/`), so a missing credential can never break the default suite.
+
+Browser code is in the unit tier only where it is free of the DOM. A test under
+`client/` runs in Node with no `document`, so a module that reaches for one cannot
+be covered — which is the constraint that shapes `client/admin/`: state, routing,
+formatting and permissions are pure modules, and the DOM is confined to the layer
+that renders them.
 
 ## Conventions
 
@@ -41,8 +47,13 @@ Not covered as of this writing:
 - `server/server.js`, `server/routes/*`, `server/services/lobby*` — the existing
   game loop and lobby state. Large, I/O-coupled, and not yet refactored for
   injection.
-- The browser client. There is no DOM test harness; adding one would mean the
-  dependency this project has so far avoided.
+- **Rendering.** There is still no DOM test harness; adding one would mean the
+  dependency this project has so far avoided. The admin panel works around this
+  rather than accepting it: its logic lives in dependency-free modules under
+  `client/admin/core/`, which the unit tier covers in full, while the section
+  modules stay thin render functions over tested selectors. What that leaves
+  unverified is the rendering itself — that an element is built, placed and wired
+  to the right handler — which is checked by hand.
 - Real provider calls. Every adapter is unit-tested against a fake `fetch`, which
   pins request construction and response parsing but cannot catch a provider
   changing its API. That gap is what the integration tier is for — and it is now
@@ -55,4 +66,4 @@ Not covered as of this writing:
   MediaSource streaming and buffered Blob playback based on the provider's format;
   only the server half of that contract is covered. Verified by hand instead.
 
-_Last verified: 2026-07-27 against branch `Refactor` (634b6c1)._
+_Last verified: 2026-07-27 against branch `Refactor` (97d037d)._
