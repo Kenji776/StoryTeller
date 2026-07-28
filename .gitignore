@@ -9,18 +9,25 @@ server/data/images/
 server/data/lobbies/
 server/data/charkey.pem
 client/config/voices_cache.json
+# Key material. keyfile.age has sat untracked and unignored in the repo root since
+# before this was written; anything running `git add -A` would have committed it.
+*.age
+*.key
+*.pem
 .claude/
 .vscode/
 # Music (downloaded from GitHub Release)
-client/music/*.mp3
-client/sfx/*.mp3
+client/music/**/*.mp3
+client/sfx/**/*.mp3
 *.7z
 # Dependencies
 node_modules/
 
 # Logs
 *.log
+*.jsonl
 npm-debug.log*
+server/logs/
 
 # OS
 .DS_Store
