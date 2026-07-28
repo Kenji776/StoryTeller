@@ -10,25 +10,18 @@
  * accumulating behind it.
  */
 
-import { h } from "../ui/dom.js";
 import { dashboard } from "./dashboard.js";
 import { party } from "./party.js";
 import { turn } from "./turn.js";
 import { narrate } from "./narrate.js";
 import { audio } from "./audio.js";
-
-/**
- * @description Placeholder for a section whose rebuild has not landed yet.
- * @param {object} ctx - The section context.
- * @returns {HTMLElement} A panel explaining what will live here.
- */
-function notYetBuilt(ctx) {
-	return h("div.panel",
-		h("h2", ctx.section.label),
-		h("p.muted", "This section has not been rebuilt yet."),
-		h("p.muted.small", "The shell, routing and permissions are in place; the controls arrive in a later phase."),
-	);
-}
+import { health } from "./health.js";
+import { activity } from "./activity.js";
+import { lobbies } from "./lobbies.js";
+import { model } from "./model.js";
+import { campaign } from "./campaign.js";
+import { raw } from "./raw.js";
+import { toolbox } from "./toolbox.js";
 
 /**
  * Renderers by section id. Every id in `nav.js` must appear here, which
@@ -36,18 +29,18 @@ function notYetBuilt(ctx) {
  * indication anything was wrong.
  */
 const RENDERERS = {
-	lobbies: notYetBuilt,
+	lobbies,
 	dashboard,
 	party,
 	turn,
 	narrate,
 	audio,
-	health: notYetBuilt,
-	activity: notYetBuilt,
-	campaign: notYetBuilt,
-	model: notYetBuilt,
-	raw: notYetBuilt,
-	toolbox: notYetBuilt,
+	health,
+	activity,
+	campaign,
+	model,
+	raw,
+	toolbox,
 };
 
 /**
@@ -77,8 +70,14 @@ export function renderableIds() {
  * @param {function(Function): void} ctx.onCleanup - Registers teardown for this mount.
  * @param {function(object): void} ctx.navigate - Moves to another route.
  * @returns {HTMLElement} The section's element.
+ * @throws {RangeError} When no renderer exists for the section.
  */
 export function renderSection(ctx) {
-	const render = RENDERERS[ctx?.section?.id] ?? notYetBuilt;
-	return render(ctx);
+	const id = ctx?.section?.id;
+	if (!hasRenderer(id)) {
+		// Every nav entry has a renderer, and a test enforces it; reaching here means
+		// a route resolved to something the registry has never heard of.
+		throw new RangeError(`No renderer for section "${id}".`);
+	}
+	return RENDERERS[id](ctx);
 }

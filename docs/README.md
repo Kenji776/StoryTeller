@@ -55,6 +55,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/admin-console.md](modules/admin-console.md) — the operator interface
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
+  (newest: [0006 — the admin console as a routed shell](decisions/0006-admin-console-as-a-routed-shell.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (634b6c1)._

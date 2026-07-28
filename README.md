@@ -305,11 +305,16 @@ A password-protected admin panel for managing all games.
 
 ```
 client/                 # Browser client (vanilla JS, no build step)
-  admin/                # Admin panel (password-protected)
+  admin/                # Admin console (password-protected) - see docs/modules/admin-console.md
     login.html          # Admin login screen
     login.js            # Login logic (SHA-256 challenge-response)
-    admin.html          # Admin panel
-    admin.js            # Admin panel logic
+    admin.html          # Shell the console builds itself into
+    admin.css           # Console design system
+    app.js              # Boot, routing, chrome, section mounting
+    nav.js              # Section registry
+    core/               # State, routing, permissions, selectors (unit tested)
+    ui/                 # DOM helpers and shared components
+    sections/           # One renderer per section
   components/           # UI component templates (HTML fragments)
   config/               # JSON config files
     armor.json          # Armor definitions and class restrictions
@@ -318,6 +323,7 @@ client/                 # Browser client (vanilla JS, no build step)
     campaignFlavors.json # Campaign tone and theme presets
     classProgression.json # Class ability unlocks per level
     sfx-library.json    # SFX file-to-description mapping
+    llm_models.json     # Models the admin console offers, by provider
     library.json        # Music song list with mood tags
     voices_cache.json   # Cached ElevenLabs voice list (auto-generated, gitignored)
   music/                # Music files (.mp3, auto-downloaded on first run)

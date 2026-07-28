@@ -1,0 +1,24 @@
+{
+	"_comment": "Models offered by the admin console's AI Model section. Served statically like music_moods.json so the browser carries no hardcoded list to drift. Provider ids are the ones server/services/llmService.js understands.",
+	"providers": [
+		{
+			"id": "openai",
+			"label": "OpenAI",
+			"models": [
+				{ "id": "gpt-4o", "label": "GPT-4o" },
+				{ "id": "gpt-4o-mini", "label": "GPT-4o Mini" },
+				{ "id": "gpt-4-turbo", "label": "GPT-4 Turbo" },
+				{ "id": "gpt-5-chat-latest", "label": "GPT-5 (latest)" }
+			]
+		},
+		{
+			"id": "claude",
+			"label": "Claude",
+			"models": [
+				{ "id": "claude-opus-4-6", "label": "Claude Opus 4.6" },
+				{ "id": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6" },
+				{ "id": "claude-haiku-4-5-20251001", "label": "Claude Haiku 4.5" }
+			]
+		}
+	]
+}

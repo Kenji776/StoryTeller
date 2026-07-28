@@ -117,10 +117,12 @@ standing.
 
 ## Status
 
-Shell, routing, permissions, socket layer, and the Play sections (Dashboard,
-Party, Turn & Phase, Narration, Audio) are complete. Lobbies, Health, Activity,
-Campaign, AI Model, Raw State and Character Files still render a placeholder.
-`client/admin/admin.js` is the old panel, retained unreferenced as a porting
-reference until the last section lands.
+Complete. Every section in `nav.js` has a renderer, and a test enforces that.
 
-_Last verified: 2026-07-27 against branch `Refactor` (fcef5d0)._
+The old single-page panel (`client/admin/admin.js`) is deleted; its behaviour is
+distributed across `sections/`, and the decision record is
+[ADR 0006](../decisions/0006-admin-console-as-a-routed-shell.md).
+
+Rendering remains unverified by automated tests — see `docs/testing.md`.
+
+_Last verified: 2026-07-27 against branch `Refactor` (239340d)._
