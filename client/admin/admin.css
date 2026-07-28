@@ -56,6 +56,12 @@
 	box-sizing: border-box;
 }
 
+/* `hidden` must beat the display rules the components set, or an element hidden
+   by script stays on screen — the armour fields showed while Weapon was chosen. */
+.admin-body [hidden] {
+	display: none !important;
+}
+
 /* ── Boot ──────────────────────────────────────────────────────────────────── */
 
 .admin-body .boot {
@@ -649,7 +655,7 @@
 /* Party: table beside the inspector */
 .admin-body .party-layout {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(0, 22rem);
+	grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
 	gap: 1rem;
 	align-items: start;
 }
@@ -677,8 +683,8 @@
    value, side by side, instead of in two different tabs. */
 .admin-body .adjust-set {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-	gap: 0.9rem;
+	grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+	gap: 0.9rem 1.1rem;
 }
 
 .admin-body .adjust-set > div {
@@ -816,4 +822,34 @@
 
 .admin-body .repair-form .control-row {
 	gap: 0.4rem;
+}
+
+/* Inspector actions: one line each. A number, an optional reason, a verb. */
+.admin-body .adjust-set .control-row {
+	gap: 0.35rem;
+	margin-bottom: 0.35rem;
+	flex-wrap: nowrap;
+}
+
+.admin-body .adjust-set .control-row > .input {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.admin-body .adjust-set .control-row > .input-number {
+	flex: 0 0 4.5rem;
+	max-width: 4.5rem;
+}
+
+.admin-body .adjust-set .control-row > .btn {
+	flex: 0 0 auto;
+}
+
+.admin-body .adjust-set .control-row > .field-hint {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.admin-body .adjust-set select.multi {
+	flex: 1 1 100%;
 }

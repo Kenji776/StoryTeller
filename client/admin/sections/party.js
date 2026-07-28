@@ -216,15 +216,15 @@ export function party(ctx) {
 	 * @returns {HTMLElement} The two columns.
 	 */
 	function adjustAndSet(name, send, note) {
-		const xp = numberInput({ placeholder: "±XP" });
-		const xpWhy = textInput({ placeholder: "Reason" });
-		const hp = numberInput({ placeholder: "±HP" });
-		const hpWhy = textInput({ placeholder: "Reason" });
-		const gold = numberInput({ placeholder: "±Gold" });
-		const goldWhy = textInput({ placeholder: "Reason" });
-		const slots = numberInput({ placeholder: "±Used" });
-		const item = textInput({ placeholder: "Item" });
-		const qty = numberInput({ placeholder: "±Qty" });
+		const xp = numberInput({ placeholder: "±XP", "aria-label": "XP change" });
+		const xpWhy = textInput({ placeholder: "Reason", "aria-label": "Reason for the XP change" });
+		const hp = numberInput({ placeholder: "±HP", "aria-label": "HP change" });
+		const hpWhy = textInput({ placeholder: "Reason", "aria-label": "Reason for the HP change" });
+		const gold = numberInput({ placeholder: "±Gold", "aria-label": "Gold change" });
+		const goldWhy = textInput({ placeholder: "Reason", "aria-label": "Reason for the gold change" });
+		const slots = numberInput({ placeholder: "±Used", "aria-label": "Change in ability uses spent" });
+		const item = textInput({ placeholder: "Item", "aria-label": "Item name" });
+		const qty = numberInput({ placeholder: "±Qty", "aria-label": "Quantity change" });
 
 		/**
 		 * @description Reads a number from an input, treating blank as zero.
@@ -233,32 +233,36 @@ export function party(ctx) {
 		 */
 		const n = (el) => Number.parseInt(el.value, 10) || 0;
 
+		// One action per line, labelled by placeholder and `aria-label` rather than a
+		// visible caption. Stacked captions pushed each action onto three rows, which
+		// made the column tall enough that Adjust and Set could not be seen together
+		// — and being seen together is the entire point of this layout.
 		const adjust = h("div",
 			h("h4", "Adjust — by an amount"),
-			row(field("XP", xp), field("Reason", xpWhy),
+			row(xp, xpWhy,
 				button({ label: "Add", small: true, onClick: () => {
 					send("xp:update", { amount: n(xp), reason: xpWhy.value || "Manual adjustment" },
 						`${n(xp) >= 0 ? "+" : ""}${n(xp)} XP sent`);
 					xp.value = "";
 				} })),
-			row(field("HP", hp), field("Reason", hpWhy),
+			row(hp, hpWhy,
 				button({ label: "Apply", small: true, onClick: () => {
 					send("hp:update", { delta: n(hp), reason: hpWhy.value || "Manual change" },
 						`${n(hp) >= 0 ? "+" : ""}${n(hp)} HP sent`);
 					hp.value = "";
 				} })),
-			row(field("Gold", gold), field("Reason", goldWhy),
+			row(gold, goldWhy,
 				button({ label: "Apply", small: true, onClick: () => {
 					send("gold:update", { delta: n(gold), reason: goldWhy.value || "Manual change" },
 						`${n(gold) >= 0 ? "+" : ""}${n(gold)} gold sent`);
 					gold.value = "";
 				} })),
-			row(field("Ability uses", slots, "Negative restores"),
+			row(slots, h("span.field-hint", "Negative restores"),
 				button({ label: "Apply", small: true, onClick: () => {
 					send("spellslots:update", { delta: n(slots) }, "Ability uses adjusted");
 					slots.value = "";
 				} })),
-			row(field("Item", item), field("Qty", qty),
+			row(item, qty,
 				button({ label: "Apply", small: true, onClick: () => {
 					if (!item.value.trim()) return note.show("Enter an item name.", "warn");
 					send("inventory:update", { item: item.value.trim(), change: n(qty), description: "Manual" },
@@ -294,13 +298,13 @@ export function party(ctx) {
 
 		for (const fieldName of fields) {
 			inputs.set(fieldName, fieldName === "conditions"
-				? multiSelect({ options: CONDITIONS, size: 4 })
-				: numberInput({ placeholder: fieldName }));
+				? multiSelect({ options: CONDITIONS, size: 4, props: { "aria-label": "Conditions to set" } })
+				: numberInput({ placeholder: fieldName, "aria-label": `${repair.label}: ${fieldName}` }));
 		}
 
 		return h("div.repair-form",
 			row(
-				...fields.map((fieldName) => field(fieldName, inputs.get(fieldName))),
+				...fields.map((fieldName) => inputs.get(fieldName)),
 				button({
 					label: repair.label,
 					small: true,

@@ -185,8 +185,12 @@ function mountShell({ store, bridge, role, hostMode }) {
 	);
 
 	// Filled rather than replacing the body, which would tear out the script tags
-	// the console is currently running from.
-	fill(document.getElementById("root"), h("div.shell", header, navEl, mainEl));
+	// the console is currently running from. The boot class centres its single
+	// child, which is right for the loading message and would otherwise shrink-wrap
+	// the whole console into a column floating in the middle of the window.
+	const root = document.getElementById("root");
+	root.classList.remove("boot");
+	fill(root, h("div.shell", header, navEl, mainEl));
 
 	// ── rendering ─────────────────────────────────────────────────────────────
 
