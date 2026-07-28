@@ -1749,6 +1749,19 @@
 				"durationSec": 3,
 				"generatedAt": "2026-07-27T21:52:42.312Z"
 			}
+		},
+		{
+			"name": "Flickering Lanterns",
+			"file": "flickering_lanterns_ms3x8nvlgxoo.mp3",
+			"tags": [
+				"flickering",
+				"lanterns"
+			],
+			"_generated": {
+				"prompt": "A sound effect of flickering lanterns",
+				"durationSec": 3,
+				"generatedAt": "2026-07-28T00:32:25.572Z"
+			}
 		}
 	]
 }

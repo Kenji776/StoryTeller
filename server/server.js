@@ -425,7 +425,16 @@ io.on("connection", (socket) => {
 		if (!state) return;
 		log(`🎵 state:request for lobby ${lobbyId} — currentMusic=${state.currentMusic || "null"}, phase=${state.phase}`);
 		socket.join(room(lobbyId));
-		socket.emit("state:update", state);
+		// Carries the watermark even though this is a targeted reply, not a broadcast.
+		// Without it a client that recovers through state:request holds no sequence or
+		// epoch, so its gap detector can never fire — and any later resync request is
+		// answered with a full snapshot because the epoch does not match.
+		socket.emit("state:update", state, {
+			lid: lobbyId,
+			seq: lobbyBus.seqOf(lobbyId),
+			epoch: lobbyBus.epoch,
+			ts: Date.now(),
+		});
 	});
 
 	socket.on("lobbies:watch", () => {

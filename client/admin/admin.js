@@ -307,8 +307,13 @@ socket.on("sfx:play", ({ effects }) => {
 socket.on("roll:required", ({ player, sides, stats }) => {
 	feedEvent("roll", `${player} must roll d${sides} (${(stats || []).join(", ")})`);
 });
-socket.on("dice:result", ({ player, roll, total, sides }) => {
-	feedEvent("roll", `${player} rolled d${sides}: ${roll} (total: ${total})`);
+socket.on("dice:result", ({ player, kind, value, detail }) => {
+	// The server sends {player, kind, value, detail:{base, bonus, stat, outcome}}.
+	// This read {roll, total, sides}, none of which exist, so every roll rendered as
+	// "rolled dundefined: undefined (total: undefined)".
+	const parts = detail ? ` — rolled ${detail.base}${detail.bonus >= 0 ? "+" : ""}${detail.bonus}` : "";
+	const result = detail?.outcome ? ` [${detail.outcome}]` : "";
+	feedEvent("roll", `${player}: ${kind ?? "roll"} = ${value ?? "?"}${parts}${result}`);
 });
 socket.on("conditions:update", ({ player, conditions }) => {
 	feedEvent("cond", `${player} conditions: ${(conditions || []).join(", ") || "none"}`);

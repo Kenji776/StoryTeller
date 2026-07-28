@@ -198,7 +198,9 @@ export const combatMethods = {
 			statKey = "dex";
 		} else if (/(perceive|search|check|inspect|look)/.test(lower)) {
 			kind = "perception";
-			statKey = "int";
+			// Noticing things is wisdom, not intellect. This was "int", so a perceptive
+			// character with a poor mind rolled perception at their weakest stat.
+			statKey = "wis";
 		} else if (/(cast|spell|arcana)/.test(lower)) {
 			kind = "spell";
 			statKey = "int";
@@ -216,7 +218,9 @@ export const combatMethods = {
 		const payload = {
 			lobbyId,
 			player: actor.name,
-			kind: `d20 ${kind.toUpperCase()} (${statKey}+${bonus >= 0 ? "+" : ""}${bonus})`,
+			// The sign comes from the modifier itself; a literal plus in front of it
+			// rendered "int++0" for zero and "int+-1" for a negative.
+			kind: `d20 ${kind.toUpperCase()} (${statKey}${bonus >= 0 ? "+" : ""}${bonus})`,
 			value: total,
 			detail: { base, bonus, stat: statKey, outcome },
 			source: "server",

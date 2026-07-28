@@ -305,3 +305,77 @@ test("turnInfo reports the round alongside the order", () => {
 	store.rollInitiative(lobbyId, scriptedD20([20, 10]));
 	assert.equal(store.turnInfo(lobbyId).round, 1);
 });
+
+// ── Automatic skill rolls ────────────────────────────────────────────────────
+
+/**
+ * @description Builds a store whose socket maps to a character, as autoRollIfNeeded
+ *   requires. The die is not injectable here, so tests assert on the parts that do
+ *   not depend on the face rolled.
+ * @param {object} [stats] - Ability scores merged over the defaults.
+ * @returns {{store: object, lobbyId: string}} The host.
+ */
+function makeRollStore(stats = {}) {
+	const { store, lobbyId } = makeStore([{ name: "Ayla", dex: 10 }]);
+	Object.assign(store.index[lobbyId].players.Ayla.stats, { str: 16, dex: 10, con: 10, int: 8, wis: 18, cha: 10, ...stats });
+	store.index[lobbyId].sockets = { s1: { playerName: "Ayla" } };
+	store.playerBySid = (id, sid) => {
+		const rec = store.index[id]?.sockets?.[sid];
+		return rec ? { name: rec.playerName, sheet: store.index[id].players[rec.playerName] } : null;
+	};
+	return { store, lobbyId };
+}
+
+test("searching rolls against wisdom, the sense that notices things", () => {
+	// Perception is a WIS check. It was mapped to INT, so a perceptive character
+	// with a poor intellect rolled at their weakest stat.
+	const { store, lobbyId } = makeRollStore();
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I search the room for anything unusual.");
+	assert.equal(payload.detail.stat, "wis");
+});
+
+test("a wisdom-based search applies the wisdom modifier", () => {
+	const { store, lobbyId } = makeRollStore({ wis: 18 });   // +4
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I look around carefully.");
+	assert.equal(payload.detail.bonus, 4);
+});
+
+test("attacking still rolls against strength", () => {
+	const { store, lobbyId } = makeRollStore();
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I attack the goblin.").detail.stat, "str");
+});
+
+test("sneaking still rolls against dexterity", () => {
+	const { store, lobbyId } = makeRollStore();
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I sneak past the guard.").detail.stat, "dex");
+});
+
+test("the roll label reads as a single signed modifier", () => {
+	// It rendered "int++0" for a zero modifier and "int+-1" for a negative one,
+	// because a literal plus sat in front of the sign logic.
+	const { store, lobbyId } = makeRollStore({ wis: 10 });   // +0
+	assert.match(store.autoRollIfNeeded(lobbyId, "s1", "I search the room.").kind, /wis\+0/);
+});
+
+test("a negative modifier reads with one sign, not two", () => {
+	const { store, lobbyId } = makeRollStore({ wis: 6 });    // -2
+	const label = store.autoRollIfNeeded(lobbyId, "s1", "I search the room.").kind;
+	assert.match(label, /wis-2/);
+	assert.ok(!label.includes("+-"), `"${label}" must not contain "+-"`);
+});
+
+test("a positive modifier keeps its plus sign", () => {
+	const { store, lobbyId } = makeRollStore({ wis: 18 });   // +4
+	assert.match(store.autoRollIfNeeded(lobbyId, "s1", "I search the room.").kind, /wis\+4/);
+});
+
+test("an action needing no roll returns nothing", () => {
+	const { store, lobbyId } = makeRollStore();
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I say hello to the innkeeper."), null);
+});
+
+test("the total is the die plus the modifier", () => {
+	const { store, lobbyId } = makeRollStore({ wis: 18 });
+	const p = store.autoRollIfNeeded(lobbyId, "s1", "I search the room.");
+	assert.equal(p.value, p.detail.base + p.detail.bonus);
+});
