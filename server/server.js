@@ -490,7 +490,7 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, llmProvider, llmModel }) => {
+	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, abilitySlotsBase, llmProvider, llmModel }) => {
 		if (!store.isHost(lobbyId, socket.id)) return;
 		store.setTimerSettings(lobbyId, timerEnabled, timerMinutes, maxMissedTurns);
 		// Provider first: switching engines swaps in that engine's remembered voice,
@@ -503,6 +503,7 @@ io.on("connection", (socket) => {
 		if (lootGenerosity !== undefined) store.setLootGenerosity(lobbyId, lootGenerosity);
 		if (campaignSetting !== undefined) store.setCampaignSetting(lobbyId, campaignSetting);
 		if (startingLevel  !== undefined) store.setStartingLevel(lobbyId, startingLevel);
+		if (abilitySlotsBase !== undefined) store.setAbilitySlotsBase(lobbyId, abilitySlotsBase);
 		if (llmProvider || llmModel) store.setLLMSettings(lobbyId, llmProvider, llmModel);
 		sendState(lobbyId);
 		broadcastLobbies();

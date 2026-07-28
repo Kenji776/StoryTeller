@@ -242,3 +242,68 @@ test("every persisted lobby on disk builds a capability without throwing", async
 		}
 	}
 });
+
+// ── Configurable ability pool ────────────────────────────────────────────────
+
+test("the pool defaults to one activation at level one, matching the previous behaviour", () => {
+	const cap = buildCapability(makeLobby({ level: 1, spellSlotsUsed: 0 }), "Ayla");
+	assert.equal(cap.resources.slots.max, 1);
+	assert.equal(cap.resources.slots.remaining, 1);
+});
+
+test("the host can raise the base, and it applies from level one", () => {
+	// The default of one activation for a whole level-1 game is punishing; a host
+	// running a combat-heavy session needs to open it up.
+	const lobby = makeLobby({ level: 1, spellSlotsUsed: 0 }, { abilitySlotsBase: 5 });
+	assert.equal(buildCapability(lobby, "Ayla").resources.slots.max, 5);
+});
+
+test("levelling still adds one activation per level on top of the base", () => {
+	const lobby = makeLobby({ level: 3, spellSlotsUsed: 0 }, { abilitySlotsBase: 5 });
+	assert.equal(buildCapability(lobby, "Ayla").resources.slots.max, 7); // 5 + (3 - 1)
+});
+
+test("a base of zero means abilities cost something the character does not have", () => {
+	const lobby = makeLobby({ level: 1, spellSlotsUsed: 0 }, { abilitySlotsBase: 0 });
+	assert.equal(buildCapability(lobby, "Ayla").resources.slots.max, 0);
+	assert.equal(buildCapability(lobby, "Ayla").resources.slots.remaining, 0);
+});
+
+test("an unlimited pool never runs out", () => {
+	const lobby = makeLobby({ level: 1, spellSlotsUsed: 99 }, { abilitySlotsBase: "unlimited" });
+	const slots = buildCapability(lobby, "Ayla").resources.slots;
+	assert.equal(slots.unlimited, true);
+	assert.ok(slots.remaining > 0, "an unlimited pool always has something left");
+});
+
+test("an unlimited pool is flagged so a display can say so instead of printing a number", () => {
+	const lobby = makeLobby({}, { abilitySlotsBase: "unlimited" });
+	const slots = buildCapability(lobby, "Ayla").resources.slots;
+	assert.equal(slots.unlimited, true);
+	assert.equal(slots.max, null, "there is no maximum to report");
+});
+
+test("a limited pool is not flagged unlimited", () => {
+	assert.equal(buildCapability(makeLobby(), "Ayla").resources.slots.unlimited, false);
+});
+
+test("a nonsensical base falls back to the default rather than breaking the pool", () => {
+	const lobby = makeLobby({ level: 1 }, { abilitySlotsBase: "banana" });
+	assert.equal(buildCapability(lobby, "Ayla").resources.slots.max, 1);
+});
+
+test("the pool note explains the rule whatever the base is", () => {
+	assert.match(buildCapability(makeLobby(), "Ayla").resources.slots.note, /every ability/i);
+});
+
+test("remainingSlots honours an explicit base", () => {
+	assert.equal(remainingSlots({ level: 1, spellSlotsUsed: 0 }, 5), 5);
+});
+
+test("remainingSlots returns Infinity for an unlimited base", () => {
+	assert.equal(remainingSlots({ level: 1, spellSlotsUsed: 99 }, "unlimited"), Infinity);
+});
+
+test("remainingSlots keeps its one-argument behaviour for existing callers", () => {
+	assert.equal(remainingSlots({ level: 4, spellSlotsUsed: 1 }), 3);
+});

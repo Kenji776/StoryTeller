@@ -405,6 +405,18 @@
 		<input type="range" id="startingLevelSlider" data-sound="Chain Links Slide" min="1" max="25" step="1" value="1" />
 		<small id="levelFlavorText" style="color:#8a7ab0;font-style:italic;margin-top:-0.25rem;">Ordinary commoner — untested and unproven</small>
 	</div>
+
+	<div class="option-row">
+		<div style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+			<div class="option-label">
+				<span>Ability Uses at Level 1</span>
+				<small>Every ability — spells and martial alike — spends from one shared pool that only a long rest refills. This is how much a level-1 character starts with; each level adds one more.</small>
+			</div>
+			<span id="abilitySlotsLabel">1</span>
+		</div>
+		<input type="range" id="abilitySlotsSlider" data-sound="Chain Links Slide" min="0" max="21" step="1" value="1" />
+		<small id="abilitySlotsFlavor" style="color:#8a7ab0;font-style:italic;margin-top:-0.25rem;">The default — sparing, and easy to run dry.</small>
+	</div>
 </div>
 
 <div class="section">
@@ -545,6 +557,40 @@ const elLLMModel       = document.getElementById("llmModelSelect");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
 const elStartingLevel      = document.getElementById("startingLevelSlider");
+const elAbilitySlots       = document.getElementById("abilitySlotsSlider");
+const elAbilitySlotsLabel  = document.getElementById("abilitySlotsLabel");
+const elAbilitySlotsFlavor = document.getElementById("abilitySlotsFlavor");
+
+// The slider is continuous, so the top position stands in for "unlimited" — a
+// separate checkbox for one value would be a second control to keep in sync.
+const ABILITY_SLOTS_UNLIMITED_AT = 21;
+
+/**
+ * Reads the ability-pool slider as the value the server expects.
+ *
+ * @returns {number|"unlimited"} The chosen base.
+ */
+function abilitySlotsValue() {
+	const raw = Number(elAbilitySlots?.value ?? 1);
+	return raw >= ABILITY_SLOTS_UNLIMITED_AT ? "unlimited" : raw;
+}
+
+/**
+ * Renders the slider's current position.
+ *
+ * @returns {void}
+ */
+function renderAbilitySlots() {
+	if (!elAbilitySlots) return;
+	const value = abilitySlotsValue();
+	elAbilitySlotsLabel.textContent = value === "unlimited" ? "∞" : String(value);
+	elAbilitySlotsFlavor.textContent =
+		value === "unlimited" ? "No limit — abilities never run out."
+		: value === 0 ? "None at level 1 — abilities unusable until they level up."
+		: value === 1 ? "The default — sparing, and easy to run dry."
+		: value <= 4 ? "Room to actually use what the character has."
+		: "Generous — abilities are the main way this party solves problems.";
+}
 const elStartingLevelLabel = document.getElementById("startingLevelLabel");
 const statusBar        = document.getElementById("statusBar");
 
@@ -730,6 +776,7 @@ function emitSettings() {
 		campaignTheme:   selectedTheme,
 		brutalityLevel:  Number(elBrutality.value),
 		startingLevel:   Number(elStartingLevel.value),
+		abilitySlotsBase: abilitySlotsValue(),
 		difficulty:      selectedChip("difficultyChips"),
 		lootGenerosity:  selectedChip("lootChips"),
 		campaignSetting: selectedSetting?.id || "standard",
@@ -740,6 +787,12 @@ function emitSettings() {
 
 function applyState(state) {
 	if (!state || state.lobbyId !== lobbyId) return;
+	if (elAbilitySlots && state.abilitySlotsBase !== undefined) {
+		elAbilitySlots.value = state.abilitySlotsBase === "unlimited"
+			? ABILITY_SLOTS_UNLIMITED_AT
+			: Number(state.abilitySlotsBase) || 0;
+		renderAbilitySlots();
+	}
 	elEnabled.checked    = !!state.timerEnabled;
 	elMinutes.value      = state.timerMinutes   ?? 3;
 	elMaxMissed.value    = state.maxMissedTurns ?? 5;
@@ -1007,6 +1060,9 @@ function updateLevelFlavor() {
 }
 elStartingLevel.addEventListener("input", updateLevelFlavor);
 elStartingLevel.addEventListener("change", emitSettings);
+elAbilitySlots.addEventListener("input", renderAbilitySlots);
+elAbilitySlots.addEventListener("change", emitSettings);
+renderAbilitySlots();
 document.querySelectorAll("input[name='llmProvider']").forEach(radio => {
 	radio.addEventListener("change", () => {
 		populateLLMModels(radio.value, null);

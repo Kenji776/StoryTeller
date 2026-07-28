@@ -139,6 +139,7 @@ export class LobbyStore {
 			lootGenerosity: "fair",
 			campaignSetting: "standard",
 			startingLevel: 1,
+			abilitySlotsBase: 1,
 			llmProvider: getDefaultLLMSettings().provider,
 			llmModel:    getDefaultLLMSettings().model,
 		};
@@ -198,6 +199,7 @@ export class LobbyStore {
 			lootGenerosity:  s.lootGenerosity  || "fair",
 			campaignSetting: s.campaignSetting || "standard",
 			startingLevel:   s.startingLevel   ?? 1,
+			abilitySlotsBase: s.abilitySlotsBase ?? 1,
 			llmProvider: s.llmProvider || null,
 			llmModel:    s.llmModel    || null,
 			chat: s.chat?.slice(-50) || [],

@@ -360,6 +360,30 @@ export const settingsMethods = {
 	},
 
 	/**
+	 * Sets how many ability activations a level-one character starts with.
+	 *
+	 * The pool still grows by one per level on top of this, so the default of 1
+	 * reproduces the original behaviour exactly. Hosts who found one activation per
+	 * level-one session too tight can raise it, or lift the limit entirely.
+	 *
+	 * @param {string} lobbyId - The lobby identifier.
+	 * @param {number|"unlimited"} value - Activations at level one, or "unlimited".
+	 * @returns {void}
+	 */
+	setAbilitySlotsBase(lobbyId, value) {
+		const s = this.index[lobbyId];
+		if (!s) return;
+		if (value === "unlimited") {
+			s.abilitySlotsBase = "unlimited";
+		} else {
+			const n = Number(value);
+			// Capped at a number no campaign will reach, so a typo cannot make the pool
+			// effectively unlimited without the host choosing that explicitly.
+			s.abilitySlotsBase = Number.isFinite(n) && n >= 0 ? Math.min(999, Math.floor(n)) : 1;
+		}
+		this.persist(lobbyId);
+	},
+	/**
 	 * Sets the campaign tone and/or theme flavor text. Only updates fields that are explicitly provided.
 	 * @param {string} lobbyId - The target lobby ID.
 	 * @param {string|null|undefined} tone - The narrative tone (e.g. "grim", "heroic"), or undefined to skip.

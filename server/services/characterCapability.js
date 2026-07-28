@@ -23,6 +23,12 @@ import classProgression from "../../client/config/classProgression.json" with { 
 /** Display sentinels that appear in condition strings but are not conditions. */
 const CONDITION_SENTINELS = new Set(["none", "dead", "healthy", "alive", ""]);
 
+/** Activations a level-one character starts with when the host has not chosen. */
+export const DEFAULT_SLOT_BASE = 1;
+
+/** Sentinel for a pool that never runs out. A string because Infinity does not survive JSON. */
+export const UNLIMITED_SLOTS = "unlimited";
+
 /** Keys that must never survive into an object built from persisted JSON. */
 const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -40,10 +46,33 @@ const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
  * @param {object} player - A player record.
  * @returns {number} Activations remaining, never negative.
  */
-export function remainingSlots(player) {
-	const level = Number(player?.level) || 1;
+export function remainingSlots(player, base = DEFAULT_SLOT_BASE) {
+	const capacity = slotCapacity(player, base);
+	if (capacity === Infinity) return Infinity;
 	const used = Number(player?.spellSlotsUsed) || 0;
-	return Math.max(0, level - used);
+	return Math.max(0, capacity - used);
+}
+
+/**
+ * @description Computes the size of the pool before anything is spent.
+ *
+ *   `base` is how many activations a level-1 character starts with, set by the host
+ *   (`lobby.abilitySlotsBase`). Levelling still adds one per level on top, so the
+ *   default of 1 reproduces the original `max = level` exactly while letting a host
+ *   open the game up — one activation for an entire level-1 session is punishing,
+ *   and it was not a decision anyone had made deliberately.
+ * @param {object} player - A player record.
+ * @param {number|"unlimited"} [base=1] - Activations at level one, or `"unlimited"`.
+ * @returns {number} The capacity, or `Infinity` when unlimited.
+ */
+export function slotCapacity(player, base = DEFAULT_SLOT_BASE) {
+	if (base === UNLIMITED_SLOTS) return Infinity;
+	const level = Number(player?.level) || 1;
+	const configured = Number(base);
+	// A malformed setting falls back to the default rather than collapsing the pool
+	// to zero, which would silently forbid every ability in the game.
+	const effective = Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_SLOT_BASE;
+	return Math.max(0, effective + (level - 1));
 }
 
 /**
@@ -201,11 +230,19 @@ export function buildCapability(lobby, playerName) {
 		},
 
 		resources: {
-			slots: {
-				remaining: remainingSlots(player),
-				max: level,
-				note: "One shared pool covering every ability, martial and magical alike. Refills only on a long rest.",
-			},
+			slots: (() => {
+				const base = lobby.abilitySlotsBase ?? DEFAULT_SLOT_BASE;
+				const capacity = slotCapacity(player, base);
+				const unlimited = capacity === Infinity;
+				return {
+					remaining: unlimited ? Infinity : remainingSlots(player, base),
+					// Null rather than Infinity: there is no maximum to report, and
+					// Infinity does not survive the trip through JSON to a client.
+					max: unlimited ? null : capacity,
+					unlimited,
+					note: "One shared pool covering every ability, martial and magical alike. Refills only on a long rest.",
+				};
+			})(),
 			gold: numberOrNull(player.gold) ?? 0,
 		},
 

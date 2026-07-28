@@ -98,3 +98,30 @@ previous turn's deadline, already past, and a resume reads it as overdue and exp
 the new player's turn instantly.
 
 _Last verified: 2026-07-27 against branch `Refactor`._
+
+## The ability pool is configurable
+
+`lobby.abilitySlotsBase` — set by the host before the game starts — is how many
+activations a level-1 character begins with. The pool still grows by one per level
+on top, so `capacity = base + (level - 1)` and the default of `1` reproduces the
+original `capacity = level` exactly.
+
+| Base | Level 1 | Level 3 |
+|---|---|---|
+| `0` | 0 | 2 |
+| `1` (default) | 1 | 3 |
+| `5` | 5 | 7 |
+| `"unlimited"` | ∞ | ∞ |
+
+`"unlimited"` is a string, not `Infinity`, because `Infinity` does not survive
+`JSON.stringify` — it would reach both disk and clients as `null`. The capability
+model reports it as `{unlimited: true, max: null, remaining: Infinity}`; anything
+crossing the wire sends the flag and leaves the numbers null rather than a
+misleading `0`. A malformed value falls back to the default instead of collapsing
+the pool to zero, which would silently forbid every ability in the game.
+
+This exists because the original rule was not a decision anyone made: one shared
+pool sized to character level meant a level-1 party had a single ability activation
+for the whole session, and the advisor spent its answers explaining why.
+
+_Last verified: 2026-07-27 against branch `Refactor`._

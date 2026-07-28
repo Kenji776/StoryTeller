@@ -182,7 +182,9 @@ function digest(capability) {
 		`Abilities known: ${abilities}`,
 		`Carrying: ${items}`,
 		`Equipped: ${gear}`,
-		`Ability uses left: ${slots.remaining ?? "?"} of ${slots.max ?? "?"}`,
+		capability.resources?.slots?.unlimited
+			? "Ability uses left: unlimited"
+			: `Ability uses left: ${slots.remaining ?? "?"} of ${slots.max ?? "?"}`,
 		`Conditions: ${conditions}`,
 	].join("\n");
 }

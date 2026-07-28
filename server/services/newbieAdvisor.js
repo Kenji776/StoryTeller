@@ -190,7 +190,9 @@ function digest(capability) {
 	return [
 		`Name: ${id.name}, level ${id.level} ${id.race ?? ""} ${id.className ?? ""}`.trim(),
 		`Health: ${capability.health?.hp ?? "unknown"} of ${capability.health?.maxHp ?? "unknown"}`,
-		`Ability uses left: ${slots.remaining} of ${slots.max}`,
+		slots.unlimited
+			? "Ability uses left: unlimited"
+			: `Ability uses left: ${slots.remaining} of ${slots.max}`,
 		`Abilities:\n  ${abilities}`,
 		`Carrying: ${items}`,
 		`Weapon: ${capability.equipped?.weapon?.name ?? "none"}`,
@@ -326,8 +328,11 @@ export function createAdvisor({ store, log, getLLMResponse, llmOpts, buildCapabi
 			capability: {
 				hp: capability.health?.hp ?? null,
 				maxHp: capability.health?.maxHp ?? null,
-				slotsRemaining: capability.resources?.slots?.remaining ?? 0,
-				slotsMax: capability.resources?.slots?.max ?? 0,
+				// Infinity does not survive JSON, so unlimited is carried as a flag and
+				// the numbers are left null rather than becoming a misleading 0.
+				slotsUnlimited: !!capability.resources?.slots?.unlimited,
+				slotsRemaining: capability.resources?.slots?.unlimited ? null : (capability.resources?.slots?.remaining ?? 0),
+				slotsMax: capability.resources?.slots?.max ?? null,
 				conditions: capability.conditions ?? [],
 				isMyTurn: !!capability.isMyTurn,
 			},

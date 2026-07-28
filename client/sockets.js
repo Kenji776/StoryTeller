@@ -127,7 +127,7 @@ function renderAdvisorOptions(options, note, capability) {
 	const head = capability
 		? `<div style="opacity:0.8;font-size:0.85em;margin-bottom:0.6em;">
 				HP ${capability.hp ?? "?"}/${capability.maxHp ?? "?"} ·
-				${capability.slotsRemaining ?? 0} of ${capability.slotsMax ?? 0} ability uses left
+				${capability.slotsUnlimited ? "unlimited" : `${capability.slotsRemaining ?? 0} of ${capability.slotsMax ?? 0}`} ability uses left
 				${capability.conditions?.length ? ` · ${capability.conditions.join(", ")}` : ""}
 				${capability.isMyTurn ? "" : " · not your turn yet"}
 			</div>`
