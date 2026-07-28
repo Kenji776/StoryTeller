@@ -47,6 +47,8 @@
  * @param {Object}                      deps.store               - In-memory game-state store.
  * @param {function(string): string}    deps.room                - Converts a lobbyId to a
  *   Socket.IO room name.
+ * @param {function(string): string}    deps.adminRoom           - Converts a lobbyId to the
+ *   admin-only room for that lobby, carrying operator traffic players must not see.
  * @param {function(...*): void}        deps.log                 - Logging utility.
  * @param {Map<string, string>}         deps.hostAdminSockets    - Maps socket IDs to the lobby
  *   code they are authorized to administrate as host.
@@ -87,6 +89,9 @@ export function registerAdminEvents(socket, deps) {
 		io,
 		store,
 		room,
+		// Defaulted so a caller that predates this dependency still joins the right
+		// room rather than silently joining "undefined" and receiving no admin traffic.
+		adminRoom = (lobbyId) => `admin:${lobbyId}`,
 		log,
 		hostAdminSockets,
 		adminSessions,
@@ -180,7 +185,7 @@ export function registerAdminEvents(socket, deps) {
 		socket.join(room(lobbyId));
 		// A separate room from the game itself, so incident traffic reaches admins
 		// watching this lobby without being broadcast to the players in it.
-		socket.join(`admin:${lobbyId}`);
+		socket.join(adminRoom(lobbyId));
 		const state = store.publicState(lobbyId);
 		socket.emit("admin:connected", state);
 		socket.emit("admin:incidents", incidents?.list(lobbyId) ?? []);

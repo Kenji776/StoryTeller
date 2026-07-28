@@ -67,6 +67,10 @@ function log(...args) {
 	console.log(`[${stamp}]`, ...args);
 }
 const room = (lobbyId) => lobbyId;
+// Admins watching a lobby join this alongside the game room, so operator-facing
+// traffic can be addressed without broadcasting it to the players. Kept in step
+// with the join in routes/adminEvents.js.
+const adminRoom = (lobbyId) => `admin:${lobbyId}`;
 
 // ── Character signing keys ───────────────────────────────────────────────────
 
@@ -114,7 +118,7 @@ const playerSessions = new PlayerSessions();
  * admin watching that lobby, so a silently-dropped update stops being invisible.
  */
 const incidents = createIncidentLog({
-	notify: (lobbyId, incident) => io.to(`admin:${lobbyId}`).emit("admin:incident", incident),
+	notify: (lobbyId, incident) => io.to(adminRoom(lobbyId)).emit("admin:incident", incident),
 });
 configureUpdates({ incidents });
 
@@ -411,7 +415,7 @@ io.on("connection", (socket) => {
 	sessionSystem.registerSessionEvents(socket);
 	registerChatEvents(socket, { io, store, room, log, sendState });
 	registerAdminEvents(socket, {
-		io, store, room, log,
+		io, store, room, adminRoom, log,
 		adminSessions: adminAuth.adminSessions,
 		hostAdminTokens: adminAuth.hostAdminTokens,
 		hostAdminSockets: adminAuth.hostAdminSockets,
@@ -912,7 +916,8 @@ io.on("connection", (socket) => {
 					cleanText = openingRaw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
 				}
 			}
-			busIo.to(room(lobbyId)).emit("debug:setup", { raw: openingRaw, parsedMusic: setupMusic, parsedSuggestions: setupSuggestions });
+			// Admins only — see the note on the `debug:llm` emit below.
+			busIo.to(adminRoom(lobbyId)).emit("debug:setup", { raw: openingRaw, parsedMusic: setupMusic, parsedSuggestions: setupSuggestions });
 
 			const adventureName = typeof adventureNameRaw === "string" ? adventureNameRaw.trim().replace(/^["']|["']$/g, "") : "Untitled Adventure";
 			store.setAdventureName(lobbyId, adventureName);
@@ -1138,7 +1143,11 @@ io.on("connection", (socket) => {
 			// Store the full raw LLM reply in history so future calls see their
 			// own JSON-formatted responses and maintain the expected format.
 			store.appendDM(lobbyId, replyText);
-			busIo.to(room(lobbyId)).emit("debug:llm", { raw: replyText, parsed: dmObj ?? null, narrationText });
+			// Admins only. This frame carries the DM's raw JSON — hidden DCs, full enemy
+			// stat blocks, and every mechanical update — and it was being broadcast to
+			// every player, where anyone with devtools open could read the numbers they
+			// are supposed to be rolling against.
+			busIo.to(adminRoom(lobbyId)).emit("debug:llm", { raw: replyText, parsed: dmObj ?? null, narrationText });
 			busIo.to(room(lobbyId)).emit("narration", { content: narrationText });
 			await streamNarrationToClients(busIo, lobbyId, narrationText, store.getNarratorVoice(lobbyId), undefined, ttsDeps);
 

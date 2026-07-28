@@ -92,6 +92,9 @@ export const EVENT_CLASSES = {
 	"sfx:play": EPHEMERAL,
 
 	// ── Diagnostics and cross-lobby chatter ──
+	// These two carry the DM's raw JSON — hidden DCs and full enemy stat blocks —
+	// and are addressed to the admin room, never to players. They stay classified
+	// here because the taxonomy is consulted by name regardless of audience.
 	"debug:llm": EPHEMERAL,
 	"debug:setup": EPHEMERAL,
 	"lobbies:update": EPHEMERAL,

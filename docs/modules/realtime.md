@@ -83,6 +83,22 @@ Two things that must stay true, both learned by breaking them:
 `sync:request` answers through an acknowledgement callback rather than an event, so
 replayed events never re-enter the client's own gap detector.
 
+### Audiences
+
+Two rooms exist per lobby. `room(lobbyId)` is the game — everyone in it, players
+included. `adminRoom(lobbyId)` is `admin:<lobbyId>`, joined by admins *in addition
+to* the game room, and carries traffic players must not see.
+
+Anything addressed to the admin room must stay there. `debug:llm` and `debug:setup`
+carry the DM's raw JSON — hidden DCs, full enemy stat blocks, and every mechanical
+update before it is applied — and were once broadcast to the whole game room, where
+any player with devtools open could read the numbers they were about to roll
+against. Incidents are admin-facing for the same reason: they name providers,
+models and internal field names.
+
+The helper is defined in `server.js` and injected into `routes/adminEvents.js`, so
+the room name has one definition rather than a literal in each file.
+
 _Last verified: 2026-07-27 against branch `Refactor`._
 
 ## Incidents and manual repair
