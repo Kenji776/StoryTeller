@@ -4,6 +4,8 @@
  */
 
 import { roll, d20, mod } from "../../helpers/dice.js";
+// "Is this an attack?" now has one answer, shared with the resolver that rolls it.
+import { isAttackAction } from "../playerAttacks.js";
 
 /**
  * Orders two initiative entries, highest first.
@@ -24,18 +26,6 @@ function compareInitiative(a, b) {
 	return a.name.localeCompare(b.name);
 }
 
-/**
- * Actions that are an attack and so call for an attack roll.
- *
- * @description "fire" is deliberately not matched on its own: a player lighting a
- *   campfire or casting a fire bolt is not making a bow attack. It counts only when
- *   followed by something one actually fires, or by "at".
- */
-const ATTACK_ACTION = new RegExp([
-	String.raw`\b(?:attacks?|strikes?|shoots?|swings?|stabs?|slashes|lunges?|hacks?)\b`,
-	String.raw`\bfires?\s+(?:at\b|(?:an?\s+|my\s+|the\s+)?(?:arrow|bolt|shot|round|bow|crossbow)\b)`,
-	String.raw`\blooses?\s+(?:an?\s+)?(?:arrow|bolt)\b`,
-].join("|"), "i");
 
 /** Melee weapons that let a character swap strength for dexterity. */
 const FINESSE_WEAPONS = /\b(dagger|shortsword|rapier|scimitar|whip|sickle)\b/i;
@@ -238,7 +228,7 @@ export const combatMethods = {
 		let kind = null,
 			statKey = null;
 
-		if (ATTACK_ACTION.test(lower)) {
+		if (isAttackAction(lower)) {
 			kind = "attack";
 			// Which stat an attack uses depends on the character and the weapon, not
 			// on the verb. Hardcoding "str" here made a Rogue's Sneak Attack roll her
@@ -415,14 +405,21 @@ export const combatMethods = {
 	 *   update, each reported exactly once so XP can be awarded without paying the
 	 *   party twice for a corpse the model re-sends. Empty on a malformed call.
 	 */
-	updateEnemies(lobbyId, enemyUpdates) {
+	updateEnemies(lobbyId, enemyUpdates, { serverResolved = [] } = {}) {
 		const s = this.index[lobbyId];
 		if (!s || !Array.isArray(enemyUpdates)) return [];
 		s.enemies = s.enemies || {};
+		// Enemies whose hit points the server settled this turn. The mirror of
+		// `stripResolvedDamage`: told plainly not to restate a resolved outcome, the
+		// model restates it anyway, and its imagined number would overwrite the rolled
+		// one — including reviving something it had just killed, or killing something
+		// the dice left standing.
+		const protectedNames = new Set(serverResolved.map((n) => String(n).toLowerCase()));
 		const newlyDead = [];
 		for (const e of enemyUpdates) {
 			if (!e?.name) continue;
 			const key = e.name;
+			const isProtected = protectedNames.has(String(key).toLowerCase()) && s.enemies[key];
 			if (!s.enemies[key]) {
 				// Skip dead/fled enemies that don't already exist in the roster —
 				// the LLM sometimes re-sends purged enemies after combat ends
@@ -442,7 +439,7 @@ export const combatMethods = {
 					cr: String(e.cr ?? "0"),
 					status: "active",
 				};
-			} else {
+			} else if (!isProtected) {
 				// Existing enemy — update HP and status
 				if (e.hp != null) s.enemies[key].hp = Math.max(0, Number(e.hp));
 				if (e.status) s.enemies[key].status = e.status;
@@ -463,6 +460,45 @@ export const combatMethods = {
 		}
 		this.persist(lobbyId);
 		return newlyDead;
+	},
+
+	/**
+	 * Applies damage the server rolled to an enemy.
+	 *
+	 * @description Player damage used to be whatever the model wrote into an `enemies`
+	 *   block, so a weapon's dice, a character's strength and the loot engine's `+N`
+	 *   were all decoration. This is where a rolled blow actually lands.
+	 *
+	 *   The death is reported exactly once, guarded by the same `xpAwarded` flag
+	 *   `updateEnemies` uses, so a corpse cannot be paid for twice however many times
+	 *   it is struck afterwards.
+	 * @param {string} lobbyId - The lobby.
+	 * @param {string} name - The enemy's name, as it appears on the roster.
+	 * @param {number} amount - Damage to apply; anything not a positive number is ignored.
+	 * @returns {{enemy: object, died: boolean}|null} The enemy after the blow and
+	 *   whether this blow killed it, or null when there is no such enemy.
+	 */
+	applyEnemyDamage(lobbyId, name, amount) {
+		const s = this.index[lobbyId];
+		const enemy = s?.enemies?.[name];
+		if (!enemy) return null;
+
+		const dealt = Number(amount);
+		if (!Number.isFinite(dealt) || dealt <= 0) return { enemy, died: false };
+
+		enemy.hp = Math.max(0, (Number(enemy.hp) || 0) - dealt);
+
+		let died = false;
+		if (enemy.hp === 0) {
+			enemy.status = "dead";
+			if (!enemy.xpAwarded) {
+				enemy.xpAwarded = true;
+				died = true;
+			}
+		}
+
+		this.persist(lobbyId);
+		return { enemy, died };
 	},
 
 	/**

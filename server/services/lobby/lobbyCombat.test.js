@@ -564,3 +564,125 @@ test("firing at a target is an attack", () => {
 	const { store, lobbyId } = makeArmedStore({ str: 18, dex: 14 }, null);
 	assert.match(store.autoRollIfNeeded(lobbyId, "s1", "I fire at the goblin.").kind, /ATTACK/i);
 });
+
+// ===== Server-applied damage =====
+//
+// Player damage used to be whatever the model said: `updateEnemies` took its `hp`
+// field and wrote it into the roster. These are the two halves of taking that back —
+// applying the rolled damage, and refusing the model's copy of it.
+
+/**
+ * @description Builds a store double carrying an enemy roster.
+ * @param {object} [enemies] - The roster.
+ * @returns {object} The double.
+ */
+function combatStore(enemies = {}) {
+	const store = Object.create(combatMethods);
+	store.index = { lob1: { lobbyId: "lob1", players: {}, enemies } };
+	store.persist = () => {};
+	return store;
+}
+
+const GOBLIN = () => ({ "Goblin 1": { name: "Goblin 1", hp: 7, max_hp: 7, ac: 15, cr: "1/4", status: "active" } });
+
+test("damage the server rolled is applied to the enemy", () => {
+	const store = combatStore(GOBLIN());
+	const result = store.applyEnemyDamage("lob1", "Goblin 1", 3);
+
+	assert.equal(result.enemy.hp, 4);
+	assert.equal(result.died, false);
+});
+
+test("an enemy taken to zero dies and is reported once", () => {
+	const store = combatStore(GOBLIN());
+
+	const killing = store.applyEnemyDamage("lob1", "Goblin 1", 9);
+	assert.equal(killing.enemy.hp, 0);
+	assert.equal(killing.enemy.status, "dead");
+	assert.equal(killing.died, true);
+
+	// XP is awarded off this flag, and the party must not be paid twice for a corpse.
+	const again = store.applyEnemyDamage("lob1", "Goblin 1", 5);
+	assert.equal(again.died, false);
+});
+
+test("hit points never fall below zero", () => {
+	const store = combatStore(GOBLIN());
+
+	assert.equal(store.applyEnemyDamage("lob1", "Goblin 1", 999).enemy.hp, 0);
+});
+
+test("damaging a name that is not on the roster reports nothing rather than throwing", () => {
+	const store = combatStore(GOBLIN());
+
+	assert.equal(store.applyEnemyDamage("lob1", "Nobody", 5), null);
+	assert.equal(store.applyEnemyDamage("nosuchlobby", "Goblin 1", 5), null);
+});
+
+test("a nonsense damage amount leaves the enemy untouched", () => {
+	const store = combatStore(GOBLIN());
+
+	for (const amount of [0, -5, null, undefined, "lots", NaN]) {
+		store.applyEnemyDamage("lob1", "Goblin 1", amount);
+	}
+	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 7);
+});
+
+// ── Refusing the model's copy ────────────────────────────────────────────────
+
+test("the model cannot overwrite hit points the server just resolved", () => {
+	// The mirror of stripResolvedDamage. Told plainly not to, the model sends its own
+	// enemy block anyway, and the goblin the server put on 4 would be reset to
+	// whatever number the narration imagined.
+	const store = combatStore(GOBLIN());
+	store.applyEnemyDamage("lob1", "Goblin 1", 3);
+
+	store.updateEnemies("lob1", [{ name: "Goblin 1", hp: 1, status: "active" }], { serverResolved: ["Goblin 1"] });
+
+	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 4);
+});
+
+test("the model cannot kill an enemy the server left standing", () => {
+	const store = combatStore(GOBLIN());
+	store.applyEnemyDamage("lob1", "Goblin 1", 2);
+
+	const dead = store.updateEnemies("lob1", [{ name: "Goblin 1", hp: 0, status: "dead" }], { serverResolved: ["Goblin 1"] });
+
+	assert.equal(store.index.lob1.enemies["Goblin 1"].status, "active");
+	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 5);
+	assert.deepEqual(dead, [], "an enemy the server did not kill must not pay XP");
+});
+
+test("enemies the server did not resolve are still the model's to update", () => {
+	// Only the target of this turn's attack is protected. A second goblin burned by a
+	// trap, or one that flees, is still the narrator's to report.
+	const store = combatStore({ ...GOBLIN(), "Goblin 2": { name: "Goblin 2", hp: 7, max_hp: 7, ac: 15, cr: "1/4", status: "active" } });
+
+	store.updateEnemies("lob1", [
+		{ name: "Goblin 1", hp: 2, status: "active" },
+		{ name: "Goblin 2", hp: 1, status: "active" },
+	], { serverResolved: ["Goblin 1"] });
+
+	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 7, "the protected enemy was changed");
+	assert.equal(store.index.lob1.enemies["Goblin 2"].hp, 1, "the unprotected enemy was not");
+});
+
+test("a protected enemy may still be introduced with a full stat block", () => {
+	// Protection covers hit points, not existence. A new enemy in the same response
+	// must still land.
+	const store = combatStore(GOBLIN());
+
+	store.updateEnemies("lob1", [{ name: "Ogre", hp: 30, max_hp: 30, ac: 11, cr: "2", status: "active" }], { serverResolved: ["Goblin 1"] });
+
+	assert.equal(store.index.lob1.enemies.Ogre.hp, 30);
+});
+
+test("with nothing resolved the model retains full control, as before", () => {
+	const store = combatStore(GOBLIN());
+
+	store.updateEnemies("lob1", [{ name: "Goblin 1", hp: 2, status: "active" }]);
+	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 2);
+
+	store.updateEnemies("lob1", [{ name: "Goblin 1", hp: 1, status: "active" }], {});
+	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 1);
+});

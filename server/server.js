@@ -58,6 +58,7 @@ import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
 import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./services/enemyTurns.js";
+import { isAttackAction, chooseTarget, resolveAttack, describeAttack } from "./services/playerAttacks.js";
 import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js";
 import { resolveConsumable } from "./services/consumables.js";
 import { rollLoot } from "./services/loot.js";
@@ -1269,7 +1270,49 @@ io.on("connection", (socket) => {
 			// then dice, then the DM's reply, with the action that caused it missing.
 			busIo.to(room(lobbyId)).emit("player:action", { player: actor.name, text });
 
-			const rollPayload = store.autoRollIfNeeded(lobbyId, socket.id, text);
+			// The player's blow, rolled against the target's real armour class before the
+			// DM writes — the other half of the exchange `resolveEnemyAttacks` already
+			// owns. Until now an attack was graded against a flat DC of 15, so an enemy's
+			// `ac` decided nothing, and the damage was whatever the narration felt like.
+			// See ADR 0018.
+			const attackTarget = isAttackAction(text) ? chooseTarget(text, s.enemies) : null;
+			const attack = attackTarget
+				? resolveAttack({ attacker: s.players[actor.name], target: attackTarget })
+				: null;
+
+			if (attack) {
+				const outcome = attack.hit ? store.applyEnemyDamage(lobbyId, attackTarget.name, attack.damage) : null;
+
+				busIo.to(room(lobbyId)).emit("dice:result", {
+					lobbyId,
+					player: actor.name,
+					kind: `d20 ATTACK vs ${attack.targetName} (AC ${attack.ac})`,
+					value: attack.total,
+					detail: {
+						base: attack.base,
+						bonus: attack.bonus,
+						stat: attack.ability,
+						outcome: attack.critical ? "critical" : (attack.hit ? "success" : "fail"),
+					},
+					source: "server",
+				});
+
+				log(`⚔️  ${actor.name} → ${attack.targetName}: ${attack.base}+${attack.bonus}=${attack.total} vs AC ${attack.ac}`
+					+ (attack.hit ? ` — ${attack.critical ? "CRIT " : ""}${attack.damage} ${attack.damageType}` : " — miss"));
+
+				// A kill pays the party here rather than through `updateEnemies`, which
+				// never sees this death: the model is forbidden from reporting it.
+				if (outcome?.died) {
+					const living = Object.values(s.players || {}).filter((p) => !p.dead).map((p) => p.name);
+					const earned = xpForKills([{ name: attackTarget.name, cr: attackTarget.cr }], living);
+					if (earned.length) broadcastXPUpdates(busIo, store, lobbyId, earned);
+				}
+			}
+
+			// The generic roll path still covers stealth, perception and spellcasting. An
+			// attack the resolver handled must not also be graded on the flat ladder, or
+			// the DM receives two contradictory verdicts on one swing.
+			const rollPayload = attack ? null : store.autoRollIfNeeded(lobbyId, socket.id, text);
 			if (rollPayload) busIo.to(room(lobbyId)).emit("dice:result", rollPayload);
 
 			// The enemies' turn, resolved before the DM writes rather than left to it.
@@ -1339,6 +1382,11 @@ io.on("connection", (socket) => {
 				msgs.push({ role: "system", content: encounterDirective(s.difficulty) });
 				console.log(`⚔️  Encounter forced after ${s.quietTurns} quiet turn(s)`);
 				s.quietTurns = 0;
+			}
+			if (attack) {
+				// Read after `applyEnemyDamage`, so the block states the hit points the
+				// target actually has rather than the ones it had before the blow.
+				msgs.push({ role: "system", content: describeAttack(attack, s.enemies?.[attack.targetName]) });
 			}
 			if (enemyTurn.attacks.length) {
 				msgs.push({ role: "system", content: describeAttacks(enemyTurn.attacks) });
@@ -1466,7 +1514,11 @@ io.on("connection", (socket) => {
 					// playtest without ever doing so — including for a confirmed kill —
 					// leaving every character at zero XP and the whole progression system
 					// unreachable. The enemy blocks carry a challenge rating; read it.
-					const killed = store.updateEnemies(lobbyId, u.enemies);
+					// The enemy this turn's attack resolved is off limits: its hit points
+					// are the server's, and the model's copy would overwrite them.
+					const killed = store.updateEnemies(lobbyId, u.enemies, {
+						serverResolved: attack ? [attack.targetName] : [],
+					});
 					const living = Object.values(store.index[lobbyId]?.players || {})
 						.filter((p) => !p.dead)
 						.map((p) => p.name);

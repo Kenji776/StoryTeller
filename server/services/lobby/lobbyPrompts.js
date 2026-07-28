@@ -442,7 +442,9 @@ ENEMY TRACKING: When you introduce ANY hostile creature, NPC combatant, or monst
 - "status": "active" (alive and fighting), "dead" (killed), or "fled" (escaped)
 - "damage_taken": amount of damage dealt THIS turn (null if none)
 - "reason": brief description of what happened to them this turn (null if nothing)
-Every turn that involves combat, include ALL currently active enemies in the "enemies" array — even those not affected this turn — so the server can maintain an accurate roster. When an enemy takes damage, reduce their "hp" by the damage amount. When an enemy reaches 0 hp, set "status" to "dead". Track enemy HP across turns — the current enemy state will be provided to you each turn.
+Every turn that involves combat, include ALL currently active enemies in the "enemies" array — even those not affected this turn — so the server can maintain an accurate roster. When an enemy reaches 0 hp, set "status" to "dead". Track enemy HP across turns — the current enemy state will be provided to you each turn.
+
+WHETHER A PLAYER'S ATTACK HITS, AND FOR HOW MUCH, IS NOT YOURS TO DECIDE. The server rolls it against the target's armour class and applies the damage before you are called. When a player attacks you will be given a "YOUR ATTACK, ALREADY RESOLVED" block: narrate exactly what it says, including a miss, and do NOT include an "enemies" entry changing that target's hit points. Reduce an enemy's "hp" yourself only for damage from something else entirely — a trap they were shoved into, a collapsing ceiling, a hazard of your own devising.
 
 COMBAT STATUS: You MUST set the "combat_over" field in EVERY response.
 - Set "combat_over": false while combat is still ongoing (enemies remain active, hostilities continue).

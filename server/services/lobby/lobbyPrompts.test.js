@@ -316,3 +316,21 @@ test("giving a player something in a shop or as a reward is still allowed", () =
 
 	assert.match(text, /buys|purchases|shop|reward|gives/i);
 });
+
+test("the DM is told player damage is not its arithmetic to do", () => {
+	// ENEMY TRACKING still said "when an enemy takes damage, reduce their hp", which
+	// now contradicts the resolved-attack block handed to it on the same turn.
+	const text = systemPromptFor("off");
+
+	assert.match(text, /do not decide|not yours to decide|already resolved/i);
+	assert.match(text, /attack/i);
+});
+
+test("the DM is still told to report enemies it introduces", () => {
+	// Taking damage away from the model must not take away enemy creation, which is
+	// the only way a fight starts at all.
+	const text = systemPromptFor("off");
+
+	assert.match(text, /introduce/i);
+	assert.match(text, /stat block/i);
+});

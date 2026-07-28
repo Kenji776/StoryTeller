@@ -59,9 +59,10 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/credentials.md](modules/credentials.md) — who pays for a third-party call
 - [modules/images.md](modules/images.md) — the image generation layer
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
+- [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0017 — what the party finds is rolled by the server](decisions/0017-loot-is-rolled-by-the-server.md))
+  (newest: [0018 — a player's attack is rolled by the server](decisions/0018-player-attacks-are-rolled-by-the-server.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._

@@ -39,7 +39,7 @@ back across, so client and server cannot disagree about what a potion is.
 | `attributes.item_type` | Slot | Notes |
 |---|---|---|
 | `weapon` | weapon | `damage`, `damage_type`, `range` |
-| `armor` | armor | `ac`, `armor_type` — **the only stat the server computes** |
+| `armor` | armor | `ac`, `armor_type` |
 | `trinket` | trinket | one slot only |
 | `consumable` | — | spent, not worn; see below |
 | `quest` | — | letters, keys, maps, tokens |
@@ -55,13 +55,18 @@ one trinket slot.
 
 ### What is actually mechanical
 
-Worth knowing before designing around it:
+As of [ADR 0018](../decisions/0018-player-attacks-are-rolled-by-the-server.md):
 
-- **`armor.ac` is live.** `enemyTurns.js` rolls enemy attacks against it.
-- **`weapon.damage` is not.** The server never rolls player damage; the weapon
-  reaches the model as prompt text and nowhere else. A `+1` sword changes the
-  fiction and no number.
-- **`trinket` is not.** Same — it is described to the DM and computed by nothing.
+- **`armor.ac` is live**, through `services/armourClass.js` — light adds full DEX,
+  medium caps it at 2, heavy ignores it. Enemies roll against the result.
+- **`weapon.damage` is live.** `services/playerAttacks.js` rolls it, doubling the
+  dice on a critical hit.
+- **`attributes.bonus` is live** on both weapons and armour: it adds to the attack
+  roll, to damage, and to AC. A `+2` is worth two.
+- **`attributes.bonus_damage` is live** — an affix's extra dice are rolled on a hit
+  and not on a miss.
+- **`trinket` is still not.** Its effect is described to the DM and computed by
+  nothing, so a Ring of the Veil works exactly as well as the narrator remembers it.
 
 ## Using a consumable
 
@@ -157,4 +162,4 @@ consumables and quest items all remain its own.
 | `test-integration/loot-probe.mjs` | Does the DM honour the server's decision? `--force nothing` and `--force treasure` pin the roll so the run measures obedience rather than dice; `--set failed` repeats the scenarios on failed rolls. | real DM calls |
 | `test-integration/consumable-probe.mjs` | Can a player actually drink a potion, and is the amount applied? | free — no model |
 
-_Last verified: 2026-07-28 against branch `Refactor` (7397d41)._
+_Last verified: 2026-07-28 against branch `Refactor` (09eb5fb)._
