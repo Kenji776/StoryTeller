@@ -371,3 +371,44 @@ test("a failure to make one likeness does not lose the rest of the party", async
 	await runner.openingScene(LOBBY);
 	assert.equal(emitted.find((e) => e.event === "illustration:ready").payload.images.length, 1);
 });
+
+// ── The scrub must not eat the diagnosis ─────────────────────────────────────
+
+test("a failure naming a missing function stays readable in the log", async () => {
+	// A blunt length threshold scrubbed "ensureCharacterImage" to "***", which is
+	// what a real wiring bug looked like in production: three lines of "*** is not
+	// a function" and nothing to act on.
+	const lines = [];
+	const runner = createIllustrationRunner({
+		gateway: { generateCharacterScene: async () => { throw new TypeError("gateway.ensureCharacterImage is not a function"); } },
+		partyOf: () => PARTY,
+		settingsOf: () => ({ illustrationMode: "key-moments" }),
+		markIllustrated: () => {},
+		saveImage: async () => "/x.png",
+		emit: () => {},
+		now: () => T0,
+		log: (line) => lines.push(line),
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	assert.ok(lines.some((l) => l.includes("ensureCharacterImage")), `identifier was scrubbed: ${lines.join(" | ")}`);
+});
+
+test("a real credential is still scrubbed out of a failure", async () => {
+	const { runner, emitted } = makeRunner({
+		scene: async () => { throw new Error("rejected key sk-ant-api03-QQhh7712ZZmmPPkkLLxxDDvvBBnn"); },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	const text = JSON.stringify(emitted);
+	assert.ok(!text.includes("QQhh7712ZZmmPPkkLLxxDDvvBBnn"), "a key survived into a player-facing message");
+});
+
+test("a credential too short for the length rule is caught by its prefix", async () => {
+	const { runner, emitted } = makeRunner({
+		scene: async () => { throw new Error("bad key sk-abc123def456"); },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	assert.ok(!JSON.stringify(emitted).includes("sk-abc123def456"));
+});

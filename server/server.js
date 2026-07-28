@@ -304,7 +304,7 @@ const { getLLMResponse, generateImage, ensureCharacterImage, generateCharacterSc
  * docs/modules/images.md.
  */
 const illustrations = createIllustrationRunner({
-	gateway: { generateCharacterScene, generateImage },
+	gateway: { generateCharacterScene, generateImage, ensureCharacterImage },
 	partyOf: (lobbyId) => Object.values(store.index[lobbyId]?.players ?? {}),
 	settingsOf: (lobbyId) => store.index[lobbyId] ?? {},
 	markIllustrated: (lobbyId, at) => store.markIllustrated(lobbyId, at),

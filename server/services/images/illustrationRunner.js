@@ -30,21 +30,31 @@ const OPENING_CAPTION = "The adventure begins";
 /** Portrait, matching what the character adapter draws by default. */
 const SCENE_SIZE = Object.freeze({ width: 896, height: 1152 });
 
+/** Prefixes that mark a string as a credential regardless of how short it is. */
+const CREDENTIAL_PREFIXES = /(sk-[A-Za-z0-9-]+|ghp_\S+|github_pat_\S+|xoxb-\S+|AKIA\S+)/g;
+
 /**
- * @description Removes token-shaped substrings from an error before it reaches a
- *   player's screen. Provider bodies occasionally echo a submitted key back.
+ * @description Removes credentials from an error before it reaches a screen or a
+ *   log. Provider bodies occasionally echo a submitted key back.
  *
- *   Sixteen characters rather than the twenty `services/llm/errors.js` uses: the
- *   longest words in ordinary prose are around fifteen, so this still cannot eat
- *   a real sentence, and it catches shorter tokens that the looser threshold
- *   lets through. This is a last line of defence — `userMessage` has usually
- *   scrubbed already — and a last line should be the tight one.
+ *   Two rules rather than one length threshold. A blunt threshold set low enough
+ *   to catch a short token also ate ordinary identifiers: a real wiring bug once
+ *   surfaced as three lines of "*** is not a function", scrubbing the very name
+ *   that would have identified it. So known credential prefixes are matched
+ *   explicitly, and the length rule is set high enough that
+ *   `gateway.ensureCharacterImage` (28) survives while a real key does not: every
+ *   credential this system handles is either prefixed or at least 32 characters.
  * @param {*} err - Whatever was thrown.
- * @returns {string} A message safe to show.
+ * @returns {string} A message safe to show and useful to read.
  */
 function safeMessage(err) {
 	const text = typeof err?.userMessage === "function" ? err.userMessage() : err?.message ?? String(err);
-	return String(text).replace(/\S{16,}/g, "***");
+	// A literal regex, not a constructed one: `\S` inside a template literal is
+	// just `S`, and the constructed version was quietly matching runs of the
+	// letter S instead of long tokens.
+	return String(text)
+		.replace(CREDENTIAL_PREFIXES, "***")
+		.replace(/\S{32,}/g, "***");
 }
 
 /**
@@ -268,7 +278,9 @@ export function createIllustrationRunner({
 					try {
 						images.push(player ? await drawCharacter(lobbyId, directive, player) : await drawScene(lobbyId, directive));
 					} catch (err) {
-						failures.push({ name: player?.name ?? null, error: safeMessage(err) });
+						const message = safeMessage(err);
+						log(`⚠️ Illustration failed for ${player?.name ?? "a scene"}: ${message}`);
+						failures.push({ name: player?.name ?? null, error: message });
 					}
 				}
 
