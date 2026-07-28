@@ -109,6 +109,55 @@ test("an option mentioning item charges is dropped", () => {
 	assert.deepEqual(kept, []);
 });
 
+// The filter is meant to remove advice about systems this game lacks. It was also
+// removing advice about systems it has. In a logged game the boldest option offered
+// to a Fighter — "Charge into the forest towards the unsettling sounds" — was
+// deleted before he saw it, because the pattern for item charges matches the verb.
+// The player was left with "Stay alert" and "Prepare my Shortsword".
+
+test("charging at something is advice, not a mechanic this game lacks", () => {
+	const kept = filterOptions(cap(), [opt({
+		title: "Charge into the forest towards the unsettling sounds",
+		action: "I rush into the forest, following the unsettling sounds to investigate further.",
+	})]);
+	assert.equal(kept.length, 1, "the boldest option must survive");
+});
+
+test("charging is kept wherever the word appears", () => {
+	for (const field of ["title", "action", "why", "cost"]) {
+		const kept = filterOptions(cap(), [opt({ [field]: "I charge the goblin" })]);
+		assert.equal(kept.length, 1, `dropped when "charge" appeared in ${field}`);
+	}
+});
+
+test("the exhausted condition is real here and may be mentioned", () => {
+	// "exhausted" is one of the game's canonical conditions, with its own rules in
+	// the DM prompt. Advice about it was being deleted as a foreign mechanic.
+	const kept = filterOptions(cap(), [opt({ why: "Resting would clear your exhausted condition." })]);
+	assert.equal(kept.length, 1);
+});
+
+test("the game's own phrase for the ability pool may be used", () => {
+	// actionFeasibility and the advisor both tell players "Ability uses left: 2 of 3".
+	// An option explaining that correctly was dropped for using the same words.
+	const kept = filterOptions(cap(), [opt({ cost: "one of your 2 uses left" })]);
+	assert.equal(kept.length, 1);
+});
+
+test("item charges are still dropped in their several phrasings", () => {
+	for (const cost of ["3 charges remaining", "uses the last charge left", "recharge your wand", "out of charges"]) {
+		const kept = filterOptions(cap(), [opt({ cost })]);
+		assert.deepEqual(kept, [], `should have dropped: ${cost}`);
+	}
+});
+
+test("the other absent systems are still dropped", () => {
+	for (const why of ["costs stamina", "builds fatigue", "spends mana", "uses 2 ki points", "spends rage points", "on cooldown"]) {
+		const kept = filterOptions(cap(), [opt({ why })]);
+		assert.deepEqual(kept, [], `should have dropped: ${why}`);
+	}
+});
+
 // ── Shape and limits ─────────────────────────────────────────────────────────
 
 test("at most four options are returned", () => {

@@ -24,8 +24,29 @@ const MAX_OPTIONS = 4;
  * Mechanics this game does not have. A model asked about "what can I do" will
  * reach for familiar RPG vocabulary; anything mentioning these is describing a
  * system that does not exist here, so it is dropped rather than shown.
+ *
+ * @description Written narrowly, because this filter deletes advice silently and an
+ * over-broad pattern is invisible in production. The previous version matched three
+ * things the game does have:
+ *
+ *   - `charges?` matched the verb. The boldest option offered to a Fighter,
+ *     "Charge into the forest towards the unsettling sounds", was deleted before he
+ *     saw it; he was left with "Stay alert" and "Prepare my Shortsword".
+ *   - `exhaust\w*` matched "exhausted", a canonical condition here with its own
+ *     rules in the DM prompt.
+ *   - `uses? left` matched the game's own words for the ability pool — both
+ *     `actionFeasibility` and this module say "Ability uses left: 2 of 3".
+ *
+ * Item charges are still absent (`chargesTracked` is false on every item), so they
+ * are matched by the shapes the noun actually takes rather than by the bare word.
+ * "Lead the charge" is deliberately left alone.
  */
-const ABSENT_MECHANICS = /\b(stamina|fatigue|exhaust\w*|charges?|uses? left|cooldown|mana|ki points?|rage points?)\b/i;
+const ABSENT_MECHANICS = new RegExp([
+	String.raw`\b(?:stamina|fatigue|mana|ki points?|rage points?|cooldowns?)\b`,
+	String.raw`\brecharg\w*`,
+	String.raw`\b(?:\d+|a|one|no|last|final|out of)\s+charges?\b`,
+	String.raw`\bcharges?\s+(?:remaining|left|used|per day)\b`,
+].join("|"), "i");
 
 /**
  * @description Reduces a name to a comparable form. Players and models both write
