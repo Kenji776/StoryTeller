@@ -6,9 +6,9 @@
  * fight the scroll position and drop the selection out from under anyone reading.
  */
 
-import { h, fill } from "../ui/dom.js";
+import { h, fill, plainText } from "../ui/dom.js";
 import { panel, button, select, empty } from "../ui/components.js";
-import { FEED_TYPES, matchesFilter } from "../core/feed.js";
+import { FEED_TYPES, matchesFilter, storySoFar } from "../core/feed.js";
 
 /**
  * @description Renders the activity section.
@@ -25,6 +25,13 @@ export function activity(ctx) {
 	let filter = "all";
 
 	const listHost = h("div.feed");
+
+	// A spectator who opens a running game has missed the premise: the feed shows
+	// what arrived since this console connected, and the opening narration was
+	// long before that. Seeded from publicState rather than replayed as events,
+	// because these did not happen now.
+	const preamble = storySoFar(store.getState().lobbyState, { toText: plainText });
+
 	const autoScroll = h("input", { type: "checkbox", checked: true, id: "feedAutoScroll" });
 
 	/**
@@ -37,6 +44,13 @@ export function activity(ctx) {
 			h("span.feed-time", new Date(entry.at).toLocaleTimeString("en-GB", { hour12: false })),
 			h("span.feed-type", entry.type),
 			h("span.feed-message", entry.message),
+			// Illustrations carry their pictures. Reading that an image was drawn is
+			// not the same as seeing it, and this is where a spectator watches.
+			entry.images?.length
+				? h("div.feed-images", ...entry.images.map((image) =>
+					h("a", { href: image.url, target: "_blank", rel: "noopener noreferrer" },
+						h("img.feed-image", { src: image.url, alt: image.alt, loading: "lazy" }))))
+				: null,
 		);
 		el.hidden = !matchesFilter(entry, filter);
 		return el;
@@ -56,12 +70,21 @@ export function activity(ctx) {
 			fill(listHost);
 		}
 
-		if (!feed.length) {
+		if (!feed.length && !preamble.length) {
 			fill(listHost, empty("Nothing yet. Events appear here as the lobby plays."));
 			rendered = 0;
 			return;
 		}
-		if (rendered === 0) fill(listHost);
+		if (rendered === 0) {
+			fill(listHost);
+			// What happened before this console was watching. Marked as such rather
+			// than dressed up as live traffic.
+			for (const entry of preamble) {
+				const el = line(entry);
+				el.classList.add("is-preamble");
+				listHost.append(el);
+			}
+		}
 
 		for (const entry of feed.slice(rendered)) listHost.append(line(entry));
 		rendered = feed.length;

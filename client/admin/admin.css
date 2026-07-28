@@ -1018,3 +1018,27 @@
 .admin-body .control-row > select.input {
 	flex: 0 1 22rem;
 }
+
+/* ── Illustrations in the activity feed ─────────────────────────────────────
+   A line saying an image was drawn is not the same as seeing it, and this
+   console is where an operator watches a game. */
+.feed-images {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	margin-top: 0.4rem;
+	grid-column: 3;
+}
+.feed-image {
+	height: 150px;
+	width: auto;
+	max-width: 100%;
+	border-radius: 4px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	display: block;
+}
+.feed-images a:hover .feed-image { border-color: rgba(122, 80, 200, 0.8); }
+
+/* What happened before this console connected — shown so a spectator knows the
+   scenario, dimmed so it is not mistaken for live traffic. */
+.feed-line.is-preamble { opacity: 0.62; border-left: 2px solid rgba(122, 80, 200, 0.45); }

@@ -153,7 +153,14 @@ const FORMATTERS = Object.freeze({
 		const who = images.map((i) => i?.name).filter(Boolean);
 		const subject = who.length ? who.join(", ") : (p.caption || "a scene");
 		const caption = p.caption && who.length ? ` — "${p.caption}"` : "";
-		return ["image", `Illustrated ${subject}${caption} (${images.length} image${images.length === 1 ? "" : "s"})`];
+		// The third element is the pictures themselves. A line saying an image was
+		// drawn is not the same as seeing it, and this console is where a spectator
+		// watches the game.
+		return [
+			"image",
+			`Illustrated ${subject}${caption}`,
+			images.filter((i) => i?.url).map((i) => ({ url: i.url, alt: i.name || p.caption || "Scene illustration" })),
+		];
 	},
 
 	"illustration:failed": (p) => ["image", `Illustration failed: ${p.error || "unknown reason"}`],
@@ -185,6 +192,47 @@ const FORMATTERS = Object.freeze({
 });
 
 /**
+ * The story a spectator missed by arriving late.
+ *
+ * @description The activity feed shows what has happened *since this console
+ *   connected*, which is honest but leaves an operator who opened a running game
+ *   with no idea what scenario they are watching — the opening narration, and the
+ *   premise it establishes, arrived before they got here.
+ *
+ *   Built from `publicState` rather than replayed as events, because these did not
+ *   happen now and timestamping them as if they did would be a lie about the
+ *   record.
+ * @param {object|null} state - The lobby's public state.
+ * @param {object} [deps] - Injected collaborators.
+ * @param {function(): number} [deps.now=Date.now] - Clock, injected for tests.
+ * @param {function(string): string} [deps.toText] - Renders DM markup as plain text.
+ * @returns {Array<object>} Entries, oldest first. Empty when there is no story yet.
+ */
+export function storySoFar(state, { now = Date.now, toText = (html) => String(html) } = {}) {
+	if (!state) return [];
+
+	const entries = [];
+	const at = now();
+
+	if (state.adventureName) {
+		entries.push({ type: "sys", message: `Adventure: ${state.adventureName}`, at });
+	}
+
+	const opening = (state.history ?? []).find((h) => h?.role === "assistant" && h?.content);
+	if (opening) {
+		const text = collapseWhitespace(toText(String(opening.content)));
+		if (text) entries.push({ type: "dm", message: `Opening: ${truncate(text, NARRATION_MAX)}`, at });
+	}
+
+	if (state.storyContext && state.storyContext !== "—") {
+		const context = collapseWhitespace(toText(String(state.storyContext)));
+		if (context) entries.push({ type: "sys", message: `Story so far: ${truncate(context, NARRATION_MAX)}`, at });
+	}
+
+	return entries;
+}
+
+/**
  * @description Formats one socket event as an activity entry.
  * @param {string} event - The socket event name.
  * @param {object} [payload] - The event payload.
@@ -192,7 +240,7 @@ const FORMATTERS = Object.freeze({
  * @param {function(): number} [deps.now=Date.now] - Clock, injected so tests are deterministic.
  * @param {function(string): string} [deps.toText] - Renders DM markup as plain text.
  *   Defaults to identity; the browser passes the DOM-backed implementation.
- * @returns {{type: string, message: string, at: number}|null} The entry, or null for
+ * @returns {{type: string, message: string, at: number, images?: Array<object>}|null} The entry, or null for
  *   an event with nothing worth showing — an unknown event, or a narration whose
  *   content is absent.
  */
@@ -204,8 +252,9 @@ export function toFeedEntry(event, payload = {}, deps = {}) {
 	const result = format(payload ?? {}, { toText });
 	if (!result) return null;
 
-	const [type, message] = result;
-	return { type, message, at: now() };
+	// A formatter may return a third element carrying pictures. Most do not.
+	const [type, message, images] = result;
+	return { type, message, at: now(), ...(images?.length ? { images } : {}) };
 }
 
 /**

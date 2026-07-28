@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { toFeedEntry, matchesFilter, FEED_TYPES } from "./feed.js";
+import { toFeedEntry, matchesFilter, FEED_TYPES, storySoFar } from "./feed.js";
 
 /** A frozen clock, so entries are comparable (TDD-8). */
 const now = () => 1_700_000_000_000;
@@ -290,4 +290,72 @@ test("a failed illustration says so rather than vanishing", () => {
 
 	assert.equal(kind, "image");
 	assert.match(text, /did not answer/i);
+});
+
+test("a finished illustration carries the pictures, not just a sentence about them", () => {
+	const entry = toFeedEntry("illustration:ready", {
+		id: "i1",
+		caption: "fighting undead in a moonlit square",
+		images: [
+			{ name: "Brannor Ironfoot", url: "/character-images/a.png" },
+			{ name: "Sylvie Ashwren", url: "/character-images/b.png" },
+		],
+	});
+
+	assert.equal(entry.images.length, 2, "the console showed a line about images but no images");
+	assert.equal(entry.images[0].url, "/character-images/a.png");
+	assert.match(entry.images[0].alt, /Brannor/);
+});
+
+test("an illustration with no usable urls carries no image list", () => {
+	const entry = toFeedEntry("illustration:ready", { id: "i1", caption: "x", images: [{ name: "A", url: null }] });
+	assert.equal(entry.images, undefined);
+});
+
+test("an ordinary entry carries no image list at all", () => {
+	assert.equal(toFeedEntry("music:change", { mood: "tense battle" }).images, undefined);
+});
+
+// ── The story a late spectator missed ────────────────────────────────────────
+
+test("arriving mid-game shows the adventure and its opening", () => {
+	const entries = storySoFar({
+		adventureName: "Shadows of the Commonborn",
+		history: [{ role: "assistant", content: "The village square lies under a broken moon." }],
+		storyContext: "The party has fought off two waves of undead.",
+	});
+
+	const text = entries.map((e) => e.message).join(" | ");
+	assert.match(text, /Shadows of the Commonborn/);
+	assert.match(text, /broken moon/);
+	assert.match(text, /two waves of undead/);
+});
+
+test("the opening is the DM's first entry, not a player's", () => {
+	const entries = storySoFar({
+		history: [
+			{ role: "user", name: "Brannor", content: "I draw my axe." },
+			{ role: "assistant", content: "The doors groan open." },
+		],
+	});
+
+	assert.equal(entries.length, 1);
+	assert.match(entries[0].message, /doors groan open/);
+});
+
+test("a game that has not started yet contributes nothing", () => {
+	assert.deepEqual(storySoFar({ history: [], storyContext: "—" }), []);
+	assert.deepEqual(storySoFar(null), []);
+	assert.deepEqual(storySoFar(undefined), []);
+});
+
+test("the em-dash placeholder for no context is not shown as context", () => {
+	const entries = storySoFar({ adventureName: "A Game", storyContext: "—" });
+	assert.equal(entries.length, 1);
+	assert.doesNotMatch(entries[0].message, /—$/);
+});
+
+test("a very long opening is truncated rather than flooding the feed", () => {
+	const entries = storySoFar({ history: [{ role: "assistant", content: "word ".repeat(500) }] });
+	assert.ok(entries[0].message.length < 600, `opening was ${entries[0].message.length} characters`);
 });
