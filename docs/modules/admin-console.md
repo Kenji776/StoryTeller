@@ -94,11 +94,33 @@ that is `core/selectors.js`'s job and nowhere else's — the old panel read
 `initiative.current` on an array, which is why its Turn indicator showed `--` for
 the life of the feature.
 
+## The player inspector
+
+Selecting a row in Party opens an inspector holding everything for that character.
+Its shape is the point:
+
+- **Adjust** (`admin:event` deltas) and **Set** (absolute repairs) are sibling
+  columns. `hp:update` moves a value by an amount; `hp:set` moves it to one. They
+  fix the same thing and were in different tabs.
+- **The Set column is built from the server's catalogue**, so a repair added in
+  `adminRepairs.js` appears here without a matching change — with the character
+  already chosen, so the name cannot be mistyped. Two repairs are given homes of
+  their own instead: `turn:set` becomes a "Give them the turn" button, and
+  `player:revive` sits beside Kill, because they are each other's undo.
+- **The table redraws on every state update; the inspector's forms do not.** They
+  are rebuilt only when the selected character changes, so an update arriving
+  mid-sentence cannot discard what is being typed. Only the vitals block redraws.
+
+Enemies are shown under the party table. The old panel surfaced nothing about
+them, so a DM running combat had to read the raw lobby JSON to see what was still
+standing.
+
 ## Status
 
-The shell, routing, permissions and socket layer are complete. Section renderers
-are being ported in phases; a section not yet rebuilt renders a placeholder saying
-so. `client/admin/admin.js` is the old panel, retained unreferenced as a porting
+Shell, routing, permissions, socket layer, and the Play sections (Dashboard,
+Party, Turn & Phase, Narration, Audio) are complete. Lobbies, Health, Activity,
+Campaign, AI Model, Raw State and Character Files still render a placeholder.
+`client/admin/admin.js` is the old panel, retained unreferenced as a porting
 reference until the last section lands.
 
-_Last verified: 2026-07-27 against branch `Refactor` (0856825)._
+_Last verified: 2026-07-27 against branch `Refactor` (fcef5d0)._

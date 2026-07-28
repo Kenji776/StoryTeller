@@ -11,6 +11,11 @@
  */
 
 import { h } from "../ui/dom.js";
+import { dashboard } from "./dashboard.js";
+import { party } from "./party.js";
+import { turn } from "./turn.js";
+import { narrate } from "./narrate.js";
+import { audio } from "./audio.js";
 
 /**
  * @description Placeholder for a section whose rebuild has not landed yet.
@@ -32,11 +37,11 @@ function notYetBuilt(ctx) {
  */
 const RENDERERS = {
 	lobbies: notYetBuilt,
-	dashboard: notYetBuilt,
-	party: notYetBuilt,
-	turn: notYetBuilt,
-	narrate: notYetBuilt,
-	audio: notYetBuilt,
+	dashboard,
+	party,
+	turn,
+	narrate,
+	audio,
 	health: notYetBuilt,
 	activity: notYetBuilt,
 	campaign: notYetBuilt,
