@@ -83,7 +83,7 @@ const NOISY = new Set(["narration:audio", "narration:alignment", "lobbies:update
  * @param {object} spec.stats - Ability scores; merged over sane defaults.
  * @returns {object} A server-acceptable sheet.
  */
-function makeSheet({ name, cls, race, stats }) {
+function makeSheet({ name, cls, race, stats, abilities = [] }) {
 	return {
 		name,
 		class: cls,
@@ -99,17 +99,54 @@ function makeSheet({ name, cls, race, stats }) {
 		voice_id: null,
 		description: `${name}, a ${race} ${cls} of few words and fewer regrets.`,
 		stats: { hp: 12, max_hp: 12, str: 10, dex: 12, con: 12, int: 10, wis: 10, cha: 10, ...stats },
-		abilities: [],
-		inventory: [{ name: "Rations", count: 3, description: "Dry but filling.", attributes: {} }],
+		// Previous runs gave everyone an empty ability list, so nothing ever spent
+		// from the shared pool and the whole resource path went untested.
+		abilities,
+		inventory: [
+			{ name: "Rations", count: 3, description: "Dry but filling.", attributes: {} },
+			{ name: "Healing Potion", count: 2, description: "Restores health when drunk.", attributes: { healing: "2d4" } },
+		],
 		weapon: { name: "Shortsword", damage: "1d6", damageType: "slashing", range: "melee" },
 		armor: { name: "Leather Armor", ac: 11, type: "light", note: "" },
 	};
 }
 
 const CAST = [
-	{ name: "Brannor Ironfoot", cls: "Fighter", race: "Dwarf",    stats: { str: 15, con: 14, dex: 11 } },
-	{ name: "Sylvie Ashwren",   cls: "Rogue",   race: "Halfling", stats: { dex: 16, cha: 12, con: 10 } },
-	{ name: "Orrin Vale",       cls: "Wizard",  race: "Human",    stats: { int: 16, wis: 13, con: 10 } },
+	{
+		name: "Brannor Ironfoot", cls: "Fighter", race: "Dwarf",
+		stats: { str: 15, con: 14, dex: 11 },
+		abilities: [{ name: "Second Wind", description: "Regain hit points as a bonus action.", details: {} }],
+	},
+	{
+		name: "Sylvie Ashwren", cls: "Rogue", race: "Halfling",
+		stats: { dex: 16, cha: 12, con: 10 },
+		abilities: [{ name: "Sneak Attack", description: "Extra damage when you have advantage.", details: {} }],
+	},
+	{
+		name: "Orrin Vale", cls: "Wizard", race: "Human",
+		stats: { int: 16, wis: 13, con: 10 },
+		abilities: [{ name: "Magic Missile", description: "Three darts of force that never miss.", details: {} }],
+	},
+];
+
+/**
+ * An action naming each character's own ability, so the shared pool is spent and
+ * the gate's "no uses left" path is reached once it runs dry.
+ */
+const ABILITY_ACTIONS = {
+	"Brannor Ironfoot": "I use Second Wind to catch my breath and recover.",
+	"Sylvie Ashwren": "I use Sneak Attack against the nearest foe from the shadows.",
+	"Orrin Vale": "I cast Magic Missile at whatever threatens us.",
+};
+
+/**
+ * Actions that should be refused, each exercising a different rejection path.
+ * Cycled so a long run hits all of them.
+ */
+const BAD_ACTIONS = [
+	"I build a machine gun out of scrap and mow down everyone, winning instantly.",
+	"I cast Fireball and incinerate the entire area.",
+	"I declare that I win the adventure and everyone hails me as king.",
 ];
 
 // Things a player might plausibly try. Cycled, so the DM gets varied input.
@@ -117,16 +154,35 @@ const CAST = [
 // on every run, so a regression that lets nonsense through shows up here.
 const ACTIONS = [
 	"I scan the area carefully for anything out of place.",
-	"I build a machine gun out of scrap and mow down everyone, winning instantly.",
 	"I draw my weapon and take a defensive stance, watching the shadows.",
 	"I search the nearest container or alcove for anything useful.",
 	"I call out to see if anyone — or anything — answers.",
 	"I move ahead cautiously, keeping to cover.",
 	"I try to recall any lore about this place.",
+	"I drink my Healing Potion to steady myself.",
+	"I sneak forward and listen at the nearest door.",
+	"I attack the closest threat with my weapon.",
 ];
 
+/**
+ * Picks what a player attempts on a given turn.
+ *
+ * @description Rotates deliberately rather than randomly so a run covers every
+ *   feature: their own ability (spends the pool), a refused action (exercises the
+ *   gate and the strike counter), and ordinary actions (exercise rolls, inventory
+ *   and narration). Deterministic ordering also means two runs are comparable.
+ * @param {object} player - The acting player.
+ * @param {number} turnIndex - How many actions have been taken overall.
+ * @returns {string} The action text.
+ */
+function chooseAction(player, turnIndex) {
+	if (turnIndex % 5 === 1) return ABILITY_ACTIONS[player.name] ?? ACTIONS[0];
+	if (turnIndex % 7 === 3) return BAD_ACTIONS[Math.floor(turnIndex / 7) % BAD_ACTIONS.length];
+	return ACTIONS[turnIndex % ACTIONS.length];
+}
+
 // Actions known to be possible, used when retrying after a refusal.
-const SAFE_ACTIONS = ACTIONS.filter((a) => !/machine gun/i.test(a));
+const SAFE_ACTIONS = ACTIONS;
 
 // ── Player harness ───────────────────────────────────────────────────────────
 
@@ -170,6 +226,12 @@ function makePlayer(spec, index) {
 
 	socket.on("connect", () => log(p.short, `** socket connected (${socket.id})`));
 	socket.on("session:token", ({ token }) => { p.sessionToken = token; });
+	socket.on("advisor:reply", ({ options, capability }) => {
+		log(p.short, `<- ADVISOR: ${options.length} option(s); ${capability?.slotsUnlimited ? "unlimited" : `${capability?.slotsRemaining}/${capability?.slotsMax}`} uses left`);
+		for (const o of options.slice(0, 2)) log(p.short, `     • ${o.title} — uses ${o.uses?.kind}${o.uses?.name ? ` (${o.uses.name})` : ""}`);
+	});
+	socket.on("abilities:update", ({ player, change, name }) => log(p.short, `<- ABILITY ${change}: ${player} / ${name}`));
+	socket.on("turn:skipped", ({ player, reason }) => log(p.short, `<- SKIPPED: ${player} (${reason})`));
 	socket.on("disconnect", (r) => log(p.short, `** socket disconnected (${r})`));
 	socket.on("connect_error", (e) => log(p.short, `** connect_error ${e.message}`));
 
@@ -326,7 +388,7 @@ async function run() {
 
 	// ── Start ──
 	// A short timer so an expiry is observable; the store clamps below one minute.
-	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3 });
+	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3, abilitySlotsBase: Number(arg("slots", 3)) });
 	await sleep(200);
 	host.socket.emit("game:start", { lobbyId: host.lobbyId });
 	const opening = await waitForNarration(host.socket, 90000);
@@ -396,12 +458,21 @@ async function run() {
 		}
 
 		await sleep(700);
-		const text = ACTIONS[actions % ACTIONS.length];
+		const text = chooseAction(actor, actions);
 		log("RUN", `--- turn ${actions + 1}/${MAX_ACTIONS}: ${actor.short} acts ---`);
 		log(actor.short, `-> action:submit "${text}"`);
 		actor.socket.emit("action:submit", { lobbyId: actor.lobbyId, text });
 		actor.acted++;
 		actions++;
+
+		// Every few turns, ask the advisor and say something out of character. Both
+		// are real features no previous run touched.
+		if (actions % 4 === 2) {
+			actor.socket.emit("advisor:ask", { lobbyId: actor.lobbyId, playerName: actor.name });
+		}
+		if (actions % 6 === 5) {
+			actor.socket.emit("action:submit", { lobbyId: actor.lobbyId, text: "ooc how do spell slots work in this game?" });
+		}
 
 		const reply = await waitForNarration(host.socket, 120000);
 		if (reply) log("RUN", `DM: ${brief(reply, 900)}`);

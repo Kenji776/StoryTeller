@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCapability, remainingSlots } from "./characterCapability.js";
+import { buildCapability, remainingSlots, slotCapacity } from "./characterCapability.js";
 
 /**
  * Builds a lobby containing one player, merged over a realistic baseline.
@@ -306,4 +306,14 @@ test("remainingSlots returns Infinity for an unlimited base", () => {
 
 test("remainingSlots keeps its one-argument behaviour for existing callers", () => {
 	assert.equal(remainingSlots({ level: 4, spellSlotsUsed: 1 }), 3);
+});
+
+test("slotCapacity is the one place the pool size is decided", () => {
+	// The spend path and the admin adjuster both clamped to player.level directly.
+	// With a configured base of 3, a level-1 character showed "3 uses left" but could
+	// only ever spend one, because the clamp disagreed with the model.
+	const player = { level: 1, spellSlotsUsed: 0 };
+	assert.equal(slotCapacity(player, 3), 3);
+	assert.equal(slotCapacity(player, "unlimited"), Infinity);
+	assert.equal(slotCapacity(player), 1);
 });

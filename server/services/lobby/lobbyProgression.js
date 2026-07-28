@@ -1,3 +1,4 @@
+import { slotCapacity } from "../characterCapability.js";
 /**
  * XP, leveling, HP, gold, abilities, spell slots, conditions,
  * inventory, and equipment methods for LobbyStore.
@@ -193,7 +194,9 @@ export const progressionMethods = {
 		const key = this.findPlayerKey(lobbyId, playerName);
 		if (!l || !key) return 0;
 		const p = l.players[key];
-		const maxSlots = Number(p.level) || 1;
+		// Same source of truth as the capability model and the spend path, so an admin
+		// adjustment cannot clamp to a different ceiling than the one players are shown.
+		const maxSlots = slotCapacity(p, l.abilitySlotsBase);
 		const current = Number(p.spellSlotsUsed) || 0;
 		p.spellSlotsUsed = Math.max(0, Math.min(maxSlots, current + Number(delta || 0)));
 		this.persist(lobbyId);

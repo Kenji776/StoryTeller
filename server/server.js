@@ -44,7 +44,7 @@ import { createSessionSystem } from "./routes/sessionEvents.js";
 import { createIncidentLog } from "./services/incidents.js";
 import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
-import { buildCapability } from "./services/characterCapability.js";
+import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
 
@@ -1052,11 +1052,14 @@ io.on("connection", (socket) => {
 				if (dmObj.spellUsed === true) {
 					const player = store.index[lobbyId]?.players?.[actor.name];
 					if (player) {
-						const maxSlots = Number(player.level) || 1;
+						// The host-configured pool, not player.level. These disagreed: a level-1
+						// character with a base of 3 was shown "3 uses left" but could spend only
+						// one, because this clamp had not been told the base was configurable.
+						const maxSlots = slotCapacity(player, store.index[lobbyId]?.abilitySlotsBase);
 						if ((player.spellSlotsUsed || 0) < maxSlots) {
 							player.spellSlotsUsed = (player.spellSlotsUsed || 0) + 1;
 							store.persist(lobbyId);
-							log(`🔮 Spell slot used by ${actor.name} (${player.spellSlotsUsed}/${maxSlots})`);
+							log(`🔮 Ability use spent by ${actor.name} (${player.spellSlotsUsed}/${Number.isFinite(maxSlots) ? maxSlots : "∞"})`);
 						}
 					}
 				}
