@@ -238,3 +238,67 @@ test("a missing or malformed batch yields an empty list rather than throwing", (
 		assert.deepEqual(stripResolvedDamage(bad, true), []);
 	}
 });
+
+// ===== Difficulty =====
+//
+// The dial used to be four adjectives handed to the narrator. These pin it to the
+// arithmetic, so "Casual" is measurably gentler than "Merciless" rather than a
+// difference of tone.
+
+test("difficulty shifts the enemies' chance to hit", () => {
+	const enemies = { Goblin: { name: "Goblin", hp: 7, max_hp: 7, ac: 15, str: 10, cr: "1/4", status: "active" } };
+	const players = { Ayla: { name: "Ayla", stats: { hp: 20, max_hp: 20, dex: 10 }, armor: { name: "Chain Shirt", ac: 13, type: "medium" } } };
+
+	const attackOn = (difficulty) => resolveEnemyAttacks({
+		enemies, players, difficulty, rollD20: () => 10, rollDamage: () => 4,
+	}).attacks[0];
+
+	// The same d20 against the same armour: a swing that misses on Casual lands on
+	// Merciless purely because of the setting.
+	assert.ok(attackOn("merciless").total > attackOn("standard").total);
+	assert.ok(attackOn("casual").total < attackOn("standard").total);
+});
+
+test("difficulty scales the damage an enemy deals", () => {
+	const enemies = { Ogre: { name: "Ogre", hp: 30, max_hp: 30, ac: 11, str: 10, cr: "2", status: "active" } };
+	const players = { Ayla: { name: "Ayla", stats: { hp: 40, max_hp: 40, dex: 10 }, armor: null } };
+
+	const dealt = (difficulty) => resolveEnemyAttacks({
+		enemies, players, difficulty, rollD20: () => 20, rollDamage: () => 8,
+	}).damage.Ayla;
+
+	assert.equal(dealt("standard"), 8);
+	assert.equal(dealt("casual"), 4);
+	assert.equal(dealt("hardcore"), 10);
+	assert.equal(dealt("merciless"), 12);
+});
+
+test("a scaled blow still takes at least one hit point", () => {
+	const enemies = { Rat: { name: "Rat", hp: 2, max_hp: 2, ac: 10, str: 4, cr: "0", status: "active" } };
+	const players = { Ayla: { name: "Ayla", stats: { hp: 20, max_hp: 20, dex: 10 }, armor: null } };
+
+	const result = resolveEnemyAttacks({ enemies, players, difficulty: "casual", rollD20: () => 20, rollDamage: () => 1 });
+
+	assert.ok(result.damage.Ayla >= 1, `dealt ${result.damage.Ayla}`);
+});
+
+test("damage is always a whole number of hit points", () => {
+	const enemies = { Ogre: { name: "Ogre", hp: 30, max_hp: 30, ac: 11, str: 12, cr: "2", status: "active" } };
+	const players = { Ayla: { name: "Ayla", stats: { hp: 40, max_hp: 40, dex: 10 }, armor: null } };
+
+	for (const difficulty of ["casual", "standard", "hardcore", "merciless"]) {
+		for (const rolled of [1, 3, 5, 7, 9]) {
+			const dealt = resolveEnemyAttacks({ enemies, players, difficulty, rollD20: () => 20, rollDamage: () => rolled }).damage.Ayla;
+			assert.ok(Number.isInteger(dealt), `${difficulty} rolling ${rolled} dealt ${dealt}`);
+		}
+	}
+});
+
+test("an absent or unknown difficulty plays as standard", () => {
+	const enemies = { Ogre: { name: "Ogre", hp: 30, max_hp: 30, ac: 11, str: 10, cr: "2", status: "active" } };
+	const players = { Ayla: { name: "Ayla", stats: { hp: 40, max_hp: 40, dex: 10 }, armor: null } };
+	const dealt = (difficulty) => resolveEnemyAttacks({ enemies, players, difficulty, rollD20: () => 20, rollDamage: () => 8 }).damage.Ayla;
+
+	assert.equal(dealt(undefined), 8);
+	assert.equal(dealt("nightmare"), 8);
+});

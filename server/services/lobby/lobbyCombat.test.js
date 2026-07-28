@@ -686,3 +686,67 @@ test("with nothing resolved the model retains full control, as before", () => {
 	store.updateEnemies("lob1", [{ name: "Goblin 1", hp: 1, status: "active" }], {});
 	assert.equal(store.index.lob1.enemies["Goblin 1"].hp, 1);
 });
+
+// ── Difficulty scales an enemy as it arrives ─────────────────────────────────
+
+test("a new enemy's hit points are scaled by the difficulty", () => {
+	const introduce = (difficulty) => {
+		const store = combatStore();
+		store.updateEnemies("lob1", [{ name: "Ogre", hp: 40, max_hp: 40, ac: 11, cr: "2", status: "active" }], { difficulty });
+		return store.index.lob1.enemies.Ogre;
+	};
+
+	assert.equal(introduce("standard").max_hp, 40);
+	assert.equal(introduce("casual").max_hp, 24);
+	assert.equal(introduce("hardcore").max_hp, 50);
+	assert.equal(introduce("merciless").max_hp, 60);
+});
+
+test("scaling moves current and maximum hit points together", () => {
+	// A wounded creature introduced mid-scene must not arrive at full health, and
+	// must not arrive above its own maximum either.
+	const store = combatStore();
+	store.updateEnemies("lob1", [{ name: "Ogre", hp: 20, max_hp: 40, ac: 11, cr: "2", status: "active" }], { difficulty: "merciless" });
+
+	const ogre = store.index.lob1.enemies.Ogre;
+	assert.equal(ogre.max_hp, 60);
+	assert.equal(ogre.hp, 30);
+	assert.ok(ogre.hp <= ogre.max_hp);
+});
+
+test("an enemy is never scaled below one hit point", () => {
+	const store = combatStore();
+	store.updateEnemies("lob1", [{ name: "Rat", hp: 1, max_hp: 1, ac: 10, cr: "0", status: "active" }], { difficulty: "casual" });
+
+	assert.ok(store.index.lob1.enemies.Rat.hp >= 1);
+	assert.ok(store.index.lob1.enemies.Rat.max_hp >= 1);
+});
+
+test("scaled hit points are whole numbers", () => {
+	for (const difficulty of ["casual", "standard", "hardcore", "merciless"]) {
+		const store = combatStore();
+		store.updateEnemies("lob1", [{ name: "Ogre", hp: 7, max_hp: 7, ac: 11, cr: "2", status: "active" }], { difficulty });
+
+		const ogre = store.index.lob1.enemies.Ogre;
+		assert.ok(Number.isInteger(ogre.hp) && Number.isInteger(ogre.max_hp), `${difficulty} gave ${ogre.hp}/${ogre.max_hp}`);
+	}
+});
+
+test("an enemy already on the roster is not rescaled by later updates", () => {
+	// Applied once, on introduction. Rescaling on every turn would inflate a
+	// creature's health without bound as the model re-sends its block.
+	const store = combatStore();
+	store.updateEnemies("lob1", [{ name: "Ogre", hp: 40, max_hp: 40, ac: 11, cr: "2", status: "active" }], { difficulty: "merciless" });
+	assert.equal(store.index.lob1.enemies.Ogre.max_hp, 60);
+
+	store.updateEnemies("lob1", [{ name: "Ogre", hp: 55, status: "active" }], { difficulty: "merciless" });
+	assert.equal(store.index.lob1.enemies.Ogre.max_hp, 60, "the maximum was scaled a second time");
+	assert.equal(store.index.lob1.enemies.Ogre.hp, 55, "the reported hit points were scaled again");
+});
+
+test("an absent difficulty introduces an enemy unscaled", () => {
+	const store = combatStore();
+	store.updateEnemies("lob1", [{ name: "Ogre", hp: 40, max_hp: 40, ac: 11, cr: "2", status: "active" }]);
+
+	assert.equal(store.index.lob1.enemies.Ogre.max_hp, 40);
+});

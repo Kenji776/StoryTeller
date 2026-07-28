@@ -28,6 +28,7 @@ const URL = arg("url", "http://localhost:3013");
 const TURNS = Number(arg("turns", 4));
 const PROVIDER = arg("provider", "anthropic");
 const MODEL = arg("model", "claude-sonnet-4-6");
+const DIFFICULTY = arg("difficulty", "standard");
 
 /**
  * @description Resolves with the next payload for an event.
@@ -75,12 +76,12 @@ await waitFor(socket, "connect", 15000);
 socket.emit("lobby:create", {});
 const created = await waitFor(socket, "lobby:created");
 const lobbyId = created.lobbyId;
-console.log(`lobby ${created.code} (${lobbyId})`);
+console.log(`lobby ${created.code} (${lobbyId}) — difficulty ${DIFFICULTY}`);
 
 socket.emit("player:sheet", { lobbyId, name: SHEET.name, sheet: SHEET });
 await sleep(300);
 socket.emit("lobby:settings", {
-	lobbyId, timerEnabled: false, difficulty: "standard", brutalityLevel: 5,
+	lobbyId, timerEnabled: false, difficulty: DIFFICULTY, brutalityLevel: 5,
 	illustrationMode: "off", lootGenerosity: "fair", llmProvider: PROVIDER, llmModel: MODEL,
 });
 await sleep(300);
@@ -91,10 +92,6 @@ console.log("starting the game…");
 socket.emit("game:start", { lobbyId });
 await waitFor(socket, "narration");
 await sleep(1500);
-
-// A tough, low-AC brute so hits and misses are both reachable, introduced through
-// the admin path rather than hoping the story produces one.
-console.log("staging an enemy and attacking it…\n");
 
 /**
  * @description Reads the lobby's current enemy roster off a state push.
@@ -114,6 +111,21 @@ async function roster() {
 	});
 	return Object.fromEntries((state?.enemies ?? []).map((e) => [e.name, e]));
 }
+
+// Enemies are forced into existence rather than waited for. An earlier run spent two
+// DM calls in an empty corridor because the story had not got around to a fight yet,
+// and measured nothing. `[admin_command]` is the escape hatch the prompt already
+// honours for exactly this.
+console.log("staging a fight…");
+socket.emit("action:submit", {
+	lobbyId,
+	text: "[admin_command] Two hobgoblin raiders attack the party right now. Introduce them with full stat blocks in the enemies array. AC 18, 11 hit points each, CR 1/2.",
+});
+await sleep(32000);
+
+const staged = await roster();
+console.log(`staged: ${Object.values(staged).map((e) => `${e.name} [${e.condition}]`).join(", ") || "(none — the command was ignored)"}\n`);
+
 
 for (let turn = 1; turn <= TURNS; turn++) {
 	frames.length = 0;

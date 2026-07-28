@@ -98,13 +98,37 @@ never been sufficient:
 XP for a server-resolved kill is awarded at the killing blow, since `updateEnemies`
 never sees that death.
 
+## Difficulty
+
+`client/difficulty.js` — in `client/` because the settings window imports it and the
+server imports it back, so the host's promise, the narrator's brief and the
+arithmetic are one artifact. See [ADR 0019](../decisions/0019-difficulty-scales-the-opposition.md).
+
+| | Casual | Standard | Hardcore | Merciless |
+|---|---|---|---|---|
+| Enemy attack bonus | −3 | 0 | +2 | +4 |
+| Enemy damage | ×0.5 | ×1 | ×1.25 | ×1.5 |
+| Enemy hit points | ×0.6 | ×1 | ×1.25 | ×1.5 |
+| Party attack bonus | +3 | 0 | 0 | −1 |
+
+Standard is a true no-op. Player *damage* is untouched at every setting — a weapon
+deals what the weapon deals. Enemy hit points are scaled once, on introduction;
+rescaling per update would inflate a creature without bound as the model re-sends
+its block.
+
+`describeDifficulty` renders the same table into the lines the settings window
+lists under the chips and the block pasted into the DM prompt — where it is also
+told the modifiers are *already applied*, or it applies them a second time.
+
+An unrecognised difficulty gets Standard's modifiers rather than throwing, so a
+combat path that forgets to pass it plays balanced rather than crashing.
+
 ## Known gaps
 
 - **Trinket effects are not computed.** A Ring of the Veil works as well as the
   narrator remembers it.
-- **`difficulty` does not touch to-hit maths.** It scales encounter composition and
-  prompt tone only. A level 3 fighter against AC 18 misses more than half the time,
-  which is correct 5e and may not be the right game.
+- **Difficulty modifiers are flat, not level-scaled.** +4 to enemy attacks matters
+  more at level 1 than at level 15.
 - **No advantage, cover, reach, opportunity attacks or resistances.**
 - **Spells and abilities are not resolved mechanically** — they still go through
   `autoRollIfNeeded`'s flat ladder and the narrator's judgement.

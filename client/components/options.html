@@ -302,6 +302,29 @@
 			gap: 0.4rem;
 		}
 
+		/* What the chosen difficulty actually does to the numbers. Stated rather than
+		   implied: "enemies are relentless" is not something a host can plan around. */
+		.effect-list {
+			list-style: none;
+			margin: 0.65rem 0 0;
+			padding: 0.55rem 0.7rem;
+			border-left: 2px solid #7a5cc4;
+			background: rgba(122, 92, 196, 0.08);
+			border-radius: 0 4px 4px 0;
+			font-size: 0.72em;
+			color: #5a4a7a;
+		}
+
+		.effect-list li {
+			padding: 0.12rem 0;
+		}
+
+		.effect-list li::before {
+			content: "›";
+			margin-right: 0.45rem;
+			opacity: 0.65;
+		}
+
 		.chip {
 			padding: 0.3em 0.75em;
 			font-size: 0.82em;
@@ -396,13 +419,15 @@
 
 <div class="section">
 	<div class="section-title">Difficulty</div>
-	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Controls enemy strength, DC thresholds, and how punishing mistakes are.</p>
+	<p style="font-size:0.72em;color:#5a4a7a;margin:0 0 0.6em;">Changes the combat maths, not just the DM's tone. The exact effects are listed below.</p>
 	<div class="chip-group" id="difficultyChips">
 		<button class="chip" data-sound-hover="Magical Shimmer" data-value="casual" data-sound="Stone Tile Click">🌸 Casual</button>
 		<button class="chip" data-sound-hover="Magical Shimmer" data-value="standard" data-sound="Stone Tile Click">⚔️ Standard</button>
 		<button class="chip" data-sound-hover="Magical Shimmer" data-value="hardcore" data-sound="Stone Tile Click">💀 Hardcore</button>
 		<button class="chip" data-sound-hover="Magical Shimmer" data-value="merciless" data-sound="Stone Tile Click">☠️ Merciless</button>
 	</div>
+	<!-- Filled from client/difficulty.js — the same table the server rolls against. -->
+	<ul id="difficultyEffects" class="effect-list"></ul>
 </div>
 
 <div class="section">
@@ -594,6 +619,16 @@
 	// a named handoff is clearer than doing the work twice.
 	import { panelRows, startGate, credentialSubmission, heldSummary } from "../aiPanel.js";
 	window.__aiPanel = { panelRows, startGate, credentialSubmission, heldSummary };
+
+	// The same module the server computes combat with, so what a host is promised
+	// here and what the dice do cannot drift apart.
+	//
+	// This runs *after* the classic script below, which is inline and so executes
+	// during parsing while a module is deferred. The re-render is what covers that
+	// gap: without it the list stays empty until the host touches a chip.
+	import { describeDifficulty } from "../difficulty.js";
+	window.describeDifficulty = describeDifficulty;
+	window.__renderDifficulty?.();
 </script>
 <script>
 const lobbyId = new URLSearchParams(location.search).get("lobbyId");
@@ -814,6 +849,9 @@ function applyState(state) {
 	// Chip selectors
 	selectChip("difficultyChips", state.difficulty     || "standard");
 	selectChip("lootChips",       state.lootGenerosity || "fair");
+	// The window can open before the module script has run, so this is also called
+	// on that script's own load; whichever lands second wins and both are correct.
+	renderDifficultyEffects(state.difficulty || "standard");
 
 	// Brutality
 	const bLevel = state.brutalityLevel ?? 5;
@@ -1079,11 +1117,37 @@ elEnabled.addEventListener("change", () => {
 elMinutes.addEventListener("change", emitSettings);
 elMaxMissed.addEventListener("change", emitSettings);
 elNarratorVoice.addEventListener("change", emitSettings);
+/**
+ * Lists what the chosen difficulty does to the combat maths.
+ *
+ * The lines come from `client/difficulty.js`, the same module the server rolls
+ * against, so a host cannot be promised one thing and dealt another.
+ *
+ * @param {string} value - The selected difficulty.
+ * @returns {void}
+ */
+function renderDifficultyEffects(value) {
+	const list = document.getElementById("difficultyEffects");
+	if (!list || !window.describeDifficulty) return;
+
+	list.innerHTML = "";
+	for (const line of window.describeDifficulty(value)) {
+		const li = document.createElement("li");
+		li.textContent = line;
+		list.appendChild(li);
+	}
+}
+
+// Called by the module script above once `describeDifficulty` exists, since it
+// loads after this one.
+window.__renderDifficulty = () => renderDifficultyEffects(selectedChip("difficultyChips") || "standard");
+
 ["difficultyChips", "lootChips"].forEach(groupId => {
 	document.getElementById(groupId).addEventListener("click", e => {
 		const chip = e.target.closest(".chip");
 		if (!chip) return;
 		selectChip(groupId, chip.dataset.value);
+		if (groupId === "difficultyChips") renderDifficultyEffects(chip.dataset.value);
 		emitSettings();
 	});
 });

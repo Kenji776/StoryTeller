@@ -334,3 +334,33 @@ test("the DM is still told to report enemies it introduces", () => {
 	assert.match(text, /introduce/i);
 	assert.match(text, /stat block/i);
 });
+
+test("the difficulty instruction tells the DM what the dial actually did", () => {
+	// The dial now moves real numbers. A narrator told only "enemies are relentless"
+	// will describe a fight that does not match the one the dice are running.
+	const store = Object.create(promptMethods);
+
+	const merciless = store._difficultyInstruction("merciless");
+	assert.match(merciless, /\+4/, "the enemy attack bonus is not stated");
+	assert.match(merciless, /50%/, "the damage and hit point scaling is not stated");
+
+	const casual = store._difficultyInstruction("casual");
+	assert.match(casual, /-3/);
+});
+
+test("the difficulty instruction still tells the DM how to pitch the fiction", () => {
+	// The mechanical facts are additions, not a replacement — DCs for non-combat
+	// checks are still the narrator's, and they should move with the setting.
+	const store = Object.create(promptMethods);
+
+	assert.match(store._difficultyInstruction("casual"), /DC/i);
+	assert.match(store._difficultyInstruction("hardcore"), /DC/i);
+});
+
+test("the DM is told the combat modifiers are already applied", () => {
+	// Otherwise it stacks them: a narrator told "enemies hit 50% harder" may inflate
+	// the damage it describes on top of damage the server already scaled.
+	const store = Object.create(promptMethods);
+
+	assert.match(store._difficultyInstruction("merciless"), /already applied|do not apply|server/i);
+});

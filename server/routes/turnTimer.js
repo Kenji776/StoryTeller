@@ -440,7 +440,7 @@ export function createTimerSystem(deps) {
 					broadcastGoldUpdates(io, store, lobbyId, u.gold);
 					broadcastConditionUpdates(io, store, lobbyId, u.conditions);
 					broadcastAbilityUpdates(io, store, lobbyId, u.abilities);
-					if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
+					if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies, { difficulty: store.index[lobbyId]?.difficulty });
 					if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 					broadcastPartyState(io, store, lobbyId);
 					updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);
@@ -551,7 +551,7 @@ export function createTimerSystem(deps) {
 					broadcastGoldUpdates(io, store, lobbyId, u.gold);
 					broadcastConditionUpdates(io, store, lobbyId, u.conditions);
 					broadcastAbilityUpdates(io, store, lobbyId, u.abilities);
-					if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
+					if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies, { difficulty: store.index[lobbyId]?.difficulty });
 					if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 					broadcastPartyState(io, store, lobbyId);
 					updateMap(io, store, lobbyId, dmObj.characters || [], dmObj.terrain || null);

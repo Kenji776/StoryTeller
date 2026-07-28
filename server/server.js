@@ -1277,7 +1277,7 @@ io.on("connection", (socket) => {
 			// See ADR 0018.
 			const attackTarget = isAttackAction(text) ? chooseTarget(text, s.enemies) : null;
 			const attack = attackTarget
-				? resolveAttack({ attacker: s.players[actor.name], target: attackTarget })
+				? resolveAttack({ attacker: s.players[actor.name], target: attackTarget, difficulty: s.difficulty })
 				: null;
 
 			if (attack) {
@@ -1325,6 +1325,7 @@ io.on("connection", (socket) => {
 			const enemyTurn = resolveEnemyAttacks({
 				enemies: s.enemies,
 				players: s.players,
+				difficulty: s.difficulty,
 			});
 
 			// Whether a fight ever happens was the narrator's whim, and it declined: one
@@ -1518,6 +1519,7 @@ io.on("connection", (socket) => {
 					// are the server's, and the model's copy would overwrite them.
 					const killed = store.updateEnemies(lobbyId, u.enemies, {
 						serverResolved: attack ? [attack.targetName] : [],
+						difficulty: s.difficulty,
 					});
 					const living = Object.values(store.index[lobbyId]?.players || {})
 						.filter((p) => !p.dead)

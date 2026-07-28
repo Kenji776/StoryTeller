@@ -22,6 +22,9 @@ import { d20, roll, mod } from "../helpers/dice.js";
 // `characterCapability.js`, the two disagreed, so the number a player was quoted was
 // not the number the enemies rolled against.
 import { armourClass } from "./armourClass.js";
+// The dial that used to be four adjectives. Held here as well as in the settings
+// window, the description and the arithmetic would drift.
+import { difficultyModifiers } from "../../client/difficulty.js";
 
 /**
  * Damage dice by challenge rating, as `[count, sides]`.
@@ -97,7 +100,8 @@ function isStanding(player) {
  *   made, and the total damage per character. `damage` carries only characters that
  *   were actually hit, so it can be applied directly.
  */
-export function resolveEnemyAttacks({ enemies, players, rollD20 = d20, rollDamage } = {}) {
+export function resolveEnemyAttacks({ enemies, players, difficulty, rollD20 = d20, rollDamage } = {}) {
+	const { enemyAttackBonus, enemyDamageMultiplier } = difficultyModifiers(difficulty);
 	const rollDice = rollDamage ?? ((count, sides) => {
 		let total = 0;
 		for (let i = 0; i < count; i++) total += roll(sides);
@@ -121,7 +125,7 @@ export function resolveEnemyAttacks({ enemies, players, rollD20 = d20, rollDamag
 		const target = targets[index % targets.length];
 		const cr = crValue(enemy.cr);
 
-		const bonus = mod(Number(enemy.str) || 10) + byCR(PROFICIENCY_BY_CR, cr).bonus;
+		const bonus = mod(Number(enemy.str) || 10) + byCR(PROFICIENCY_BY_CR, cr).bonus + enemyAttackBonus;
 		const base = rollD20();
 		const total = base + bonus;
 		const ac = armourClass(target);
@@ -132,7 +136,11 @@ export function resolveEnemyAttacks({ enemies, players, rollD20 = d20, rollDamag
 		let dealt = 0;
 		if (hit) {
 			const [count, sides] = byCR(DAMAGE_BY_CR, cr).dice;
-			dealt = Math.max(1, rollDice(count, sides) + mod(Number(enemy.str) || 10));
+			const raw = rollDice(count, sides) + mod(Number(enemy.str) || 10);
+			// Scaled after the roll rather than by inflating the dice, so the shape of
+			// the distribution is unchanged and only its magnitude moves. Rounded and
+			// floored at 1: a blow that lands always costs something.
+			dealt = Math.max(1, Math.round(raw * enemyDamageMultiplier));
 			damage[target.name] = (damage[target.name] ?? 0) + dealt;
 		}
 

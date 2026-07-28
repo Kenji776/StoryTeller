@@ -6,6 +6,7 @@
 import { roll, d20, mod } from "../../helpers/dice.js";
 // "Is this an attack?" now has one answer, shared with the resolver that rolls it.
 import { isAttackAction } from "../playerAttacks.js";
+import { difficultyModifiers } from "../../../client/difficulty.js";
 
 /**
  * Orders two initiative entries, highest first.
@@ -405,7 +406,7 @@ export const combatMethods = {
 	 *   update, each reported exactly once so XP can be awarded without paying the
 	 *   party twice for a corpse the model re-sends. Empty on a malformed call.
 	 */
-	updateEnemies(lobbyId, enemyUpdates, { serverResolved = [] } = {}) {
+	updateEnemies(lobbyId, enemyUpdates, { serverResolved = [], difficulty } = {}) {
 		const s = this.index[lobbyId];
 		if (!s || !Array.isArray(enemyUpdates)) return [];
 		s.enemies = s.enemies || {};
@@ -424,11 +425,16 @@ export const combatMethods = {
 				// Skip dead/fled enemies that don't already exist in the roster —
 				// the LLM sometimes re-sends purged enemies after combat ends
 				if (e.status === "dead" || e.status === "fled" || (Number(e.hp) || 0) <= 0) continue;
-				// New enemy — store full stat block
+				// New enemy — store full stat block, scaled once by the difficulty.
+				// Applied only here: rescaling on every update would inflate a
+				// creature without bound as the model re-sends its block each turn.
+				const toughness = difficultyModifiers(difficulty).enemyHpMultiplier;
+				const scale = (value) => Math.max(1, Math.round((Number(value) || 10) * toughness));
+
 				s.enemies[key] = {
 					name: key,
-					hp: Number(e.hp) || 10,
-					max_hp: Number(e.max_hp || e.hp) || 10,
+					hp: scale(e.hp),
+					max_hp: scale(e.max_hp || e.hp),
 					ac: Number(e.ac) || 10,
 					str: Number(e.str) || 10,
 					dex: Number(e.dex) || 10,

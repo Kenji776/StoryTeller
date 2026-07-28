@@ -18,6 +18,7 @@
  */
 
 import { d20, mod, rollExpression } from "../helpers/dice.js";
+import { difficultyModifiers } from "../../client/difficulty.js";
 
 /** What you hit with when you are holding nothing. */
 const UNARMED = { name: "Unarmed Strike", damage: "1d4", damageType: "bludgeoning", range: "melee" };
@@ -177,7 +178,7 @@ function computeDamage({ weapon, critical, abilityMod, enchantment, rollDice }) 
  *   taking a dice expression.
  * @returns {object|null} The resolved attack, or null when there is nothing to resolve.
  */
-export function resolveAttack({ attacker, target, rollD20 = d20, rollDamage } = {}) {
+export function resolveAttack({ attacker, target, difficulty, rollD20 = d20, rollDamage } = {}) {
 	if (!attacker || !target) return null;
 
 	const rollDice = rollDamage ?? ((expression) => rollExpression(expression)?.total ?? 1);
@@ -187,7 +188,11 @@ export function resolveAttack({ attacker, target, rollD20 = d20, rollDamage } = 
 	const abilityMod = mod(Number(attacker?.stats?.[ability]) || 10);
 	const enchantment = Number(weapon.bonus) || 0;
 
-	const bonus = abilityMod + proficiencyBonus(attacker.level) + enchantment;
+	// The one place the difficulty dial touches the party's own dice rather than the
+	// opposition's. Without it Casual is no gentler than Standard, because armour
+	// class decides hits now and a shortsword against AC 18 misses either way.
+	const bonus = abilityMod + proficiencyBonus(attacker.level) + enchantment
+		+ difficultyModifiers(difficulty).playerAttackBonus;
 	const base = rollD20();
 	const total = base + bonus;
 

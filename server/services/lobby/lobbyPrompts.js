@@ -16,6 +16,9 @@ import { slotCapacity, remainingSlots, DEFAULT_SLOT_BASE } from "../characterCap
 // places, the prompt and the validator drift and the DM starts naming conditions
 // nothing can apply.
 import { CANONICAL_CONDITIONS } from "../conditions.js";
+// The same lines the host is shown in the settings window, from the same table the
+// dice use — so the narrator, the operator and the arithmetic all agree.
+import { describeDifficulty } from "../../../client/difficulty.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MUSIC_MOODS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "client", "config", "music_moods.json"), "utf8")).moods;
@@ -684,12 +687,26 @@ The "text" field may contain basic HTML formatting. Set "music" to "sad_moment".
 	 * @returns {string} A sentence describing enemy strength and DC expectations.
 	 */
 	_difficultyInstruction(d) {
-		switch (d) {
-			case "casual":    return "Difficulty is Casual. Enemies are weak and untactical. Most DCs are low (8–12). Players should rarely face real danger — keep deaths and devastating failures scarce. Prioritise fun and experimentation over challenge.";
-			case "hardcore":  return "Difficulty is Hardcore. Enemies are smart, hit hard, and exploit weaknesses. DCs skew high (14–18 for moderate tasks). Mistakes carry real consequences. Players should feel genuine danger throughout.";
-			case "merciless": return "Difficulty is Merciless. Enemies are relentless and unforgiving. DCs are punishing. Every blunder may be lethal. Show absolutely no mercy — the world does not care whether the players survive.";
-			default:          return "Difficulty is Standard. Follow normal D&D 5e encounter balance. DCs are fair (10–15 for moderate tasks). Combat is challenging but winnable with smart play.";
-		}
+		const tone = {
+			casual: "Difficulty is Casual. Enemies are weak and untactical. Most DCs are low (8–12). Players should rarely face real danger — keep deaths and devastating failures scarce. Prioritise fun and experimentation over challenge.",
+			hardcore: "Difficulty is Hardcore. Enemies are smart, hit hard, and exploit weaknesses. DCs skew high (14–18 for moderate tasks). Mistakes carry real consequences. Players should feel genuine danger throughout.",
+			merciless: "Difficulty is Merciless. Enemies are relentless and unforgiving. DCs are punishing. Every blunder may be lethal. Show absolutely no mercy — the world does not care whether the players survive.",
+		}[d] ?? "Difficulty is Standard. Follow normal D&D 5e encounter balance. DCs are fair (10–15 for moderate tasks). Combat is challenging but winnable with smart play.";
+
+		// The dial moves real numbers now, and the server has already moved them. Told
+		// only "enemies are relentless", the narrator describes a fight that does not
+		// match the one the dice are running; told the modifiers without being told
+		// they are spent, it applies them a second time on top.
+		const effects = describeDifficulty(d);
+		const mechanical = effects.length
+			? `\nThis setting has ALREADY been applied by the server to every roll and every enemy. `
+				+ `Stated from the party's point of view, where "you" is a player and not you: `
+				+ `${effects.join(" ")} `
+				+ `Do not adjust damage, hit points or to-hit numbers yourself to account for it — describe what you are given. `
+				+ `It should, however, colour how you pitch DCs for non-combat checks and how the opposition behaves.`
+			: "";
+
+		return `${tone}${mechanical}`;
 	},
 	/**
 	 * Returns a loot-frequency directive string for the LLM.

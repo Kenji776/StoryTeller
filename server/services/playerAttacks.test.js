@@ -375,3 +375,53 @@ test("malformed input is not an attack", () => {
 		assert.equal(isAttackAction(bad), false);
 	}
 });
+
+// ── Difficulty ───────────────────────────────────────────────────────────────
+
+test("difficulty adjusts the party's attack roll, and says so", () => {
+	// The one place the dial touches the party's own dice rather than the opposition.
+	// It exists because AC now decides hits, and without it Casual is no gentler than
+	// Standard for a level 3 character swinging at AC 18.
+	const opts = { attacker: fighter(), target: roster().Gurnak, rollD20: always(10), rollDamage: () => 3 };
+
+	const standard = resolveAttack({ ...opts, difficulty: "standard" });
+	const casual = resolveAttack({ ...opts, difficulty: "casual" });
+	const merciless = resolveAttack({ ...opts, difficulty: "merciless" });
+
+	assert.equal(casual.bonus, standard.bonus + 3);
+	assert.equal(merciless.bonus, standard.bonus - 1);
+	assert.equal(casual.total, standard.total + 3);
+});
+
+test("hardcore leaves the party's own rolls alone", () => {
+	// It hardens the opposition instead. A host reading "your attack rolls are
+	// unmodified" must find that true.
+	const opts = { attacker: fighter(), target: roster().Gurnak, rollD20: always(10), rollDamage: () => 3 };
+
+	assert.equal(resolveAttack({ ...opts, difficulty: "hardcore" }).bonus, resolveAttack({ ...opts, difficulty: "standard" }).bonus);
+});
+
+test("difficulty cannot turn a natural one into a hit or a natural twenty into a miss", () => {
+	const paper = { name: "Paper", hp: 1, max_hp: 1, ac: 1, cr: "0", status: "active" };
+	const wall = { name: "Wall", hp: 99, max_hp: 99, ac: 40, cr: "20", status: "active" };
+
+	assert.equal(resolveAttack({ attacker: fighter(), target: paper, difficulty: "casual", rollD20: always(1), rollDamage: () => 3 }).hit, false);
+	assert.equal(resolveAttack({ attacker: fighter(), target: wall, difficulty: "merciless", rollD20: always(20), rollDamage: () => 3 }).hit, true);
+});
+
+test("an absent difficulty leaves the attack unmodified", () => {
+	const opts = { attacker: fighter(), target: roster().Gurnak, rollD20: always(10), rollDamage: () => 3 };
+
+	assert.equal(resolveAttack(opts).bonus, resolveAttack({ ...opts, difficulty: "standard" }).bonus);
+	assert.equal(resolveAttack({ ...opts, difficulty: "nightmare" }).bonus, resolveAttack({ ...opts, difficulty: "standard" }).bonus);
+});
+
+test("difficulty does not touch the damage a player's weapon deals", () => {
+	// Weapon damage stays honest to the weapon; the dial moves the opposition's
+	// numbers and the party's chance to connect, and that is what the host is told.
+	const opts = { attacker: fighter(), target: roster().Gurnak, rollD20: always(18), rollDamage: () => 4 };
+
+	for (const difficulty of ["casual", "standard", "hardcore", "merciless"]) {
+		assert.equal(resolveAttack({ ...opts, difficulty }).damage, 7, `${difficulty} changed player damage`);
+	}
+});
