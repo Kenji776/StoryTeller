@@ -22,6 +22,7 @@ for how long they live.
 | `sessionKeys.js` | Holds a lobby host's key in memory, and what the lobby has spent. |
 | `resolve.js` | Decides whose credential serves one call, or refuses with a reason. |
 | `capabilities.js` | Describes what the instance can do — one shape for players, one for the operator. |
+| `readiness.js` | Whether a lobby can start, and what its host would have to do about it. |
 | `index.js` | Composition root: assembles the above and is the only file here that knows the registries. |
 
 Every one of them takes `fsImpl`, the clock, and the logger as parameters, so the
@@ -346,3 +347,68 @@ call it `isAvailable` rather than `probe`.
 The adaptation lives in one visible table in `providerAdmin.js` rather than being
 smeared across callers. It is a wart, and the fix is to give the TTS adapters the
 same shape as the other two.
+
+
+## Whether a lobby can start
+
+`readiness.js` produces one verdict, consumed by three things that must never
+disagree: the settings window drawing the AI panel, the Start button, and the
+server refusing `game:start`. If those answered separately they would drift, and
+the failure mode is the worst kind — a Start button that looks enabled and then
+does nothing.
+
+**Only the story service blocks a game.** Narration degrades to silence and
+portraits to a blank frame, which is still a game; a Dungeon Master that cannot
+answer is not. Refusing to start because nobody has an ElevenLabs key would be
+hostile, and it is precisely the gate that gets added by accident when every
+capability is treated uniformly.
+
+| State | Means |
+|---|---|
+| `server` | The instance's key pays. Nothing to do. |
+| `local` | A self-hosted service. Free, nothing to do. |
+| `own-key` | The host supplied their own. |
+| `needs-key` | A key would make this work. |
+| `unavailable` | Nothing on offer — and **not** actionable. |
+
+The last distinction matters. An unreachable Ollama with no paid alternative is
+`unavailable`, not `needs-key`: no key would fix somebody else's server being
+down, and offering a key field would be busywork dressed as a solution.
+
+A host's key is matched against what is *currently* offered, so a key for a
+provider the operator has since withdrawn satisfies nothing. Otherwise a lobby
+passes its own start check and fails on the first turn.
+
+## The host's side
+
+`routes/aiSetup.js` is host-gated throughout — a joining player neither supplies
+nor sees a credential, because ADR 0001 made the host's key the one a lobby runs
+on. It serves `GET /api/capabilities` (public, carries nothing sensitive) and the
+`ai:*` socket handlers.
+
+`CONSENT_TERMS` is exported as one string so the server's refusal and the
+browser's checkbox cannot drift. A host agreeing to wording different from what
+was enforced is the shape of a complaint nobody can answer.
+
+**Listing models does not spend budget.** `sessionKeys.peek()` reads a credential
+without touching the call counter — browsing models while configuring is not
+playing the game. And where the operator restricts a shared key to an allowlist,
+that list *is* the answer; no request is made at all, because asking the provider
+would spend a call to produce a superset we would then discard.
+
+## The browser
+
+`client/aiPanel.js` holds the logic — row building, the Start gate, and turning a
+form into a submission — because `options.html` is one long inline script with no
+test harness. It decides nothing: the server's verdict is presented, never
+re-derived. `index.html` and `options.html` both attach it to `window` rather than
+duplicating it, since both pages are classic scripts.
+
+Two rules it encodes that are easy to get wrong:
+
+- **Unknown means not startable.** Before the first `ai:state` arrives there is no
+  verdict, and defaulting to enabled lets someone press a button the server then
+  refuses — which reads as a broken game rather than as missing configuration.
+- **A date input means the end of that day.** A host choosing "the 5th" wants the
+  key to last *through* the 5th; treating it as midnight would expire it as that
+  day begins.

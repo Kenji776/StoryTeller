@@ -494,6 +494,19 @@ function registerSocketEvents() {
 		if (me.name === player) showToast(`Your turn was skipped — ${reason}.`, "warning", 6000);
 	});
 
+	// The server's verdict on whether this lobby can start. It arrives unprompted
+	// when the host supplies a key, and on request when the settings window opens.
+	socket.on("ai:state", (state) => {
+		applyAiState(state);
+	});
+
+	// A model call failed mid-game for a reason the host can act on -- a missing,
+	// rejected, expired or exhausted key. ADR 0009: this is not narration.
+	socket.on("ai:unavailable", ({ message }) => {
+		showToast(message, "error");
+		if (lobbyId) socket.emit("ai:state:request", { lobbyId });
+	});
+
 	socket.on("toast", ({ type, message }) => {
 		showToast(message, type);
 	});

@@ -762,6 +762,13 @@
 		document.dispatchEvent(new CustomEvent("portraitPrompt:ready"));
 	</script>
 	<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" defer></script>
+	<!-- The AI gate's logic is an ES module and the scripts below are classic, so
+	     it is attached to `window` rather than duplicated. Duplicating it is exactly
+	     the drift that lets the Start button disagree with the server. -->
+	<script type="module">
+		import { startGate, panelRows } from "/aiPanel.js";
+		window.__aiPanel = { startGate, panelRows };
+	</script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>
 	<script src="/charBuilder.js" defer></script>

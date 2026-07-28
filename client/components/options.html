@@ -329,6 +329,41 @@
 		::-webkit-scrollbar { width: 5px; }
 		::-webkit-scrollbar-track { background: #0c0a14; }
 		::-webkit-scrollbar-thumb { background: #3a2a5a; border-radius: 3px; }
+	
+		/* ── AI services panel ───────────────────────────────────────────── */
+		.ai-intro { margin: 0 0 0.75rem; font-size: 0.88em; opacity: 0.85; }
+		.ai-note  { margin: 0.75rem 0 0; font-size: 0.78em; opacity: 0.6; font-style: italic; }
+		.ai-card {
+			border: 1px solid rgba(255,255,255,0.12);
+			border-left: 3px solid var(--ai-tone, rgba(255,255,255,0.2));
+			border-radius: 6px;
+			padding: 0.7rem 0.85rem;
+			margin-bottom: 0.6rem;
+			background: rgba(0,0,0,0.15);
+		}
+		.ai-card.is-ok     { --ai-tone: #4caf7d; }
+		.ai-card.is-warn   { --ai-tone: #d4a24c; }
+		.ai-card.is-muted  { --ai-tone: rgba(255,255,255,0.2); opacity: 0.6; }
+		.ai-card-head { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+		.ai-card-title { font-weight: 600; font-size: 0.95em; }
+		.ai-card-badge {
+			font-size: 0.68em; text-transform: uppercase; letter-spacing: 0.05em;
+			padding: 0.1rem 0.4rem; border-radius: 3px; background: rgba(255,255,255,0.1);
+		}
+		.ai-card-badge.is-required { background: rgba(212,162,76,0.25); color: #e8c88a; }
+		.ai-card-detail { font-size: 0.82em; opacity: 0.85; margin-top: 0.25rem; }
+		.ai-card-form { margin-top: 0.6rem; display: none; flex-direction: column; gap: 0.45rem; }
+		.ai-card-form.is-open { display: flex; }
+		.ai-field { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85em; }
+		.ai-field label { min-width: 6.5rem; opacity: 0.8; }
+		.ai-field select, .ai-field input { flex: 1; min-width: 0; }
+		.ai-consent { display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.8em; line-height: 1.35; }
+		.ai-consent input { margin-top: 0.2rem; accent-color: #7a50c8; cursor: pointer; }
+		.ai-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+		.ai-msg { font-size: 0.8em; min-height: 1.1em; }
+		.ai-msg.is-error { color: #e08b8b; }
+		.ai-msg.is-ok { color: #7fd4a3; }
+		.ai-keylink { font-size: 0.78em; opacity: 0.8; }
 	</style>
 </head>
 <body>
@@ -517,40 +552,17 @@
 <!-- ── TECHNICAL ─────────────────────────────────────────── -->
 
 <div class="section">
-	<div class="section-title">AI Model</div>
+	<div class="section-title">AI Services</div>
+	<p class="ai-intro" id="aiIntro">Checking what this server provides&hellip;</p>
 
-	<div class="option-row">
-		<div class="option-label">
-			<span>Provider</span>
-			<small>Which AI service powers the DM</small>
-		</div>
-		<div class="option-control" style="gap:1rem;">
-			<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
-				<input type="radio" name="llmProvider" value="openai" id="providerOpenAI" data-sound="Page Turn" style="accent-color:#7a50c8;cursor:pointer;" />
-				OpenAI
-			</label>
-			<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
-				<input type="radio" name="llmProvider" value="claude" id="providerClaude" data-sound="Page Turn" style="accent-color:#7a50c8;cursor:pointer;" />
-				Claude
-			</label>
-			<label id="providerTestLabel" style="display:none;align-items:center;gap:0.35rem;font-size:0.88em;cursor:pointer;">
-				<input type="radio" name="llmProvider" value="test" id="providerTest" data-sound="Page Turn" style="accent-color:#7a50c8;cursor:pointer;" />
-				Test Mode
-			</label>
-		</div>
-	</div>
+	<!-- One card per service, built from /api/capabilities and the server's own
+	     readiness verdict. Nothing here is hardcoded: which providers exist, which
+	     the operator offers, and which need a key are all server-side decisions,
+	     and duplicating any of them in the browser is how the Start button ends up
+	     disagreeing with the server. -->
+	<div id="aiServices"></div>
 
-	<hr class="divider" />
-
-	<div class="option-row">
-		<div class="option-label">
-			<span>Model</span>
-			<small>Specific model version to use</small>
-		</div>
-		<div class="option-control" style="flex:1;min-width:0;">
-			<select id="llmModelSelect" data-sound="Page Turn" style="flex:1;min-width:0;"></select>
-		</div>
-	</div>
+	<p class="ai-note" id="aiConsentTerms"></p>
 </div>
 
 <button class="save-close-btn" id="saveCloseBtn" data-sound="Gem Socket" data-sound-hover="Magical Shimmer">Save &amp; Close</button>
@@ -558,6 +570,13 @@
 <div id="statusBar">Connecting…</div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script type="module">
+	// Exposed for the classic script below. This page is one long inline script
+	// and converting it wholesale is a bigger change than this feature warrants;
+	// a named handoff is clearer than doing the work twice.
+	import { panelRows, startGate, credentialSubmission, heldSummary } from "../aiPanel.js";
+	window.__aiPanel = { panelRows, startGate, credentialSubmission, heldSummary };
+</script>
 <script>
 const lobbyId = new URLSearchParams(location.search).get("lobbyId");
 
@@ -570,7 +589,6 @@ const elTTSHint        = document.getElementById("ttsProviderHint");
 const elLocalTtsRow    = document.getElementById("localTtsRow");
 const elLocalTtsUrl    = document.getElementById("localTtsUrl");
 const elLocalTtsStatus = document.getElementById("localTtsStatus");
-const elLLMModel       = document.getElementById("llmModelSelect");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
 const elStartingLevel      = document.getElementById("startingLevelSlider");
@@ -623,83 +641,10 @@ function selectedChip(groupId) {
 	return document.querySelector(`#${groupId} .chip.selected`)?.dataset.value || null;
 }
 
-const LLM_MODELS = {
-	openai: [
-		{ value: "gpt-4o",              label: "GPT-4o" },
-		{ value: "gpt-4o-mini",         label: "GPT-4o Mini" },
-		{ value: "gpt-4-turbo",         label: "GPT-4 Turbo" },
-		{ value: "gpt-5-chat-latest",   label: "GPT-5 (latest)" },
-	],
-	claude: [
-		{ value: "claude-opus-4-6",           label: "Claude Opus 4.6" },
-		{ value: "claude-sonnet-4-6",         label: "Claude Sonnet 4.6" },
-		{ value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
-	],
-	test: [
-		{ value: "test-stub", label: "Canned Responses (no API)" },
-	],
-};
-
-// Feature availability (populated from /api/features)
-let features = { openai: true, claude: true, elevenlabs: true, devMode: false };
-
-function populateLLMModels(provider, currentModel) {
-	const models = LLM_MODELS[provider] || [];
-	elLLMModel.innerHTML = models.map(m =>
-		`<option value="${m.value}"${m.value === currentModel ? " selected" : ""}>${m.label}</option>`
-	).join("");
-	if (currentModel && !models.find(m => m.value === currentModel)) {
-		elLLMModel.innerHTML += `<option value="${currentModel}" selected>${currentModel}</option>`;
-	}
-}
-
 function applyFeatureGating() {
-	const openaiRadio = document.getElementById("providerOpenAI");
-	const claudeRadio = document.getElementById("providerClaude");
-
-	// Show Test Mode provider in dev mode
-	if (features.devMode) {
-		const testLabel = document.getElementById("providerTestLabel");
-		testLabel.style.display = "flex";
-	}
-
-	// Disable unavailable LLM providers
-	if (!features.openai) {
-		openaiRadio.disabled = true;
-		openaiRadio.parentElement.style.opacity = "0.4";
-		openaiRadio.parentElement.title = "OpenAI API key is missing or invalid";
-		// If OpenAI was selected, switch to Claude
-		if (openaiRadio.checked && features.claude) {
-			claudeRadio.checked = true;
-			populateLLMModels("claude", null);
-		}
-	}
-	if (!features.claude) {
-		claudeRadio.disabled = true;
-		claudeRadio.parentElement.style.opacity = "0.4";
-		claudeRadio.parentElement.title = "Claude API key is missing or invalid";
-		// If Claude was selected, switch to OpenAI
-		if (claudeRadio.checked && features.openai) {
-			openaiRadio.checked = true;
-			populateLLMModels("openai", null);
-		}
-	}
-	if (!features.openai && !features.claude && !features.devMode) {
-		elLLMModel.innerHTML = '<option value="">No AI providers available</option>';
-		elLLMModel.disabled = true;
-	}
-	// If no real providers are available but devMode is on, auto-select Test Mode
-	if (!features.openai && !features.claude && features.devMode) {
-		const testRadio = document.getElementById("providerTest");
-		testRadio.checked = true;
-		populateLLMModels("test", null);
-	}
-
-	// Deliberately nothing to gate here. An absent ElevenLabs key no longer means
-	// silence, and "no engine connected" is a state the host can fix from this very
-	// window by pointing the local engine at their speech server — so the controls
-	// must stay live. loadTTSProviders and loadNarratorVoices already show what is
-	// and is not reachable.
+	// Provider availability is no longer a browser concern. The AI Services panel
+	// is built from the server's own capability view and readiness verdict, so
+	// there is nothing here to gate -- see renderAiPanel below.
 }
 
 // Campaign flavor state — full objects stored so prompt text is sent to server
@@ -776,7 +721,9 @@ function emitSettings() {
 		statusBar.textContent = "⚠️ Lost connection to main window.";
 		return;
 	}
-	const selectedProvider = document.querySelector("input[name='llmProvider']:checked")?.value || "claude";
+	// Chosen in the AI Services panel, which is the only thing that knows which
+	// providers this server actually offers.
+	const selectedProvider = aiSelection.providerId;
 	window.opener.socket.emit("lobby:settings", {
 		lobbyId,
 		timerEnabled:    elEnabled.checked,
@@ -794,7 +741,7 @@ function emitSettings() {
 		lootGenerosity:  selectedChip("lootChips"),
 		campaignSetting: selectedSetting?.id || "standard",
 		llmProvider:     selectedProvider,
-		llmModel:        elLLMModel.value || null,
+		llmModel:        aiSelection.model,
 	});
 }
 
@@ -858,11 +805,10 @@ function applyState(state) {
 	elStartingLevel.value = sLevel;
 	updateLevelFlavor();
 
-	// LLM provider + model
-	const provider = state.llmProvider || "claude";
-	const providerRadio = document.querySelector(`input[name='llmProvider'][value='${provider}']`);
-	if (providerRadio) providerRadio.checked = true;
-	populateLLMModels(provider, state.llmModel);
+	// The lobby's stored choice seeds the panel; the panel owns it from then on.
+	aiSelection.providerId = state.llmProvider || aiSelection.providerId;
+	aiSelection.model = state.llmModel || aiSelection.model;
+	renderAiPanel();
 }
 
 function highlightCard(gridId, selectedId) {
@@ -1118,7 +1064,6 @@ elNarratorVoice.addEventListener("change", emitSettings);
 		emitSettings();
 	});
 });
-elLLMModel.addEventListener("change", emitSettings);
 elBrutality.addEventListener("input", () => {
 	elBrutalityLabel.textContent = BRUTALITY_LABELS[Number(elBrutality.value)];
 });
@@ -1161,12 +1106,7 @@ elStartingLevel.addEventListener("change", emitSettings);
 elAbilitySlots.addEventListener("input", renderAbilitySlots);
 elAbilitySlots.addEventListener("change", emitSettings);
 renderAbilitySlots();
-document.querySelectorAll("input[name='llmProvider']").forEach(radio => {
-	radio.addEventListener("change", () => {
-		populateLLMModels(radio.value, null);
-		emitSettings();
-	});
-});
+requestAiState();
 
 // Connect own socket to receive live state updates
 const socket = io();
@@ -1300,6 +1240,264 @@ async function boot() {
 	applyFeatureGating();
 	if (state) applyState(state);
 }
+// ══════════════════════════════════════════════════════════════════════════════
+// ██ AI SERVICES PANEL
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Everything here comes from the server: `/api/capabilities` for what is offered,
+// and `ai:state` for whether this lobby can start. The browser decides nothing —
+// a second opinion is how a Start button ends up enabled for a game the server
+// then refuses.
+
+/** The lobby's provider and model, owned by this panel once it has loaded. */
+const aiSelection = { providerId: null, model: null };
+
+/** The last `ai:state` the server sent. */
+let aiState = null;
+
+/** Consent wording, fetched with the capabilities so it cannot drift. */
+let aiConsentTerms = "";
+
+/**
+ * @description Asks the server for this lobby's AI readiness.
+ * @returns {void}
+ */
+function requestAiState() {
+	if (lobbyId && window.opener && window.opener.socket) {
+		window.opener.socket.emit("ai:state:request", { lobbyId });
+	}
+}
+
+/**
+ * @description Builds a labelled control row.
+ * @param {string} labelText - The field label.
+ * @param {HTMLElement} control - The input.
+ * @returns {HTMLElement} The row.
+ */
+function aiField(labelText, control) {
+	const row = document.createElement("div");
+	row.className = "ai-field";
+	const label = document.createElement("label");
+	label.textContent = labelText;
+	row.appendChild(label);
+	row.appendChild(control);
+	return row;
+}
+
+/**
+ * @description Builds the key-entry form for a service that needs one.
+ * @param {object} row - A row from `panelRows`.
+ * @returns {HTMLElement} The form.
+ */
+function aiKeyForm(row) {
+	const form = document.createElement("div");
+	form.className = "ai-card-form is-open";
+
+	const providerSelect = document.createElement("select");
+	for (const option of row.options) {
+		const el = document.createElement("option");
+		el.value = option.id;
+		el.textContent = option.label;
+		providerSelect.appendChild(el);
+	}
+	form.appendChild(aiField("Provider", providerSelect));
+
+	const keyLink = document.createElement("a");
+	keyLink.className = "ai-keylink";
+	keyLink.target = "_blank";
+	keyLink.rel = "noopener noreferrer";
+	form.appendChild(keyLink);
+
+	// Points "get a key" at whichever provider is selected — the most common
+	// reason a host stalls here is not knowing where to go.
+	function syncKeyLink() {
+		const chosen = row.options.find((o) => o.id === providerSelect.value);
+		const url = chosen && chosen.keyUrl;
+		keyLink.href = url || "";
+		keyLink.textContent = url ? "Get a " + chosen.label + " key ↗" : "";
+		keyLink.style.display = url ? "" : "none";
+	}
+	providerSelect.addEventListener("change", syncKeyLink);
+	syncKeyLink();
+
+	const keyInput = document.createElement("input");
+	keyInput.type = "password";
+	keyInput.autocomplete = "off";
+	keyInput.placeholder = "Paste your key";
+	form.appendChild(aiField("API key", keyInput));
+
+	const limitInput = document.createElement("input");
+	limitInput.type = "number";
+	limitInput.min = "1";
+	limitInput.placeholder = "Unlimited";
+	form.appendChild(aiField("Call limit", limitInput));
+
+	const expiryInput = document.createElement("input");
+	expiryInput.type = "date";
+	form.appendChild(aiField("Delete after", expiryInput));
+
+	const consent = document.createElement("label");
+	consent.className = "ai-consent";
+	const consentBox = document.createElement("input");
+	consentBox.type = "checkbox";
+	const consentText = document.createElement("span");
+	consentText.textContent = aiConsentTerms;
+	consent.appendChild(consentBox);
+	consent.appendChild(consentText);
+	form.appendChild(consent);
+
+	const actions = document.createElement("div");
+	actions.className = "ai-actions";
+	const save = document.createElement("button");
+	save.className = "chip";
+	save.textContent = "Save key";
+	const msg = document.createElement("span");
+	msg.className = "ai-msg";
+	actions.appendChild(save);
+	actions.appendChild(msg);
+	form.appendChild(actions);
+
+	// Save stays disabled until there is something valid to send, so the first
+	// feedback a host gets is never a refusal.
+	function syncSave() {
+		save.disabled = !keyInput.value.trim() || !consentBox.checked;
+		save.style.opacity = save.disabled ? "0.45" : "1";
+	}
+	keyInput.addEventListener("input", syncSave);
+	consentBox.addEventListener("change", syncSave);
+	syncSave();
+
+	save.addEventListener("click", () => {
+		msg.className = "ai-msg";
+		msg.textContent = "Saving…";
+		const payload = window.__aiPanel.credentialSubmission({
+			lobbyId: lobbyId,
+			capability: row.capability,
+			providerId: providerSelect.value,
+			apiKey: keyInput.value,
+			consent: consentBox.checked,
+			maxCalls: limitInput.value,
+			expiresAt: expiryInput.value,
+		});
+		window.opener.socket.emit("ai:credential:set", payload, (result) => {
+			if (result && result.ok) {
+				keyInput.value = "";
+				msg.className = "ai-msg is-ok";
+				msg.textContent = "Saved.";
+				aiSelection.providerId = payload.providerId;
+				applyAiState(result.state);
+				emitSettings();
+			} else {
+				msg.className = "ai-msg is-error";
+				msg.textContent = (result && result.error) || "Could not save that key.";
+			}
+		});
+	});
+
+	return form;
+}
+
+/**
+ * @description Builds one service card.
+ * @param {object} row - A row from `panelRows`.
+ * @returns {HTMLElement} The card.
+ */
+function aiCard(row) {
+	const card = document.createElement("div");
+	card.className = "ai-card is-" + row.tone;
+
+	const head = document.createElement("div");
+	head.className = "ai-card-head";
+	const title = document.createElement("span");
+	title.className = "ai-card-title";
+	title.textContent = row.title;
+	head.appendChild(title);
+
+	const badge = document.createElement("span");
+	badge.className = "ai-card-badge" + (row.blocking ? " is-required" : "");
+	badge.textContent = row.blocking ? "Needed to start" : row.optional ? "Optional" : "Ready";
+	head.appendChild(badge);
+	card.appendChild(head);
+
+	const detail = document.createElement("div");
+	detail.className = "ai-card-detail";
+	detail.textContent = row.detail;
+	card.appendChild(detail);
+
+	if (row.canWithdraw) {
+		const withdraw = document.createElement("button");
+		withdraw.className = "chip";
+		withdraw.style.marginTop = "0.5rem";
+		withdraw.textContent = "Remove my key";
+		withdraw.addEventListener("click", () => {
+			window.opener.socket.emit("ai:credential:clear", { lobbyId: lobbyId, capability: row.capability }, () => requestAiState());
+		});
+		card.appendChild(withdraw);
+	}
+
+	if (row.needsInput && row.options.length) card.appendChild(aiKeyForm(row));
+	return card;
+}
+
+/**
+ * @description Redraws the panel from the last state the server sent.
+ * @returns {void}
+ */
+function renderAiPanel() {
+	const host = document.getElementById("aiServices");
+	if (!host) return;
+
+	const rows = window.__aiPanel.panelRows(aiState);
+	host.replaceChildren.apply(host, rows.map(aiCard));
+
+	const gate = window.__aiPanel.startGate(aiState);
+	const intro = document.getElementById("aiIntro");
+	if (intro) {
+		intro.textContent = gate.canStart ? "Everything this game needs is ready." : gate.reason;
+		intro.style.color = gate.canStart ? "" : "#e8c88a";
+	}
+
+	// The story service's provider is the lobby's provider, which is what
+	// lobby:settings has always carried.
+	const chat = rows.find((r) => r.capability === "chat");
+	if (chat && chat.providerId) aiSelection.providerId = chat.providerId;
+
+	const terms = document.getElementById("aiConsentTerms");
+	if (terms) terms.textContent = aiConsentTerms ? "If you supply a key: " + aiConsentTerms : "";
+}
+
+/**
+ * @description Accepts a new state from the server and redraws. The main window
+ *   owns the Start button, so it is told too rather than asking separately.
+ * @param {object} state - An `ai:state` payload.
+ * @returns {void}
+ */
+function applyAiState(state) {
+	aiState = state;
+	renderAiPanel();
+	if (window.opener && !window.opener.closed) {
+		window.opener.postMessage({ type: "ai:state", state: state }, "*");
+	}
+}
+
+/**
+ * @description Loads the consent wording and subscribes to readiness updates.
+ * @returns {Promise<void>} Resolves once the first state has been requested.
+ */
+async function initAiPanel() {
+	try {
+		const res = await fetch("/api/capabilities");
+		const body = await res.json();
+		aiConsentTerms = body.consentTerms || "";
+	} catch (err) {
+		// The panel still works from ai:state alone; only the wording is missing.
+	}
+	if (window.opener && window.opener.socket) window.opener.socket.on("ai:state", applyAiState);
+	requestAiState();
+	renderAiPanel();
+}
+
+initAiPanel();
 boot();
 </script>
 </body>

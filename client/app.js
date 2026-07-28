@@ -336,6 +336,29 @@ function show(section) {
 	section.classList.remove("hidden");
 }
 
+/**
+ * Whether this lobby's AI is configured enough to start, as the server sees it.
+ *
+ * Held rather than derived. `services/credentials/readiness.js` is the only thing
+ * that decides; re-deciding here is how a Start button ends up disagreeing with
+ * the server that has to honour it. Closed until told otherwise, because guessing
+ * optimistically before the first `ai:state` lets a host press a button the
+ * server then refuses.
+ */
+const aiGate = { canStart: false, reason: "Checking the AI configuration…" };
+
+/**
+ * @description Records the server's readiness verdict and refreshes the lobby.
+ * @param {object} state - An `ai:state` payload.
+ * @returns {void}
+ */
+function applyAiState(state) {
+	const gate = window.__aiPanel?.startGate(state) ?? { canStart: false, reason: "" };
+	aiGate.canStart = gate.canStart;
+	aiGate.reason = gate.reason;
+	if (currentState) renderState(currentState);
+}
+
 function renderState(s) {
 	currentState = s;
 	window.currentState = s; // exposed for popup windows
@@ -650,10 +673,13 @@ function renderPhaseUI(s) {
 		const named = (s.connected || []).filter((p) => p.name);
 		const readyCount = named.filter((p) => p.ready).length;
 		const allReady = named.length > 0 && readyCount === named.length;
-		els.startGame.disabled = !allReady;
-		els.startGame.title = allReady
-			? ""
-			: `Waiting for players to ready up (${readyCount}/${named.length} ready)`;
+		// Both gates matter, and the server enforces both. A button that looks
+		// enabled and then does nothing reads as a broken game rather than as
+		// missing configuration.
+		els.startGame.disabled = !allReady || !aiGate.canStart;
+		els.startGame.title = !allReady
+			? `Waiting for players to ready up (${readyCount}/${named.length} ready)`
+			: aiGate.canStart ? "" : aiGate.reason;
 	}
 
 	if (isPreGame) {
