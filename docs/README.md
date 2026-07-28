@@ -58,6 +58,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/admin-console.md](modules/admin-console.md) — the operator interface
 - [modules/credentials.md](modules/credentials.md) — who pays for a third-party call
 - [modules/images.md](modules/images.md) — the image generation layer
+- [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
   (newest: [0016 — the game loop moves onto the credential resolver](decisions/0016-the-game-loop-moves-onto-the-credential-resolver.md))

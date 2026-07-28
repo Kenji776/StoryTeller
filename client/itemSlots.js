@@ -20,6 +20,28 @@
  */
 export const NON_EQUIPPABLE_TYPES = new Set(["consumable", "quest"]);
 
+/**
+ * Reports whether an item can be drunk, eaten or otherwise spent.
+ *
+ * @description Lives here rather than beside the effect resolver because it is the
+ *   same question as `equipSlotFor` — what kind of thing is this? — and the browser
+ *   needs the answer to decide whether to offer a Use button. The server imports it
+ *   back across, as it already does for the portrait prompt builder.
+ *
+ *   A stated type is the signal, but the starting Healing Potion predates the type
+ *   field and carries only `healing`, so that counts too: refusing to drink the
+ *   potion every character starts with would be the worst possible introduction to
+ *   the feature.
+ * @param {object} item - An inventory item.
+ * @returns {boolean} True when the item is consumable.
+ */
+export function isConsumable(item) {
+	if (!item || typeof item !== "object") return false;
+	const attrs = item.attributes && typeof item.attributes === "object" ? item.attributes : {};
+	if (String(attrs.item_type || "").trim().toLowerCase() === "consumable") return true;
+	return Boolean(attrs.healing);
+}
+
 /** Types that name their own slot. */
 const TYPE_SLOTS = {
 	weapon: "weapon",

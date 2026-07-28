@@ -59,6 +59,7 @@ import { buildCapability, slotCapacity } from "./services/characterCapability.js
 import { xpForKills } from "./services/experience.js";
 import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./services/enemyTurns.js";
 import { reconcileCurrency } from "./services/lootNormalize.js";
+import { resolveConsumable } from "./services/consumables.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -912,6 +913,62 @@ io.on("connection", (socket) => {
 		} catch (err) {
 			log("💥 Error equipping item:", err);
 			socket.emit("toast", { type: "error", message: "Failed to equip item." });
+		}
+	});
+
+	// Drinking a potion does not cost a turn and does not call the model. It is a
+	// mechanical act with a known outcome, and routing it through the narrator meant
+	// paying for a generation and hoping it remembered to emit both the HP update and
+	// the inventory removal. It records itself in history instead, so the DM narrates
+	// around it on the next turn.
+	socket.on("item:use", ({ lobbyId, itemName }) => {
+		try {
+			if (!store.belongs(lobbyId, socket.id)) return;
+			const found = store.playerBySid(lobbyId, socket.id);
+			const playerName = found?.name;
+			const sheet = found?.sheet;
+			if (!playerName || !sheet) return;
+			if (sheet.dead) return socket.emit("toast", { type: "error", message: "You are dead." });
+
+			const entry = (sheet.inventory || []).find(
+				(i) => String(i?.name || i || "").toLowerCase() === String(itemName || "").toLowerCase()
+			);
+			if (!entry) return socket.emit("toast", { type: "error", message: `You are not carrying "${itemName}".` });
+
+			// A sheet that has never taken an inventory update still holds bare strings;
+			// `applyInventoryChange` normalises on write, not on read.
+			const held = typeof entry === "string" ? { name: entry, count: 1, description: "", attributes: {} } : entry;
+
+			// The character's conditions are passed so the summary reports what actually
+			// changed — without them an antitoxin drunk by a healthy character
+			// cheerfully announced it had cured poison.
+			const effect = resolveConsumable(held, { conditions: sheet.conditions || [] });
+			if (!effect) return socket.emit("toast", { type: "error", message: `${held.name} is not something you can use.` });
+
+			// Spend the item first. If applying the effect throws, the character has
+			// still drunk the potion — the alternative is an item that heals repeatedly.
+			broadcastInventoryUpdates(busIo, store, lobbyId, [{ player: playerName, item: held.name, change: -1 }]);
+
+			if (effect.hp > 0) {
+				broadcastHPUpdates(busIo, store, lobbyId, [{ player: playerName, delta: effect.hp, reason: held.name }]);
+			}
+			if (effect.conditions.remove.length || effect.conditions.add.length) {
+				broadcastConditionUpdates(busIo, store, lobbyId, [
+					{ player: playerName, add: effect.conditions.add, remove: effect.conditions.remove },
+				]);
+			}
+
+			// The room already sees this through the inventory, hp and condition
+			// broadcasts it triggered; history is what the DM reads next turn.
+			store.appendUser(lobbyId, playerName, `[${playerName} used ${held.name}. ${effect.summary}]`);
+
+			log(`🧪 ${playerName} used "${held.name}" (lobby ${lobbyId}): ${effect.summary}`);
+			socket.emit("toast", { type: "success", message: effect.summary });
+			sendState(lobbyId);
+			broadcastPartyState(busIo, store, lobbyId);
+		} catch (err) {
+			log("💥 Error using item:", err);
+			socket.emit("toast", { type: "error", message: "Failed to use item." });
 		}
 	});
 

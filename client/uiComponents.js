@@ -131,17 +131,25 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false, e
 			}
 		}
 
+		// A consumable is spent, not worn, so it gets a Use button instead of an
+		// Equip one. Only in play: the character builder has no game to act on.
+		let useBtn = "";
+		if (!canAdd && window.isConsumable && window.isConsumable(item)) {
+			useBtn = `<button class="equip-btn chip" data-item="${item.name.replace(/"/g, "&quot;")}" data-action="use" data-sound="Magical Shimmer" data-sound-hover="Magical Shimmer" title="Use ${item.name}">🧪 Use</button>`;
+		}
+
 		// Show attributes summary for equippable items
 		const a = item.attributes || {};
 		let statsHint = "";
 		if (a.damage) statsHint += ` [${a.damage} ${a.damage_type || ""}]`;
 		if (a.ac) statsHint += ` [AC ${a.ac}]`;
+		if (a.healing) statsHint += ` [heals ${a.healing}]`;
 
 		row.innerHTML = `
 			<td><strong>${item.name}</strong>${statsHint ? `<span style="opacity:0.6;font-size:0.85em;">${statsHint}</span>` : ""}</td>
 			<td>${item.count ?? 1}</td>
 			<td>${item.description || ""}</td>
-			<td>${equipBtn}</td>
+			<td>${equipBtn}${useBtn}</td>
 		`;
 		tbody.appendChild(row);
 
@@ -153,8 +161,9 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false, e
 		btn.addEventListener("click", () => {
 			const itemName = btn.dataset.item;
 			const slot = btn.dataset.slot;
-			const action = btn.dataset.action === "unequip" ? "item:unequip" : "item:equip";
-			console.log(`⚔️ ${action} clicked: "${itemName}" → ${slot}`);
+			const ACTIONS = { unequip: "item:unequip", use: "item:use" };
+			const action = ACTIONS[btn.dataset.action] || "item:equip";
+			console.log(`⚔️ ${action} clicked: "${itemName}"${slot ? ` → ${slot}` : ""}`);
 			if (typeof socket !== "undefined" && socket) {
 				socket.emit(action, { lobbyId, itemName, slot });
 			}

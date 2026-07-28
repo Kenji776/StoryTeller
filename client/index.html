@@ -772,8 +772,9 @@
 	<!-- Equipment slot detection is a pure module so it can be unit tested; the
 	     inventory renderer below is a classic script. Same bridge as above. -->
 	<script type="module">
-		import { equipSlotFor } from "/itemSlots.js";
+		import { equipSlotFor, isConsumable } from "/itemSlots.js";
 		window.equipSlotFor = equipSlotFor;
+		window.isConsumable = isConsumable;
 	</script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>

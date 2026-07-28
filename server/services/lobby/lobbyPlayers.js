@@ -138,9 +138,14 @@ export const playerMethods = {
 			delete existing._startLevelInit;
 		}
 
-		// Preserve max_hp across re-saves; initialize from hp on first save
+		// Preserve max_hp across re-saves — a client must not be able to raise its own
+		// ceiling mid-game. On the *first* save, take the maximum the sheet states
+		// before falling back to current hp: initialising from hp alone permanently
+		// capped any character who arrived wounded (an import, a carried-over
+		// character) at whatever they happened to be on, and healing could never lift
+		// them past it.
 		if (merged.stats) {
-			merged.stats.max_hp = existing.stats?.max_hp ?? merged.stats.hp ?? 10;
+			merged.stats.max_hp = existing.stats?.max_hp ?? merged.stats.max_hp ?? merged.stats.hp ?? 10;
 		}
 		// Preserve generated image URL across sheet re-saves
 		if (existing.imageUrl && !merged.imageUrl) merged.imageUrl = existing.imageUrl;

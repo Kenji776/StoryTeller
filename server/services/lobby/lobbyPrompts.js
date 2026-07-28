@@ -12,6 +12,10 @@ import { fileURLToPath } from "url";
 // The same slot maths the feasibility gate and the advisor use. Deriving it
 // separately here is what let the three engines disagree in front of players.
 import { slotCapacity, remainingSlots, DEFAULT_SLOT_BASE } from "../characterCapability.js";
+// The condition vocabulary is shared with the code that validates it. Held in two
+// places, the prompt and the validator drift and the DM starts naming conditions
+// nothing can apply.
+import { CANONICAL_CONDITIONS } from "../conditions.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MUSIC_MOODS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "client", "config", "music_moods.json"), "utf8")).moods;
@@ -352,7 +356,7 @@ Examples:
 - DEATH: If an hp update would reduce a player to 0 HP or below, set "new_total" to 0. This means the character DIES. You MUST narrate their death dramatically — describe how they fall, their final moments, and the impact on the party. From that point forward in this response and all future responses, that character is GONE. Do not give them actions, dialogue, or any narrative presence as a living character.
 - If a player drinks or throws a potion → add an "inventory" update reducing that item count.
 - If a player receives gold or treasure → add a "gold" update.
-- If they get poisoned, stunned, or similar → add a "conditions" update. Use lowercase canonical condition names: blinded, burning, charmed, deafened, exhausted, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious. Always remove a condition when it logically ends (e.g. remove "burning" after it's extinguished).
+- If they get poisoned, stunned, or similar → add a "conditions" update. Use lowercase canonical condition names: ${CANONICAL_CONDITIONS.join(", ")}. Always remove a condition when it logically ends (e.g. remove "burning" after it's extinguished).
 - If the player says "I roll" anywhere in their dialog DO NOT immediatly resolve the action. Instead prompt them to roll an appropriate dice. Then when they do, judge the action accordingly. If the next player response is not a roll, the player immediatly fails whatever they were trying to do. Rolling is a crucial part of D&D and players want to roll for actions. Let them. You should prompt them what kind of dice to roll in this case.
 - If requesting the player rolls a dice include a "roll" property in your JSON response. The value should be an object with four properties: "sides" (the number of sided die they should roll), "stats" (the stats to include in addition to the raw roll), "mods" (discretionary adjustments due to player conditions or other circumstances), and "dc" (the Difficulty Class — the minimum total the player must meet or exceed to succeed). Always set "dc" to an appropriate D&D 5e value (e.g. 10 for easy, 15 for medium, 20 for hard). The client will determine pass/fail and report it back to you so you can narrate the outcome.
 

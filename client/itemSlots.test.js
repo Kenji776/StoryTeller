@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { equipSlotFor, NON_EQUIPPABLE_TYPES } from "./itemSlots.js";
+import { equipSlotFor, isConsumable, NON_EQUIPPABLE_TYPES } from "./itemSlots.js";
 
 /**
  * @description Builds an inventory item in the shape the store holds, so a case can
@@ -103,4 +103,43 @@ test("type matching ignores case and surrounding space", () => {
 
 test("an empty name with no attributes is not equippable", () => {
 	assert.equal(equipSlotFor(item({ name: "" })), null);
+});
+
+// ── What can be drunk ────────────────────────────────────────────────────────
+
+test("an item is consumable when it says so", () => {
+	assert.equal(isConsumable(item({ attributes: { item_type: "consumable" } })), true);
+	assert.equal(isConsumable(item({ attributes: { item_type: " CONSUMABLE " } })), true);
+});
+
+test("a healing attribute makes an item consumable even with no stated type", () => {
+	// The character builder's starting potion predates the type field.
+	assert.equal(isConsumable(item({ name: "Healing Potion", attributes: { healing: "2d4+2" } })), true);
+});
+
+test("gear and quest items are not consumable", () => {
+	assert.equal(isConsumable(item({ name: "Barrow Blade", attributes: { item_type: "weapon", damage: "1d6" } })), false);
+	assert.equal(isConsumable(item({ name: "Sealed Letter", attributes: { item_type: "quest" } })), false);
+	assert.equal(isConsumable(item({ name: "Rope", attributes: {} })), false);
+});
+
+test("missing and malformed items are not consumable rather than throwing", () => {
+	assert.equal(isConsumable(null), false);
+	assert.equal(isConsumable(undefined), false);
+	assert.equal(isConsumable({}), false);
+	assert.equal(isConsumable("Potion"), false);
+});
+
+test("nothing is both equippable and consumable", () => {
+	// The two questions drive two different buttons; an item answering yes to both
+	// would render as wearable *and* drinkable.
+	const cases = [
+		item({ name: "Healing Potion", attributes: { item_type: "consumable", healing: "2d4+2" } }),
+		item({ name: "Alchemist's Fire", attributes: { item_type: "consumable", damage: "1d4" } }),
+		item({ name: "Barrow Blade", attributes: { item_type: "weapon", damage: "1d6" } }),
+	];
+
+	for (const c of cases) {
+		assert.ok(!(equipSlotFor(c) && isConsumable(c)), `${c.name} is both equippable and consumable`);
+	}
 });
