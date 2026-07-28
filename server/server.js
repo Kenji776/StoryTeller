@@ -43,6 +43,7 @@ import { PlayerSessions } from "./services/playerSessions.js";
 import { createSessionSystem } from "./routes/sessionEvents.js";
 import { createIncidentLog, SEVERITY } from "./services/incidents.js";
 import { isLLMFailure } from "./services/llmFailure.js";
+import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
 import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
@@ -988,6 +989,31 @@ io.on("connection", (socket) => {
 			} else {
 				console.log('Got character information by socket for id: ' + socket.id);
 				console.log(actor);
+			}
+
+			// A rules question is not a turn. Handled before the turn machinery so it
+			// costs nothing: no clock cancelled, no table locked, no history written.
+			// Previously there was no notion of one — "ooc how do spell slots work in
+			// this game?" went to the narrator, which answered with the 5e per-level
+			// table this game does not use, broadcast that to everyone as story, and
+			// appended it to the history the DM is re-prompted with.
+			const ooc = isOutOfCharacter(text);
+			if (ooc.isOoc) {
+				console.log(`💬 OOC question from ${actor.name}: "${ooc.question}"`);
+				try {
+					const answer = await getLLMResponse(
+						[{ role: "system", content: buildRulesPrompt(ooc.question, buildCapability(s, actor.name)) }],
+						llmOpts(lobbyId),
+					);
+					socket.emit("ooc:reply", {
+						question: ooc.question,
+						answer: isLLMFailure(answer) ? "The rules helper is unavailable right now — ask your host." : answer.trim(),
+					});
+				} catch (err) {
+					console.warn(`⚠️ OOC answer failed: ${err.message}`);
+					socket.emit("ooc:reply", { question: ooc.question, answer: "The rules helper is unavailable right now — ask your host." });
+				}
+				return;
 			}
 
 			cancelTurnTimer(lobbyId);

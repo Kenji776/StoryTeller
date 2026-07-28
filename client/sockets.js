@@ -529,6 +529,13 @@ function registerSocketEvents() {
 	// the only carrier was the TTS lifecycle, which sends the speaker and the audio
 	// but not the text, so everyone else saw the DM react to something they had not
 	// been shown. With audio off there was no trace of it at all.
+	// A rules answer, for the asker alone. Deliberately not appended as story: the
+	// previous behaviour published it to the whole table as DM narration.
+	socket.on("ooc:reply", ({ question, answer }) => {
+		if (typeof answer !== "string" || !answer.trim()) return;
+		appendLog(`[rules] ${question ? `${question}\n` : ""}${answer.trim()}\n\n`);
+	});
+
 	socket.on("player:action", ({ player, text }) => {
 		if (typeof text !== "string" || !text.trim()) return;
 		appendLog(`${player || "Someone"}: ${text.trim()}\n\n`);

@@ -90,6 +90,10 @@ export const EVENT_CLASSES = {
 	"timer:cancel": EPHEMERAL,
 
 	// ── Transient interface signals ──
+	// Answered to the asking socket alone and never part of the story, so it is not
+	// replayed on reconnect: a question nobody else saw asked does not belong in the
+	// table's log, and the asker can simply ask again.
+	"ooc:reply": EPHEMERAL,
 	"ui:lock": EPHEMERAL,
 	"ui:unlock": EPHEMERAL,
 	"toast": EPHEMERAL,

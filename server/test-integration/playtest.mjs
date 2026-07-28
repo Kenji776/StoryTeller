@@ -551,10 +551,16 @@ async function run() {
 		// Every few turns, ask the advisor and say something out of character. Both
 		// are real features no previous run touched.
 		if (actions % 4 === 2) {
+			log(actor.short, "-> advisor:ask");
 			actor.socket.emit("advisor:ask", { lobbyId: actor.lobbyId, playerName: actor.name });
 		}
 		if (actions % 6 === 5) {
-			actor.socket.emit("action:submit", { lobbyId: actor.lobbyId, text: "ooc how do spell slots work in this game?" });
+			// Logged, unlike before. This probe used to be emitted silently, so the DM's
+			// answer appeared in the feed with nothing accounting for it and the run
+			// looked as though the narrator had started lecturing unprompted.
+			const question = "ooc how do spell slots work in this game?";
+			log(actor.short, `-> action:submit (OOC probe) "${question}"`);
+			actor.socket.emit("action:submit", { lobbyId: actor.lobbyId, text: question });
 		}
 
 		const reply = await waitForNarration(host.socket, 120000);
