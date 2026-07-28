@@ -569,6 +569,66 @@ function showCharacterImage(url) {
 	}
 }
 
+// === Portrait prompt box ===
+
+/**
+ * Whether the player has taken the prompt over.
+ *
+ * @description Once they type in the box it stops refilling. Overwriting a
+ *   description someone wrote by hand because they then changed their armour would
+ *   be worse than letting the two fall out of step.
+ */
+let portraitPromptEdited = false;
+
+/**
+ * @description Refreshes the portrait prompt from the current character choices,
+ *   unless the player has edited it. Called whenever the sheet changes, so the box
+ *   is already filled in by the time anyone opens it.
+ *
+ *   `window.buildPortraitPrompt` rather than an import: this file is a classic
+ *   script, and the builder is an ES module so the server can share it. The shim in
+ *   index.html bridges the two.
+ * @returns {void}
+ */
+function refreshPortraitPrompt() {
+	const box = document.getElementById("portraitPrompt");
+	if (!box || portraitPromptEdited || typeof window.buildPortraitPrompt !== "function") return;
+
+	try {
+		const sheet = buildCurrentSheet();
+		sheet.name = (els.name?.value || "").trim();
+		box.value = window.buildPortraitPrompt(sheet);
+	} catch (err) {
+		console.warn("Could not build portrait prompt:", err.message);
+	}
+}
+
+/**
+ * @description Wires the box up: typing claims it, the reset button hands it back.
+ * @returns {void}
+ */
+function initPortraitPrompt() {
+	const box = document.getElementById("portraitPrompt");
+	const hint = document.getElementById("portraitPromptHint");
+	const reset = document.getElementById("resetPortraitPrompt");
+	if (!box) return;
+
+	box.addEventListener("input", () => {
+		portraitPromptEdited = true;
+		if (hint) hint.textContent = "Edited — this text will be used as written.";
+	});
+
+	if (reset) {
+		reset.addEventListener("click", () => {
+			portraitPromptEdited = false;
+			refreshPortraitPrompt();
+			if (hint) hint.textContent = "Reset from your character sheet.";
+		});
+	}
+
+	refreshPortraitPrompt();
+}
+
 // === Generate Character Image ===
 async function handleGenerateCharImage() {
 	const name = (els.name?.value || "").trim();
@@ -594,10 +654,16 @@ async function handleGenerateCharImage() {
 		const sheet = buildCurrentSheet();
 		sheet.name = name;
 
+		// Whatever is in the box at this moment is what gets drawn. The sheet still
+		// goes along so the server can fall back if the box is empty.
+		const promptBox = document.getElementById("portraitPrompt");
+		const prompt = (promptBox?.value || "").trim()
+			|| (typeof window.buildPortraitPrompt === "function" ? window.buildPortraitPrompt(sheet) : "");
+
 		const res = await fetch("/api/character-image", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ lobbyId, playerName: name, sheet }),
+			body: JSON.stringify({ lobbyId, playerName: name, sheet, prompt }),
 		});
 
 		if (res.status === 204) {
@@ -866,6 +932,16 @@ safeAddEvent(els.openMapBtn, "click", handleOpenMap);
 safeAddEvent(els.openInitiativeBtn, "click", handleOpenInitiative);
 safeAddEvent(els.openOptionsBtn, "click", handleOpenOptions);
 safeAddEvent(els.generateCharImageBtn, "click", handleGenerateCharImage);
+
+// === Portrait prompt ===
+// Rebuilt whenever a choice that shows in the picture changes, so the box is already
+// filled in by the time anyone opens it. Stops refilling once the player types.
+document.addEventListener("portraitPrompt:ready", initPortraitPrompt);
+for (const id of ["raceSelect", "charClass", "gender", "age", "height", "weight", "alignment",
+	"background", "desc", "weaponSelect", "armorSelect", "trinketSelect", "level"]) {
+	safeAddEvent(document.getElementById(id), "change", refreshPortraitPrompt);
+	safeAddEvent(document.getElementById(id), "input", refreshPortraitPrompt);
+}
 safeAddEvent(els.exportCharBtn, "click", handleExportCharacter);
 safeAddEvent(els.exportCharGameBtn, "click", handleExportCharacter);
 safeAddEvent(els.importCharBtn, "click", () => els.importCharInput?.click());

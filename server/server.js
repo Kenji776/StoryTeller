@@ -44,6 +44,10 @@ import { createSessionSystem } from "./routes/sessionEvents.js";
 import { createIncidentLog, SEVERITY } from "./services/incidents.js";
 import { isLLMFailure } from "./services/llmFailure.js";
 import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
+// Shared with the browser, which populates the editable prompt box from the same
+// builder. Two implementations would drift, and the text the player edits has to be
+// the text that is sent.
+import { buildPortraitPrompt, finalisePrompt } from "../client/portraitPrompt.js";
 import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
@@ -1436,13 +1440,22 @@ registerMapEndpoints(app, store);
 // === CHARACTER IMAGE GENERATION ===
 app.post("/api/character-image", async (req, res) => {
 	try {
-		const { lobbyId, playerName, sheet } = req.body;
+		const { lobbyId, playerName, sheet, prompt } = req.body;
 		if (!lobbyId || !playerName) return res.status(400).json({ error: "Missing lobbyId or playerName" });
 		if (devMode) return res.status(REJECTED_REQUEST_STATUS).json({ message: "Character image generation disabled in developer mode." });
-		if (!hasLLM()) return res.status(503).json({ error: "Image generation unavailable — no OpenAI key configured" });
+		// Portraits are OpenAI-only, so check for that key specifically. hasLLM() is
+		// true for a Claude-only install, which passed this gate and then failed
+		// inside the service with a much less helpful message.
+		if (!hasOpenAI()) return res.status(503).json({ error: "Image generation unavailable — no OpenAI key configured" });
+
+		// The player edits the prompt before sending; the sheet is only the fallback
+		// for a client that did not supply one. finalisePrompt caps the length and
+		// re-attaches the no-text guard whatever they wrote.
+		const finalPrompt = finalisePrompt(typeof prompt === "string" && prompt.trim() ? prompt : buildPortraitPrompt(sheet));
 
 		log(`🎨 Generating character image for ${playerName} in lobby ${lobbyId}`);
-		const b64 = await generateCharacterImage(sheet);
+		const { b64, model } = await generateCharacterImage(finalPrompt);
+		log(`   model: ${model}`);
 
 		const safeName = playerName.replace(/[^a-zA-Z0-9]/g, "_");
 		const filename = `${lobbyId}-${safeName}.png`;

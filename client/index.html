@@ -125,6 +125,22 @@
                 <img id="charImagePreview" src="" alt="Character portrait" class="hidden" style="max-width:100%;border-radius:8px;border:2px solid #555;" />
               </div>
 
+              <!-- The prompt the portrait is drawn from. Filled in from the choices
+                   made below and freely editable: the box is the player's, and
+                   whatever is in it at the moment they press generate is what gets
+                   sent. Editing it stops the automatic refill, so a description
+                   someone has written by hand is never overwritten. -->
+              <details id="portraitPromptBox" style="margin-bottom:12px;">
+                <summary style="cursor:pointer;font-size:0.85em;color:#aaa;user-select:none;">🎨 Portrait description — edit before generating</summary>
+                <textarea id="portraitPrompt" rows="5"
+                  style="width:100%;margin-top:6px;font-size:0.85em;line-height:1.4;"
+                  placeholder="Fill in your character below and this will write itself. Add anything you like — 'in an epic pose', 'wearing a battered leather jacket', 'standing in the rain'."></textarea>
+                <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+                  <button type="button" id="resetPortraitPrompt" class="secondary" style="font-size:0.75em;padding:4px 8px;">↺ Reset to character sheet</button>
+                  <span id="portraitPromptHint" style="font-size:0.7em;color:#777;"></span>
+                </div>
+              </details>
+
               <input id="name" placeholder="Character Name" />
 
               <div class="grid two">
@@ -723,6 +739,16 @@
 	</div>
 
 	<script src="/errorLog.js"></script>
+	<!-- The portrait prompt builder is an ES module so the server can import the same
+	     one; every other script here is classic. This shim bridges the two. Module
+	     scripts are deferred like the rest and run in document order, so the globals
+	     exist before eventHandlers.js does anything with them. -->
+	<script type="module">
+		import { buildPortraitPrompt, finalisePrompt } from "/portraitPrompt.js";
+		window.buildPortraitPrompt = buildPortraitPrompt;
+		window.finalisePrompt = finalisePrompt;
+		document.dispatchEvent(new CustomEvent("portraitPrompt:ready"));
+	</script>
 	<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" defer></script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>

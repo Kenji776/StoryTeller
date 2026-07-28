@@ -263,34 +263,72 @@ export function sanitizeForLLMName(name) {
 }
 
 /**
- * Generate a character portrait image via DALL-E 3.
- * Returns the raw base64 PNG string.
+ * Image models in descending order of capability.
+ *
+ * @description Tried in order, because a key that can *list* a model cannot always
+ *   *call* it — access is granted per organisation, and the difference only shows up
+ *   on a real request. Probed against this deployment's key: gpt-image-2 answered in
+ *   22s, gpt-image-1.5 in 38s, gpt-image-1 in 36s.
+ *
+ *   dall-e-3 is last and is the reason this list exists. It was hardcoded, and the
+ *   endpoint now rejects the `response_format` parameter the old call sent
+ *   ("400 Unknown parameter: 'response_format'"), so every portrait had been failing.
  */
-export async function generateCharacterImage(sheet) {
+const IMAGE_MODELS = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "dall-e-3"];
+
+/** Remembered across calls so a working model is not re-discovered every time. */
+let preferredImageModel = null;
+
+/**
+ * @description Builds the request body for one model. The gpt-image family always
+ *   returns base64 and rejects `response_format`; dall-e-3 requires it.
+ * @param {string} model - The model id.
+ * @param {string} prompt - The finalised prompt.
+ * @returns {object} Parameters for `images.generate`.
+ */
+function imageRequest(model, prompt) {
+	const params = { model, prompt, n: 1, size: "1024x1024" };
+	if (model.startsWith("dall-e")) params.response_format = "b64_json";
+	return params;
+}
+
+/**
+ * Generates a character portrait and returns it as base64 PNG data.
+ *
+ * @description Takes a finished prompt rather than a sheet, so that the text the
+ *   player edited in the browser is the text that is actually sent. Callers build
+ *   the default with `buildPortraitPrompt` and finalise it with `finalisePrompt`,
+ *   both shared with the client.
+ * @param {string} prompt - The finalised prompt.
+ * @returns {Promise<{b64: string, model: string}>} The image and the model that made it.
+ * @throws {Error} If no OpenAI client is configured, or every candidate model failed.
+ */
+export async function generateCharacterImage(prompt) {
 	if (!openaiClient) throw new Error("No OpenAI client configured (missing OPENAI_API_KEY) — image generation requires OpenAI");
+	if (typeof prompt !== "string" || !prompt.trim()) throw new Error("generateCharacterImage: prompt must be a non-empty string");
 
-	const { race, class: cls, gender, age, height, weight, description } = sheet || {};
+	// A model known to work goes first; the rest stay as fallbacks in case it is
+	// withdrawn or starts refusing mid-session.
+	const candidates = preferredImageModel
+		? [preferredImageModel, ...IMAGE_MODELS.filter((m) => m !== preferredImageModel)]
+		: IMAGE_MODELS;
 
-	const traits = [
-		race && cls ? `${race} ${cls}` : (race || cls || "adventurer"),
-		gender,
-		[age && `${age} years old`, height, weight].filter(Boolean).join(", "),
-		description || null,
-	].filter(Boolean).join(", ");
+	const failures = [];
+	for (const model of candidates) {
+		try {
+			console.log(`🎨 Generating portrait with ${model}`);
+			const response = await openaiClient.images.generate(imageRequest(model, prompt));
+			const b64 = response?.data?.[0]?.b64_json;
+			if (!b64) throw new Error("no image data in response");
 
-	const prompt = `IMPORTANT: absolutely no text, letters, words, numbers, labels, captions, name tags, scrolls with writing, or any written characters anywhere in the image. `
-		+ `A detailed fantasy character portrait: ${traits}. `
-		+ `Epic fantasy art style, dramatic lighting, richly detailed painterly illustration, full body dramatic pose. `
-		+ `Pure illustration only — no text overlays, no UI elements, no written words of any kind.`;
+			preferredImageModel = model;
+			return { b64, model };
+		} catch (err) {
+			const reason = `${model}: ${err?.status ?? ""} ${err?.message ?? err}`.trim();
+			console.warn(`⚠️ Portrait model unavailable — ${reason}`);
+			failures.push(reason);
+		}
+	}
 
-	console.log("Generating image using prompt: " + prompt);
-	const response = await openaiClient.images.generate({
-		model: "dall-e-3",
-		prompt,
-		n: 1,
-		size: "1024x1024",
-		response_format: "b64_json",
-	});
-
-	return response.data[0].b64_json;
+	throw new Error(`No image model would answer. Tried ${candidates.length}: ${failures.join(" | ")}`);
 }
