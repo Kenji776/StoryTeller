@@ -58,8 +58,10 @@ import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
 import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./services/enemyTurns.js";
-import { reconcileCurrency } from "./services/lootNormalize.js";
+import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js";
 import { resolveConsumable } from "./services/consumables.js";
+import { rollLoot } from "./services/loot.js";
+import { detectLootMoment } from "./services/lootMoment.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -1293,13 +1295,46 @@ io.on("connection", (socket) => {
 			);
 			s.quietTurns = enemiesPresent ? 0 : (Number(s.quietTurns) || 0) + 1;
 
+			// A new encounter is a new scene, and a new scene is worth searching again.
+			// Without this the diminishing returns on repeated searching would follow the
+			// party through the whole adventure.
+			if (enemiesPresent && !s.enemiesWerePresent) s.lootAttempts = 0;
+			s.enemiesWerePresent = enemiesPresent;
+
 			const forceEncounter = shouldForceEncounter({
 				quietTurns: s.quietTurns,
 				difficulty: s.difficulty,
 				enemiesPresent,
 			});
 
-			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload);
+			// What the party finds is rolled here, before the model writes, for the same
+			// reason the enemies' attacks are: the narration has to describe the outcome,
+			// so the outcome has to exist first. Asked to decide for itself, the model
+			// paid out on six of six loot-seeking turns and on two of three turns where
+			// the roll had *failed* — see ADR 0017.
+			const lootMoment = detectLootMoment({ action: text, enemies: s.enemies });
+			let loot = null;
+			if (lootMoment) {
+				const living = Object.values(s.players || {}).filter((p) => !p.dead);
+				const partyLevel = living.length
+					? Math.round(living.reduce((sum, p) => sum + (Number(p.level) || 1), 0) / living.length)
+					: 1;
+
+				loot = rollLoot({
+					source: lootMoment.source,
+					partyLevel,
+					generosity: s.lootGenerosity || "fair",
+					turnsSinceLastItem: Number(s.turnsSinceLastItem) || 0,
+					attemptsThisScene: Number(s.lootAttempts) || 0,
+				});
+				s.lootAttempts = (Number(s.lootAttempts) || 0) + 1;
+				console.log(`💰 Loot roll (${lootMoment.source}, party L${partyLevel}, attempt ${s.lootAttempts}): `
+					+ (loot.items.length || loot.gold ? `${loot.gold}g ${loot.items.map((i) => i.name).join(", ") || "—"}` : "nothing"));
+			}
+			// Turns since the party last found anything, so a session cannot go dry.
+			s.turnsSinceLastItem = loot?.items.length ? 0 : (Number(s.turnsSinceLastItem) || 0) + 1;
+
+			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload, loot);
 			if (forceEncounter) {
 				msgs.push({ role: "system", content: encounterDirective(s.difficulty) });
 				console.log(`⚔️  Encounter forced after ${s.quietTurns} quiet turn(s)`);
@@ -1399,10 +1434,28 @@ io.on("connection", (socket) => {
 					return;
 				}
 
+				// Loot the server rolled is applied here, not left to the model to echo.
+				// Its own copy of the same reward is dropped first, the way enemy damage
+				// is — told plainly not to duplicate a settled fact, it duplicates it.
+				const kept = stripGrantedLoot(u.inventory, u.gold, loot);
 				// Coins the model paid through both channels are banked once. Left alone, a
 				// pouch arrives as `+6 gold` *and* as a permanent inventory entry named
 				// after the bag it came in.
-				const treasure = reconcileCurrency(u.inventory, u.gold);
+				const treasure = reconcileCurrency(kept.inventory, kept.gold);
+
+				if (loot) {
+					for (const found of loot.items) {
+						treasure.inventory.push({
+							player: actor.name,
+							item: found.name,
+							change: 1,
+							description: found.effect || `A ${found.rarity} ${found.baseName}.`,
+							attributes: found.attributes,
+						});
+					}
+					if (loot.gold > 0) treasure.gold.push({ player: actor.name, delta: loot.gold, reason: "Found" });
+				}
+
 				broadcastInventoryUpdates(busIo, store, lobbyId, treasure.inventory);
 				broadcastGoldUpdates(busIo, store, lobbyId, treasure.gold);
 				broadcastConditionUpdates(busIo, store, lobbyId, u.conditions);

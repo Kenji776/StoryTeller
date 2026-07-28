@@ -90,21 +90,71 @@ Condition names are validated against `services/conditions.js`, which the DM
 prompt interpolates. Held in two places, the vocabulary drifts and the model
 starts naming conditions nothing can apply.
 
-## Generosity
+## Where loot comes from
 
-`lobby.lootGenerosity` (`sparse` | `fair` | `generous`) becomes one sentence of
-prompt via `_lootInstruction`. Measured behaviour at `fair`, over 15 real DM
-calls: **6/6 loot-seeking turns paid out, and 2/3 still paid out on a failed
-roll.** The roll gates access to a container, never the reward inside it. "You
-find nothing" is not a state the game can currently reach.
+Not from the narrator. See [ADR 0017](../decisions/0017-loot-is-rolled-by-the-server.md)
+for why; the short version is that asked whether the party should find something, a
+model mid-prose has no way to say no. It paid out on six of six loot-seeking turns,
+and on two of three turns where the roll had *failed*.
 
-Reproduce with `server/test-integration/loot-probe.mjs`.
+The turn now runs in this order, mirroring how enemy attacks are already handled:
+
+1. `services/lootMoment.js` reads the player's action and decides whether this is a
+   looting turn, and against what — `trash`, `elite` or `boss` (by the challenge
+   rating of what lies dead), `cache` (a named container or hoard), or `search`.
+2. `services/loot.js` rolls it, **before** the model is called, because the narration
+   has to describe the outcome and so the outcome has to exist first.
+3. The result goes into the prompt as an authoritative `LOOT THIS TURN` block —
+   including, importantly, the case where the answer is nothing.
+4. The server applies the items and gold itself. `stripGrantedLoot` drops the model's
+   own copy of the same reward, as `stripResolvedDamage` does for damage.
+
+### The odds
+
+| Source | Item | Gold | Rarity bias |
+|---|---|---|---|
+| `trash` | 7% | 35% | down |
+| `search` | 18% | 30% | down |
+| `elite` | 33% | 60% | — |
+| `cache` | 60% | 75% | up |
+| `boss` | 80% | 85% | up |
+| `quest` | 100% | 90% | up |
+
+`lootGenerosity` scales these (sparse ×0.5, fair ×1, generous ×1.6). Nothing but a
+quest reward is ever certain — the ceiling is 95%, because a chest that always pays
+is a formality rather than a moment.
+
+Two pacing corrections sit on top:
+
+- **Drought.** Each turn since the party last found anything adds a point of chance,
+  up to 25, so a session cannot go entirely dry.
+- **Exhaustion.** Each repeated search of one scene divides the odds, so "I search
+  the bodies" typed twenty times is not a gold faucet. It resets when a new
+  encounter begins.
+
+### Rarity
+
+Party level caps the tier: below 5 nothing above uncommon, below 9 nothing above
+rare, below 13 nothing above very rare. An affix is drawn from the item's own tier
+or the one below — without that window the engine produced a *very-rare* "Pendant of
+the Wayfinder" whose entire power was knowing which way north is.
+
+The tables live in `server/config/loot-tables.json`, deliberately **not** under
+`client/config/`, which is served to the browser. Base items come from the existing
+`weapons.json` and `armor.json`.
+
+### What the narrator still owns
+
+Naming the thing and saying where it came from — the part worth reading. It may not
+change the item, its rarity, its effect, or the amount of gold, and it is told not to
+invent equipment as a reward for searching. Shops, gifts, agreed quest rewards,
+consumables and quest items all remain its own.
 
 ## Probes
 
 | Probe | What it answers | Cost |
 |---|---|---|
-| `test-integration/loot-probe.mjs` | What does the DM hand out, and how often? `--set failed` repeats it on failed rolls. | real DM calls |
+| `test-integration/loot-probe.mjs` | Does the DM honour the server's decision? `--force nothing` and `--force treasure` pin the roll so the run measures obedience rather than dice; `--set failed` repeats the scenarios on failed rolls. | real DM calls |
 | `test-integration/consumable-probe.mjs` | Can a player actually drink a potion, and is the amount applied? | free — no model |
 
-_Last verified: 2026-07-28 against branch `Refactor` (833fcc8)._
+_Last verified: 2026-07-28 against branch `Refactor` (7397d41)._

@@ -24,6 +24,8 @@ import fetchImpl from "node-fetch";
 dotenv.config({ path: new URL("../.env", import.meta.url) });
 
 const { LobbyStore } = await import("../services/lobbyStore.js");
+const { detectLootMoment } = await import("../services/lootMoment.js");
+const { rollLoot } = await import("../services/loot.js");
 const { createCredentialSystem } = await import("../services/credentials/index.js");
 const { createLLMGateway } = await import("../services/llmGateway.js");
 const { parseDMJson } = await import("../helpers/parseDMJson.js");
@@ -40,6 +42,38 @@ const RUNS = Number(arg("runs", 1));
 // DM has already described a container and handed the moment back, which is what
 // the first run of this probe showed it does every time.
 const SET = arg("set", "open");
+// Pins the engine so the probe measures the DM's obedience rather than the dice.
+// "nothing" is the case that matters: the narrator's failure mode is describing a
+// container and handing the moment back, forever.
+const FORCE = arg("force", "");
+
+/**
+ * Drops handed to the prompt instead of a rolled one, so the probe measures the
+ * narrator's obedience rather than the dice.
+ *
+ * `nothing` is the case that matters most: the DM's failure mode was describing a
+ * container and handing the moment back, forever. `treasure` is handcrafted rather
+ * than forced out of `rollLoot` with a rigged rng, because a rigged rng picks the
+ * floor of every table and a common Dagger proves nothing about whether a memorable
+ * item survives the handover.
+ */
+const FORCED_LOOT = {
+	nothing: () => ({ source: "search", rarity: null, gold: 0, items: [] }),
+	treasure: () => ({
+		source: "boss",
+		rarity: "rare",
+		gold: 120,
+		items: [{
+			name: "Whisperfang",
+			rarity: "rare",
+			slot: "weapon",
+			baseName: "Dagger",
+			bonus: 1,
+			effect: "This weapon makes no sound when drawn or when it strikes. Attacks made with it from hiding do not reveal the wielder's position.",
+			attributes: { item_type: "weapon", damage: "1d4", damage_type: "piercing", range: "melee", bonus: 1, silent: true },
+		}],
+	}),
+};
 const PROVIDER = arg("provider", "anthropic");
 const MODEL = arg("model", "claude-sonnet-4-6");
 
@@ -128,6 +162,13 @@ const SCENARIOS = [
 		id: "search-bodies",
 		context: "The party has just killed three goblins in a collapsed mine shaft. The bodies "
 			+ "lie among the rubble. Nothing else is moving.",
+		// The roster is what tells the detector how big the thing that died was, so a
+		// scenario without one measures the fallback rather than the case it names.
+		enemies: {
+			"Goblin 1": { name: "Goblin 1", hp: 0, max_hp: 7, cr: "1/4", status: "dead" },
+			"Goblin 2": { name: "Goblin 2", hp: 0, max_hp: 7, cr: "1/4", status: "dead" },
+			"Goblin 3": { name: "Goblin 3", hp: 0, max_hp: 7, cr: "1/4", status: "dead" },
+		},
 		actor: "Sylvie Ashwren",
 		action: "I search the goblin bodies for anything useful — coin, weapons, anything they were carrying.",
 		roll: { kind: "d20 INVESTIGATION (int+1)", value: 17, detail: { base: 16, bonus: 1, stat: "int", outcome: "success" } },
@@ -144,6 +185,7 @@ const SCENARIOS = [
 		id: "boss-corpse",
 		context: "The ogre chieftain Gurnak, who has terrorised the valley for a season, lies dead at "
 			+ "the party's feet in his hall. The fight is over. His warband has scattered.",
+		enemies: { Gurnak: { name: "Gurnak", hp: 0, max_hp: 76, cr: "7", status: "dead" } },
 		actor: "Brannor Ironfoot",
 		action: "I kneel beside Gurnak's body and take whatever he was carrying.",
 		roll: { kind: "d20 INVESTIGATION (int-1)", value: 14, detail: { base: 15, bonus: -1, stat: "int", outcome: "success" } },
@@ -249,7 +291,7 @@ const ACTIVE = SETS[SET] ?? SCENARIOS;
 
 console.log(`loot probe — set="${SET}", generosity="${GENEROSITY}", ${PROVIDER}/${MODEL}, ${RUNS} run(s) per scenario\n`);
 
-const tally = { calls: 0, withItems: 0, withGold: 0, items: 0, equippable: 0, magical: 0, withAttrs: 0 };
+const tally = { calls: 0, withItems: 0, withGold: 0, items: 0, equippable: 0, magical: 0, withAttrs: 0, grants: 0, narrated: 0, conjured: 0, duplicated: 0 };
 
 for (const scenario of ACTIVE) {
 	for (let run = 1; run <= RUNS; run++) {
@@ -260,7 +302,22 @@ for (const scenario of ACTIVE) {
 		// than through `appendUser`, which persists and would leave a lobby file behind.
 		store.index[lobbyId].history.push({ role: "user", name: scenario.actor, content: scenario.action });
 
-		const messages = store.composeMessages(lobbyId, scenario.actor, scenario.action, scenario.roll);
+		// The server now decides the reward before the model writes. Driven through
+		// the real detector and the real engine, so this probe measures the whole
+		// path — including whether the DM honours being told the party finds nothing.
+		const moment = detectLootMoment({ action: scenario.action, enemies: store.index[lobbyId].enemies });
+		let loot = null;
+		if (moment) {
+			loot = FORCED_LOOT[FORCE]
+				? FORCED_LOOT[FORCE]()
+				: rollLoot({ source: moment.source, partyLevel: 3, generosity: GENEROSITY });
+		}
+
+		console.log(`── ${RUNS > 1 ? `${scenario.id} #${run}` : scenario.id} ${"─".repeat(Math.max(0, 50 - scenario.id.length))}`);
+		console.log(`   detected:  ${moment ? moment.source : "(not a loot moment)"}`);
+		console.log(`   server rolled: ${loot ? (loot.items.length || loot.gold ? `${loot.gold}g — ${loot.items.map((i) => `${i.name} [${i.rarity}]`).join(", ") || "no item"}` : "NOTHING") : "—"}`);
+
+		const messages = store.composeMessages(lobbyId, scenario.actor, scenario.action, scenario.roll, loot);
 		const raw = await gateway.getLLMResponse(messages, { provider: PROVIDER, model: MODEL, lobbyId });
 		const dm = await parseDMJson(raw, {
 			getLLMResponse: gateway.getLLMResponse,
@@ -269,14 +326,36 @@ for (const scenario of ACTIVE) {
 
 		const inv = dm?.updates?.inventory ?? [];
 		const gold = dm?.updates?.gold ?? [];
+		const prose = String(dm?.text || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ");
 
 		tally.calls++;
 		if (inv.some((i) => Number(i.change) > 0)) tally.withItems++;
 		if (gold.some((g) => Number(g.delta) > 0)) tally.withGold++;
 
-		const label = RUNS > 1 ? `${scenario.id} #${run}` : scenario.id;
-		console.log(`── ${label} ${"─".repeat(Math.max(0, 56 - label.length))}`);
-		console.log(`   narration: "${String(dm?.text || "").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").slice(0, 150)}…"`);
+		// The DM's updates are no longer where loot lives — the server applies it. What
+		// is being measured now is whether the narration honours the block: naming the
+		// item it was given, and not conjuring gear it was not.
+		if (loot) {
+			tally.grants++;
+			const named = loot.items.every((i) => prose.toLowerCase().includes(i.name.toLowerCase()));
+			const conjured = inv.filter((i) =>
+				Number(i.change) > 0
+				&& ["weapon", "armor", "trinket"].includes(i.attributes?.item_type)
+				&& !loot.items.some((g) => g.name.toLowerCase() === String(i.item).toLowerCase())
+			);
+			const duplicated = inv.some((i) => loot.items.some((g) => g.name.toLowerCase() === String(i.item).toLowerCase()))
+				|| (loot.gold > 0 && gold.some((g) => Number(g.delta) > 0));
+
+			if (loot.items.length && named) tally.narrated++;
+			if (conjured.length) tally.conjured++;
+			if (duplicated) tally.duplicated++;
+
+			console.log(`   honoured:  ${loot.items.length ? (named ? "named the item ✓" : "DID NOT name the item ✗") : "n/a (nothing to name)"}`
+				+ ` | conjured gear: ${conjured.length ? `✗ ${conjured.map((c) => c.item).join(", ")}` : "none ✓"}`
+				+ ` | duplicated: ${duplicated ? "✗ yes" : "no ✓"}`);
+		}
+
+		console.log(`   narration: "${prose.slice(0, 260)}…"`);
 
 		if (!inv.length) {
 			console.log(`   items:     (none)`);
@@ -304,6 +383,8 @@ for (const scenario of ACTIVE) {
 }
 
 console.log(`══ summary ${"═".repeat(50)}`);
-console.log(`   ${tally.withItems}/${tally.calls} loot-seeking turns produced any item at all`);
-console.log(`   ${tally.withGold}/${tally.calls} produced gold`);
-console.log(`   ${tally.items} items total — ${tally.equippable} equippable, ${tally.magical} magical, ${tally.withAttrs} carried attributes`);
+console.log(`   ${tally.grants}/${tally.calls} turns were recognised as loot moments`);
+console.log(`   ${tally.narrated} of those named the granted item in the narration`);
+console.log(`   ${tally.conjured} conjured equipment the server never granted`);
+console.log(`   ${tally.duplicated} duplicated the grant into their own updates`);
+console.log(`   ${tally.items} items came through the DM channel (quest hooks and consumables are expected here)`);

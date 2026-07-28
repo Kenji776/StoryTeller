@@ -201,3 +201,118 @@ test("the freest mode does not simultaneously tell the DM to hold back", () => {
 test("illustrations off tell the DM never to populate the field", () => {
 	assert.match(systemPromptFor("off"), /Do not use the "illustrate" field/);
 });
+
+// ===== The loot block =====
+//
+// The server decides what the party finds and hands the narrator the answer. Two
+// things have to survive that handover: the item exactly as rolled, and — the harder
+// one — the fact that sometimes there is nothing. Left to itself the DM describes a
+// chest and hands the moment back, and the party opens a nested sequence of
+// containers that never contain anything.
+
+import { describeLootForDM } from "./lobbyPrompts.js";
+
+/** A drop as `rollLoot` returns it. */
+const DROP = {
+	source: "boss",
+	gold: 40,
+	items: [{
+		name: "+1 Chain Shirt of Warding",
+		rarity: "uncommon",
+		baseName: "Chain Shirt",
+		effect: "Faint wards are worked into every plate.",
+		attributes: { item_type: "armor", ac: 15 },
+	}],
+};
+
+test("a turn that is not about loot produces no block at all", () => {
+	assert.equal(describeLootForDM(null, "Sylvie"), "");
+	assert.equal(describeLootForDM(undefined, "Sylvie"), "");
+});
+
+test("finding nothing is stated as an instruction, not left implied", () => {
+	const block = describeLootForDM({ source: "trash", gold: 0, items: [] }, "Sylvie");
+
+	assert.match(block, /Sylvie finds NOTHING/);
+	assert.match(block, /authoritative/i);
+});
+
+test("the nothing case forbids dangling a container the party cannot open", () => {
+	// The exact behaviour observed: "The chest is open. Whatever is inside has been
+	// waiting in goblin-darkness for some time." — and then no contents, ever.
+	const block = describeLootForDM({ source: "search", gold: 0, items: [] }, "Brannor");
+
+	assert.match(block, /locked container|glint/i);
+});
+
+test("an item is handed over with its name, rarity, base and effect", () => {
+	const block = describeLootForDM(DROP, "Sylvie");
+
+	assert.match(block, /\+1 Chain Shirt of Warding/);
+	assert.match(block, /uncommon/);
+	assert.match(block, /Chain Shirt/);
+	assert.match(block, /Faint wards are worked into every plate\./);
+});
+
+test("gold is stated as an exact amount", () => {
+	assert.match(describeLootForDM(DROP, "Sylvie"), /Sylvie finds 40 gold/);
+});
+
+test("the narrator is told what is theirs and what is not", () => {
+	const block = describeLootForDM(DROP, "Sylvie");
+
+	assert.match(block, /where it came from/i, "the DM is not invited to invent the provenance");
+	assert.match(block, /may NOT change/, "the DM is not told the stats are fixed");
+});
+
+test("the narrator is told not to duplicate what the server applied", () => {
+	// Without this the party gets two of everything: the server's copy and the DM's.
+	const block = describeLootForDM(DROP, "Sylvie");
+
+	assert.match(block, /Do NOT add "inventory" or "gold" updates/);
+});
+
+test("gold with no item still produces a block", () => {
+	const block = describeLootForDM({ source: "trash", gold: 12, items: [] }, "Brannor");
+
+	assert.match(block, /Brannor finds 12 gold/);
+	assert.doesNotMatch(block, /NOTHING/);
+});
+
+test("an item with no effect is still fully described", () => {
+	const plain = { source: "search", gold: 0, items: [{ name: "Battleaxe", rarity: "common", baseName: "Battleaxe", effect: "", attributes: {} }] };
+	const block = describeLootForDM(plain, "Brannor");
+
+	assert.match(block, /Brannor finds: Battleaxe — a common Battleaxe\./);
+});
+
+test("every item in a multi-item drop is named", () => {
+	const two = {
+		source: "cache", gold: 0,
+		items: [
+			{ name: "Kingsbane", rarity: "legendary", baseName: "Greatsword", effect: "It bites deeper into the crowned.", attributes: {} },
+			{ name: "Ring of the Veil", rarity: "rare", baseName: "Ring", effect: "The wearer may vanish once a day.", attributes: {} },
+		],
+	};
+	const block = describeLootForDM(two, "Sylvie");
+
+	assert.match(block, /Kingsbane/);
+	assert.match(block, /Ring of the Veil/);
+});
+
+test("the DM is told not to hand out gear on its own initiative", () => {
+	// The engine only fires on turns the detector recognises. On every other turn the
+	// old behaviour leaks straight through: a probed quest-reward turn had the model
+	// hand over a hand axe, a potion and 25 gold entirely off its own bat.
+	const text = systemPromptFor("off");
+
+	assert.match(text, /do not invent .*(weapons?|armou?r)/i);
+	assert.match(text, /server/i);
+});
+
+test("giving a player something in a shop or as a reward is still allowed", () => {
+	// A blanket ban would break buying a sword, which is a thing players do.
+	const text = systemPromptFor("off");
+
+	assert.match(text, /buys|purchases|shop|reward|gives/i);
+});

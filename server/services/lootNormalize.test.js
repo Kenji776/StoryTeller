@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { reconcileCurrency } from "./lootNormalize.js";
+import { reconcileCurrency, stripGrantedLoot } from "./lootNormalize.js";
 
 /**
  * @description Builds an inventory entry in the shape the DM emits, so a case can
@@ -195,4 +195,73 @@ test("non-currency entries pass through untouched and in order", () => {
 	const { inventory } = reconcileCurrency([rope, map], []);
 
 	assert.deepEqual(inventory, [rope, map]);
+});
+
+// ── Loot the server already granted ──────────────────────────────────────────
+
+/** A drop as `rollLoot` returns it. */
+const GRANTED = {
+	source: "boss",
+	gold: 40,
+	items: [{ name: "+1 Chain Shirt of Warding", rarity: "uncommon", baseName: "Chain Shirt", attributes: { item_type: "armor", ac: 15 } }],
+};
+
+test("the DM's copy of loot the server already applied is dropped", () => {
+	// The prompt says not to. `stripResolvedDamage` exists because saying so did not
+	// work for enemy damage, and there is no reason to expect better here.
+	const { inventory, gold } = stripGrantedLoot(
+		[item({ item: "+1 Chain Shirt of Warding", change: 1 })],
+		[{ player: "Sylvie Ashwren", delta: 40 }],
+		GRANTED
+	);
+
+	assert.deepEqual(inventory, []);
+	assert.deepEqual(gold, []);
+});
+
+test("the match ignores case and surrounding space", () => {
+	const { inventory } = stripGrantedLoot([item({ item: "  +1 chain SHIRT of warding " })], [], GRANTED);
+
+	assert.deepEqual(inventory, []);
+});
+
+test("anything the server did not grant still reaches the player", () => {
+	// A key, a letter, a potion the DM invented in the same breath must survive.
+	const key = item({ item: "Iron Key", attributes: { item_type: "quest" } });
+	const potion = item({ item: "Potion of Healing", attributes: { item_type: "consumable" } });
+
+	const { inventory } = stripGrantedLoot([key, item({ item: "+1 Chain Shirt of Warding" }), potion], [], GRANTED);
+
+	assert.deepEqual(inventory, [key, potion]);
+});
+
+test("gold survives when the server granted none", () => {
+	const noGold = { ...GRANTED, gold: 0 };
+	const { gold } = stripGrantedLoot([], [{ player: "Sylvie Ashwren", delta: 12 }], noGold);
+
+	assert.deepEqual(gold, [{ player: "Sylvie Ashwren", delta: 12 }]);
+});
+
+test("a turn with no server grant passes everything through", () => {
+	const entry = item({ item: "Anything At All" });
+
+	for (const granted of [null, undefined]) {
+		const { inventory, gold } = stripGrantedLoot([entry], [{ player: "Sylvie Ashwren", delta: 5 }], granted);
+
+		assert.deepEqual(inventory, [entry]);
+		assert.deepEqual(gold, [{ player: "Sylvie Ashwren", delta: 5 }]);
+	}
+});
+
+test("a player spending gold is not mistaken for a duplicate grant", () => {
+	// Buying something on the same turn as finding treasure is unusual but legal,
+	// and losing the purchase would be worse than an extra coin.
+	const { gold } = stripGrantedLoot([], [{ player: "Sylvie Ashwren", delta: -30 }], GRANTED);
+
+	assert.deepEqual(gold, [{ player: "Sylvie Ashwren", delta: -30 }]);
+});
+
+test("absent channels strip to empty arrays", () => {
+	assert.deepEqual(stripGrantedLoot(undefined, undefined, GRANTED), { inventory: [], gold: [] });
+	assert.deepEqual(stripGrantedLoot(null, "nonsense", GRANTED), { inventory: [], gold: [] });
 });

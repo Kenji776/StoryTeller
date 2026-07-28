@@ -114,3 +114,33 @@ export function reconcileCurrency(inventory, gold) {
 
 	return { inventory: keptItems, gold: [...golds, ...mintedGold] };
 }
+
+/**
+ * Drops the DM's own copy of loot the server has already applied.
+ *
+ * @description The prompt tells it plainly not to add these. `stripResolvedDamage`
+ *   exists because saying so did not work for enemy damage — a character was wounded
+ *   twice for one blow — and there is no reason to expect better here, where the
+ *   consequence is a party carrying two of everything.
+ *
+ *   Narrow on purpose. Only an item the server actually granted is dropped, matched by
+ *   name; a key or a potion the DM invented in the same breath survives. Gold is
+ *   dropped only when the server granted some, and only when it is a *gain* — a player
+ *   spending coin on the same turn keeps their purchase.
+ * @param {*} inventory - The DM's `updates.inventory` array.
+ * @param {*} gold - The DM's `updates.gold` array.
+ * @param {object|null} granted - What `rollLoot` produced this turn, if anything.
+ * @returns {{inventory: Array<object>, gold: Array<object>}} The surviving updates.
+ */
+export function stripGrantedLoot(inventory, gold, granted) {
+	const items = Array.isArray(inventory) ? inventory : [];
+	const golds = Array.isArray(gold) ? gold : [];
+	if (!granted) return { inventory: items, gold: golds };
+
+	const grantedNames = new Set((granted.items || []).map((i) => String(i?.name || "").trim().toLowerCase()));
+
+	return {
+		inventory: items.filter((entry) => !grantedNames.has(String(entry?.item || "").trim().toLowerCase())),
+		gold: granted.gold > 0 ? golds.filter((g) => !(Number(g?.delta) > 0)) : golds,
+	};
+}

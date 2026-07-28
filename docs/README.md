@@ -61,7 +61,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0016 — the game loop moves onto the credential resolver](decisions/0016-the-game-loop-moves-onto-the-credential-resolver.md))
+  (newest: [0017 — what the party finds is rolled by the server](decisions/0017-loot-is-rolled-by-the-server.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._

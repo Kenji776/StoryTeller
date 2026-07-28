@@ -111,6 +111,54 @@ export function describePartyForDM(lobby) {
 	}).join("\n");
 }
 
+/**
+ * Renders the server's loot decision as an instruction the narrator must follow.
+ *
+ * @description The wording matters more than it looks. The "nothing" case is stated
+ *   as positively as the reward case, because the DM's failure mode is not refusing to
+ *   describe treasure — it is refusing to describe its absence. Left to itself it
+ *   narrates a chest, hands the moment back to the player, and the party opens a
+ *   nested sequence of containers that never contain anything.
+ * @param {object|null} loot - A `rollLoot` result, or null when this is not a
+ *   looting turn.
+ * @param {string} actorName - Who is doing the looking.
+ * @returns {string} The block, or "" when there is nothing to say.
+ */
+export function describeLootForDM(loot, actorName) {
+	if (!loot) return "";
+
+	const lines = [`LOOT THIS TURN (authoritative — the server has already decided this; narrate exactly it and nothing more):`];
+
+	if (!loot.items.length && !loot.gold) {
+		lines.push(
+			`${actorName} finds NOTHING of value. Say so plainly and move the scene on. Do not describe a`,
+			`locked container, a promising glint, or anything else that implies treasure the party has yet`,
+			`to reach — there is none here, and dangling one wastes everybody's turn.`
+		);
+		return lines.join("\n");
+	}
+
+	if (loot.gold) lines.push(`${actorName} finds ${loot.gold} gold.`);
+
+	for (const item of loot.items) {
+		lines.push(
+			`${actorName} finds: ${item.name} — a ${item.rarity} ${item.baseName}.`
+				+ (item.effect ? ` ${item.effect}` : "")
+		);
+	}
+
+	lines.push(
+		``,
+		`Name it, and say where it came from and what it looks like — that part is yours, and it is the`,
+		`part worth reading. What you may NOT change is the item itself: not its name, not its rarity,`,
+		`not its effect, not the amount of gold.`,
+		`Do NOT add "inventory" or "gold" updates for any of this. The server has already applied it, and`,
+		`a second copy would hand the party two of everything.`
+	);
+
+	return lines.join("\n");
+}
+
 export const promptMethods = {
 	/**
 	 * Builds a short prompt asking the LLM to summarise the adventure so far.
@@ -210,10 +258,12 @@ export const promptMethods = {
 	 * @param {string} action - The player's action text.
 	 * @param {object|null} diceOutcome - Optional dice-roll result from the server,
 	 *   shaped as `{ kind, value, detail: { base, bonus, outcome } }`.
+	 * @param {object|null} loot - What the server has already decided the player finds
+	 *   this turn, from `rollLoot`. Null on a turn that is not about looting.
 	 * @returns {Array<{role: string, content: string, name?: string}>} Ordered
 	 *   message array ready to pass to the LLM API.
 	 */
-	composeMessages(lobbyId, actorName, action, diceOutcome) {
+	composeMessages(lobbyId, actorName, action, diceOutcome, loot = null) {
 		const s = this.index[lobbyId];
 		if (!s) return [{ role: "system", content: "Error: Lobby not found." }];
 
@@ -408,6 +458,9 @@ EQUIPPABLE ITEMS: When you give a player a weapon, armor, or trinket (ring, amul
 - Quest items: { "item_type": "quest" } — letters, keys, maps, documents, tokens, anything carried for the story rather than worn or wielded. Use this type for them. There is ONE trinket slot, so a sealed letter typed as a trinket competes with the amulet the player actually wants to wear.
 The player can then choose to equip weapons, armor, and trinkets from their inventory. Always include realistic D&D stats when giving equipment.
 
+FOUND TREASURE IS NOT YOURS TO INVENT. Do not invent weapons, armour or trinkets as the reward for searching, looting, opening a container, or defeating something. When a search turns up equipment, you will be told so in a "LOOT THIS TURN" block, and you narrate exactly what it says. Where you are given no such block, the search found no equipment — say so and move on.
+You may still give a player an item when the fiction plainly hands them one: they buy it in a shop, an NPC gives or lends it, they win it in a wager, or it is the agreed reward for a completed job. You may also invent consumables and "quest" items — letters, keys, maps, tokens — freely at any time. Those are story, not treasure.
+
 COINS GO IN THE "gold" UPDATE, NEVER IN "inventory". A purse, pouch, coffer or sack of coins is a "gold" update for its value and nothing else. Do not also add it as an item — the player banks the coins and is then left carrying the empty bag forever. Name a gem, jewel or art object as an item only when it is meant to be kept or sold as an object rather than spent as money.`,
 			},
 			{
@@ -459,6 +512,13 @@ COINS GO IN THE "gold" UPDATE, NEVER IN "inventory". A purse, pouch, coffer or s
 				content: `ACTIVE ENEMIES (authoritative — track HP across turns):\n${enemyRoster}\n\nRules:\n- These are the enemies currently in play. Their HP values are AUTHORITATIVE.\n- When an enemy takes damage, reduce their HP accordingly in the "enemies" update. When HP reaches 0, set "status" to "dead".\n- When introducing NEW enemies, include full stat blocks in the "enemies" update.\n- Every combat turn, include ALL active enemies in the "enemies" array — even those unaffected this turn — so the server keeps an accurate roster.\n- Dead enemies should still be listed with "status": "dead" until combat ends.\n- Do not resurrect dead enemies unless the narrative explicitly calls for it (e.g. necromancy).\n- These enemies FIGHT BACK, and their attacks are rolled by the server before you write. Look for the "ENEMY ACTIONS THIS ROUND" block: it is authoritative. Narrate those hits and misses exactly as given, with the damage stated, and do not add "hp" updates for them.`,
 			});
 		}
+
+		// What the party finds is the server's to decide, exactly as enemy damage is.
+		// The narrator is handed the answer and asked to write it, not consulted about
+		// whether it should happen — asked that, it said yes six times out of six, and
+		// twice more on rolls that had failed.
+		const lootBlock = describeLootForDM(loot, actorName);
+		if (lootBlock) base.push({ role: "system", content: lootBlock });
 
 		// Recent unsummarized history for continuity — everything after summarizedUpTo
 		// (older events are captured in storyContext via auto-summarization).
