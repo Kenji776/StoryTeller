@@ -62,7 +62,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0019 — difficulty scales the opposition](decisions/0019-difficulty-scales-the-opposition.md))
+  (newest: [0020 — combat balance is measured, not guessed](decisions/0020-combat-balance-measured-not-guessed.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._

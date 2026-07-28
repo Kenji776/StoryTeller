@@ -74,10 +74,21 @@ than dealing nothing — the model has invented `"1d6+1"` before now.
 
 ## The enemies' half
 
-`services/enemyTurns.js`, unchanged by ADR 0018. Attacks are round-robin across
-living characters rather than focused, because three goblins concentrating on one
-level-1 character is an instant kill that reads as the engine singling somebody out.
-Damage is by challenge rating, deliberately coarse.
+`services/enemyTurns.js`. Attacks are round-robin across living characters rather
+than focused, because three goblins concentrating on one level-1 character is an
+instant kill that reads as the engine singling somebody out. Damage is by challenge
+rating, deliberately coarse.
+
+**The roster is shared out across the party's turns.** This runs on every
+`action:submit`, so without a share-out every enemy swung on every player's turn: a
+party of three facing three goblins took nine attacks a round against their three,
+and the penalty grew with party size. Enemy *i* now acts on player turn
+*i mod partySize* — once per full round each, with every turn still drawing fire. A
+solo character faces the whole roster, correctly, because their turn is the round.
+
+**No single blow takes more than three-quarters of a character's maximum hit
+points.** A character at full health survives any one hit; two still kill. It caps a
+blow and not a turn, so a wounded character is in as much danger as ever.
 
 ## What the narrator may still do
 
@@ -106,15 +117,27 @@ arithmetic are one artifact. See [ADR 0019](../decisions/0019-difficulty-scales-
 
 | | Casual | Standard | Hardcore | Merciless |
 |---|---|---|---|---|
-| Enemy attack bonus | −3 | 0 | +2 | +4 |
-| Enemy damage | ×0.5 | ×1 | ×1.25 | ×1.5 |
-| Enemy hit points | ×0.6 | ×1 | ×1.25 | ×1.5 |
-| Party attack bonus | +3 | 0 | 0 | −1 |
+| Enemy attack bonus | −3 | 0 | +6 | +9 |
+| Enemy damage | ×0.5 | ×1 | ×1.5 | ×2 |
+| Enemy hit points | ×0.7 | ×1 | ×1 | ×1 |
+| Party attack bonus | +3 | 0 | −1 | −1 |
 
-Standard is a true no-op. Player *damage* is untouched at every setting — a weapon
-deals what the weapon deals. Enemy hit points are scaled once, on introduction;
-rescaling per update would inflate a creature without bound as the model re-sends
-its block.
+Tuned against `balance-sim.mjs`, not guessed — see
+[ADR 0020](../decisions/0020-combat-balance-measured-not-guessed.md). Standard is a
+true no-op, and player *damage* is untouched at every setting.
+
+Hit points scale only *downward*, on Casual, and only when the enemy is introduced.
+A multiplier is disproportionate for a big monster — ×1.4 adds three hit points to a
+goblin and twenty-four to an ogre — so above Standard the same setting was a mild
+handicap against a horde and unwinnable against a single brute.
+
+Hit chance is preferred to damage as the lever: an attack bonus saturates, while a
+damage multiplier compounds. At ×2 a CR 2 ogre one-shot a level 3 character in 82% of
+simulated fights, which is what the one-blow cap prevents.
+
+Measured, 4000 fights per encounter: party win rates run 100% / 99–100% / 29–91% /
+26–78% across the four settings, solo 100% / 84% / 34% / 20%, and the one-shot rate
+is **0% at every setting**.
 
 `describeDifficulty` renders the same table into the lines the settings window
 lists under the chips and the block pasted into the DM prompt — where it is also
@@ -137,6 +160,7 @@ combat path that forgets to pass it plays balanced rather than crashing.
 
 | Probe | What it answers | Cost |
 |---|---|---|
+| `test-integration/balance-sim.mjs` | Can a party actually win? Win and one-shot rates per difficulty, over thousands of fights through the real resolvers. | free — no model |
 | `test-integration/combat-probe.mjs` | Does the roll use the real AC, does the DM narrate a miss as a miss, and does it leave the server's hit points alone? | one DM call per turn |
 | `test-integration/damage-probe.mjs` | Older, and **stale** — it imports `services/llmService.js`, which no longer exists. | — |
 

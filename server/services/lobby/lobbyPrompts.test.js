@@ -341,8 +341,8 @@ test("the difficulty instruction tells the DM what the dial actually did", () =>
 	const store = Object.create(promptMethods);
 
 	const merciless = store._difficultyInstruction("merciless");
-	assert.match(merciless, /\+4/, "the enemy attack bonus is not stated");
-	assert.match(merciless, /50%/, "the damage and hit point scaling is not stated");
+	assert.match(merciless, /\+9/, "the enemy attack bonus is not stated");
+	assert.match(merciless, /100%/, "the damage scaling is not stated");
 
 	const casual = store._difficultyInstruction("casual");
 	assert.match(casual, /-3/);

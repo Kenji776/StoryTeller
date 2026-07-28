@@ -1,6 +1,6 @@
 # 0019 — Difficulty scales the opposition, and says exactly how
 
-Status: accepted
+Status: superseded by [0020](0020-combat-balance-measured-not-guessed.md)
 
 ## Context
 

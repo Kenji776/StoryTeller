@@ -393,12 +393,14 @@ test("difficulty adjusts the party's attack roll, and says so", () => {
 	assert.equal(casual.total, standard.total + 3);
 });
 
-test("hardcore leaves the party's own rolls alone", () => {
-	// It hardens the opposition instead. A host reading "your attack rolls are
-	// unmodified" must find that true.
+test("hardcore and merciless both cost the party a point of accuracy", () => {
+	// Tuning moved hardcore to -1 as well. A host reading "your attack rolls are -1"
+	// must find that true, which is why this pins both against standard.
 	const opts = { attacker: fighter(), target: roster().Gurnak, rollD20: always(10), rollDamage: () => 3 };
+	const standard = resolveAttack({ ...opts, difficulty: "standard" }).bonus;
 
-	assert.equal(resolveAttack({ ...opts, difficulty: "hardcore" }).bonus, resolveAttack({ ...opts, difficulty: "standard" }).bonus);
+	assert.equal(resolveAttack({ ...opts, difficulty: "hardcore" }).bonus, standard - 1);
+	assert.equal(resolveAttack({ ...opts, difficulty: "merciless" }).bonus, standard - 1);
 });
 
 test("difficulty cannot turn a natural one into a hit or a natural twenty into a miss", () => {

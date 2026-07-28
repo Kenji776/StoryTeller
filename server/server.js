@@ -1326,6 +1326,10 @@ io.on("connection", (socket) => {
 				enemies: s.enemies,
 				players: s.players,
 				difficulty: s.difficulty,
+				// Which share of the roster swings this turn. Without these every enemy
+				// attacked on every player's turn.
+				turnIndex: s.turnIndex,
+				partySize: (s.initiative || []).filter((n) => !s.players?.[n]?.dead).length,
 			});
 
 			// Whether a fight ever happens was the narrator's whim, and it declined: one

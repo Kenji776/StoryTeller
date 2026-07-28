@@ -57,7 +57,29 @@ test("casual helps the party and merciless hinders it", () => {
 	assert.ok(casual.enemyDamageMultiplier < 1 && casual.enemyHpMultiplier < 1);
 
 	assert.ok(merciless.enemyAttackBonus > 0 && merciless.playerAttackBonus < 0);
-	assert.ok(merciless.enemyDamageMultiplier > 1 && merciless.enemyHpMultiplier > 1);
+	assert.ok(merciless.enemyDamageMultiplier > 1);
+});
+
+test("no difficulty above standard inflates enemy hit points", () => {
+	// Measured, not assumed. A multiplier is disproportionate for a big monster —
+	// ×1.4 adds three hit points to a goblin and twenty-four to an ogre — so the same
+	// setting was a mild handicap against a horde and unwinnable against a single
+	// brute: 78% versus 4% at one difficulty. Holding it at 1 collapsed that spread.
+	// Scaling *down* on Casual is fine, because the same disproportion is a kindness.
+	for (const name of ["standard", "hardcore", "merciless"]) {
+		assert.equal(difficultyModifiers(name).enemyHpMultiplier, 1, `${name} scales enemy hit points`);
+	}
+	assert.ok(difficultyModifiers("casual").enemyHpMultiplier < 1);
+});
+
+test("hit chance is pushed harder than damage, because damage is what deletes a character", () => {
+	// An attack bonus saturates: past a point every swing lands and more does nothing.
+	// A damage multiplier compounds without limit, and is what turns a hard fight into
+	// a character removed from the game in one blow.
+	const merciless = difficultyModifiers("merciless");
+
+	assert.ok(merciless.enemyAttackBonus >= 6, "the safe lever is not being used");
+	assert.ok(merciless.enemyDamageMultiplier <= 2, "the dangerous lever is being over-used");
 });
 
 // ── Bad input ────────────────────────────────────────────────────────────────
@@ -78,7 +100,7 @@ test("the returned modifiers cannot be mutated by a caller", () => {
 	const mods = difficultyModifiers("hardcore");
 
 	assert.throws(() => { mods.enemyDamageMultiplier = 99; }, TypeError);
-	assert.equal(difficultyModifiers("hardcore").enemyDamageMultiplier, 1.25);
+	assert.equal(difficultyModifiers("hardcore").enemyDamageMultiplier, 1.5);
 });
 
 // ── What the host is told ────────────────────────────────────────────────────
@@ -109,4 +131,22 @@ test("standard says plainly that it changes nothing", () => {
 
 test("an unknown difficulty is described as standard", () => {
 	assert.deepEqual(describeDifficulty("nightmare"), describeDifficulty("standard"));
+});
+
+test("a modifier that does nothing is not listed", () => {
+	// Hit points are no longer scaled above Standard, which rendered as "Enemies have
+	// 0% hit points" — a line that reads as a bug and tells the host nothing.
+	for (const name of ["hardcore", "merciless"]) {
+		const text = describeDifficulty(name).join(" ");
+		assert.doesNotMatch(text, /\b0%/, `${name} lists a no-op modifier`);
+		assert.doesNotMatch(text, /are \+?0 to hit/, `${name} lists a no-op bonus`);
+	}
+});
+
+test("a difficulty still describes everything it does change", () => {
+	const hardcore = describeDifficulty("hardcore").join(" ");
+
+	assert.match(hardcore, /\+6 to hit/);
+	assert.match(hardcore, /\+50%/);
+	assert.match(hardcore, /-1/);
 });

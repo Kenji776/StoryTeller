@@ -75,6 +75,25 @@ function byCR(table, cr) {
 }
 
 /**
+ * The most of a character's maximum health one blow may take. Three-quarters leaves a
+ * character at full health standing after any single hit, however large, while leaving
+ * two hits lethal.
+ */
+const ONE_BLOW_SHARE = 0.75;
+
+/**
+ * @description The most damage one attack may deal to a character.
+ * @param {object} player - The character sheet.
+ * @returns {number} The cap, or Infinity when the sheet states no maximum — inventing
+ *   one from current hit points would shrink the cap as they were worn down, which is
+ *   the opposite of what it is for.
+ */
+function oneBlowCap(player) {
+	const max = Number(player?.stats?.max_hp);
+	return Number.isFinite(max) && max > 0 ? Math.max(1, Math.floor(max * ONE_BLOW_SHARE)) : Infinity;
+}
+
+/**
  * @description Whether a character can still be attacked. Zero hit points counts as
  *   down even without the flag, because the two are set by separate code paths and
  *   can disagree.
@@ -100,7 +119,7 @@ function isStanding(player) {
  *   made, and the total damage per character. `damage` carries only characters that
  *   were actually hit, so it can be applied directly.
  */
-export function resolveEnemyAttacks({ enemies, players, difficulty, rollD20 = d20, rollDamage } = {}) {
+export function resolveEnemyAttacks({ enemies, players, difficulty, turnIndex, partySize, rollD20 = d20, rollDamage } = {}) {
 	const { enemyAttackBonus, enemyDamageMultiplier } = difficultyModifiers(difficulty);
 	const rollDice = rollDamage ?? ((count, sides) => {
 		let total = 0;
@@ -108,10 +127,25 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, rollD20 = d2
 		return total;
 	});
 
-	const attackers = Object.values(enemies ?? {}).filter(
+	const living = Object.values(enemies ?? {}).filter(
 		(e) => e && e.status !== "dead" && e.status !== "fled" && (Number(e.hp) || 0) > 0,
 	);
 	const targets = Object.values(players ?? {}).filter(isStanding);
+
+	// This runs on every `action:submit`, so without a share-out every enemy swung on
+	// every player's turn: a party of three facing three goblins took nine goblin
+	// attacks per round against their three, and the penalty grew with party size. A
+	// live merciless run killed a level 3 fighter in three turns to two CR 1/2
+	// hobgoblins. Each enemy now acts once per full round, its slot picked by the
+	// acting player's position — so every turn still draws fire, but only its share.
+	//
+	// Filtered *before* the share-out, or a corpse would hold a slot and the
+	// survivors would attack less often than they should. A caller that does not know
+	// whose turn it is — the timer path, an admin-forced round — gets the whole
+	// roster, which is the old behaviour and the safe one.
+	const seats = Math.max(1, Math.floor(Number(partySize)) || 0);
+	const seat = Number.isFinite(Number(turnIndex)) ? ((Math.floor(Number(turnIndex)) % seats) + seats) % seats : null;
+	const attackers = seat === null ? living : living.filter((_, i) => i % seats === seat);
 
 	if (!attackers.length || !targets.length) return { attacks: [], damage: {} };
 
@@ -141,6 +175,17 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, rollD20 = d2
 			// the distribution is unchanged and only its magnitude moves. Rounded and
 			// floored at 1: a blow that lands always costs something.
 			dealt = Math.max(1, Math.round(raw * enemyDamageMultiplier));
+
+			// No single blow deletes a character at full health. At a damage multiplier
+			// of 2 a CR 2 ogre one-shot a level 3 character in 82% of simulated fights,
+			// which is both miserable and makes the difficulty dial useless: the only
+			// way to make a fight harder was to make it arbitrary. Capped as a share of
+			// the maximum so it holds at every level.
+			//
+			// This is not immortality. It caps one *blow*, not a turn, and a character
+			// already wounded still dies — which is the point.
+			dealt = Math.min(dealt, oneBlowCap(target));
+
 			damage[target.name] = (damage[target.name] ?? 0) + dealt;
 		}
 

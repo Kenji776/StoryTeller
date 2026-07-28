@@ -19,11 +19,27 @@
 /** The difficulties, softest first. */
 export const DIFFICULTIES = Object.freeze(["casual", "standard", "hardcore", "merciless"]);
 
+/**
+ * Tuned against `test-integration/balance-sim.mjs`, which plays thousands of fights
+ * through the real resolvers. Two findings shaped these numbers:
+ *
+ * **Hit chance is the safe lever; damage is the dangerous one.** An attack bonus
+ * saturates — past a point every swing lands and more does nothing — while a damage
+ * multiplier compounds without limit and is what produces a character deleted in one
+ * blow.
+ *
+ * **Enemy hit points are not scaled above Standard.** A multiplier is disproportionate
+ * for a big monster: ×1.4 adds three hit points to a goblin and twenty-four to an
+ * ogre, so the same setting was a mild handicap against a horde and unwinnable against
+ * a single brute — 4% versus 78% at one difficulty. Holding it at 1 collapsed that
+ * spread. It also keeps fights short, and every round of a fight is a paid model call.
+ * Casual still scales *down*, where the same disproportion is a kindness.
+ */
 const MODIFIERS = Object.freeze({
 	casual: Object.freeze({
 		enemyAttackBonus: -3,
 		enemyDamageMultiplier: 0.5,
-		enemyHpMultiplier: 0.6,
+		enemyHpMultiplier: 0.7,
 		playerAttackBonus: 3,
 	}),
 	standard: Object.freeze({
@@ -33,15 +49,15 @@ const MODIFIERS = Object.freeze({
 		playerAttackBonus: 0,
 	}),
 	hardcore: Object.freeze({
-		enemyAttackBonus: 2,
-		enemyDamageMultiplier: 1.25,
-		enemyHpMultiplier: 1.25,
-		playerAttackBonus: 0,
+		enemyAttackBonus: 6,
+		enemyDamageMultiplier: 1.5,
+		enemyHpMultiplier: 1,
+		playerAttackBonus: -1,
 	}),
 	merciless: Object.freeze({
-		enemyAttackBonus: 4,
-		enemyDamageMultiplier: 1.5,
-		enemyHpMultiplier: 1.5,
+		enemyAttackBonus: 9,
+		enemyDamageMultiplier: 2,
+		enemyHpMultiplier: 1,
 		playerAttackBonus: -1,
 	}),
 });
@@ -100,12 +116,15 @@ export function describeDifficulty(name) {
 		];
 	}
 
+	// A modifier that does nothing gets no line. Hit points are not scaled above
+	// Standard, and listing that rendered as "Enemies have 0% hit points" — which
+	// reads as a bug and tells a host nothing.
 	return [
-		`Enemies are ${asBonus(mods.enemyAttackBonus)} to hit you.`,
-		`Enemy damage is ${asPercent(mods.enemyDamageMultiplier)}.`,
-		`Enemies have ${asPercent(mods.enemyHpMultiplier)} hit points.`,
-		mods.playerAttackBonus === 0
-			? "Your attack rolls are unmodified."
-			: `Your attack rolls are ${asBonus(mods.playerAttackBonus)}.`,
-	];
+		mods.enemyAttackBonus !== 0 && `Enemies are ${asBonus(mods.enemyAttackBonus)} to hit you.`,
+		mods.enemyDamageMultiplier !== 1 && `Enemy damage is ${asPercent(mods.enemyDamageMultiplier)}.`,
+		mods.enemyHpMultiplier !== 1 && `Enemies have ${asPercent(mods.enemyHpMultiplier)} hit points.`,
+		mods.playerAttackBonus !== 0
+			? `Your attack rolls are ${asBonus(mods.playerAttackBonus)}.`
+			: "Your attack rolls are unmodified.",
+	].filter(Boolean);
 }

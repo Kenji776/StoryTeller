@@ -260,8 +260,9 @@ test("difficulty shifts the enemies' chance to hit", () => {
 });
 
 test("difficulty scales the damage an enemy deals", () => {
+	// A generous maximum, so the one-blow cap is not what is being measured here.
 	const enemies = { Ogre: { name: "Ogre", hp: 30, max_hp: 30, ac: 11, str: 10, cr: "2", status: "active" } };
-	const players = { Ayla: { name: "Ayla", stats: { hp: 40, max_hp: 40, dex: 10 }, armor: null } };
+	const players = { Ayla: { name: "Ayla", stats: { hp: 200, max_hp: 200, dex: 10 }, armor: null } };
 
 	const dealt = (difficulty) => resolveEnemyAttacks({
 		enemies, players, difficulty, rollD20: () => 20, rollDamage: () => 8,
@@ -269,8 +270,8 @@ test("difficulty scales the damage an enemy deals", () => {
 
 	assert.equal(dealt("standard"), 8);
 	assert.equal(dealt("casual"), 4);
-	assert.equal(dealt("hardcore"), 10);
-	assert.equal(dealt("merciless"), 12);
+	assert.equal(dealt("hardcore"), 12);
+	assert.equal(dealt("merciless"), 16);
 });
 
 test("a scaled blow still takes at least one hit point", () => {
@@ -301,4 +302,181 @@ test("an absent or unknown difficulty plays as standard", () => {
 
 	assert.equal(dealt(undefined), 8);
 	assert.equal(dealt("nightmare"), 8);
+});
+
+// ===== Action economy =====
+//
+// The enemy round fires inside `action:submit`, so every enemy used to swing every
+// time *any* player acted: a party of three facing three goblins took nine goblin
+// attacks per round against their three, and the penalty grew with party size. A
+// live merciless run killed a level 3 fighter in three turns to two CR 1/2
+// hobgoblins. The roster is now spread across the party's turns.
+
+/**
+ * @description Builds a party of the given size.
+ * @param {number} size - How many characters.
+ * @returns {object} Players keyed by name.
+ */
+function economyParty(size) {
+	return Object.fromEntries(
+		Array.from({ length: size }, (_, i) => [`P${i}`, { name: `P${i}`, stats: { hp: 30, max_hp: 30, dex: 10 }, armor: null }])
+	);
+}
+
+/**
+ * @description Builds a roster of identical enemies.
+ * @param {number} count - How many.
+ * @returns {object} Enemies keyed by name.
+ */
+function horde(count) {
+	return Object.fromEntries(
+		Array.from({ length: count }, (_, i) => [`E${i}`, { name: `E${i}`, hp: 7, max_hp: 7, ac: 15, str: 10, cr: "1/4", status: "active" }])
+	);
+}
+
+test("each enemy attacks exactly once over a full round of player turns", () => {
+	const enemies = horde(3);
+	const players = economyParty(3);
+
+	const swings = [];
+	for (let turnIndex = 0; turnIndex < 3; turnIndex++) {
+		const { attacks } = resolveEnemyAttacks({ enemies, players, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 });
+		swings.push(...attacks.map((a) => a.enemy));
+	}
+
+	assert.equal(swings.length, 3, `three enemies over three turns should swing three times, got ${swings.length}`);
+	assert.deepEqual([...swings].sort(), ["E0", "E1", "E2"]);
+});
+
+test("a single player faces the whole roster on their turn", () => {
+	// Their turn *is* the round, so nothing should be held back.
+	const { attacks } = resolveEnemyAttacks({
+		enemies: horde(3), players: economyParty(1), turnIndex: 0, partySize: 1, rollD20: () => 10, rollDamage: () => 1,
+	});
+
+	assert.equal(attacks.length, 3);
+});
+
+test("more enemies than players means several act on one turn", () => {
+	// Six goblins against two characters: three per player turn, six over the round.
+	const enemies = horde(6);
+	const players = economyParty(2);
+
+	const first = resolveEnemyAttacks({ enemies, players, turnIndex: 0, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
+	const second = resolveEnemyAttacks({ enemies, players, turnIndex: 1, partySize: 2, rollD20: () => 10, rollDamage: () => 1 });
+
+	assert.equal(first.attacks.length, 3);
+	assert.equal(second.attacks.length, 3);
+	assert.deepEqual([...first.attacks, ...second.attacks].map((a) => a.enemy).sort(), ["E0", "E1", "E2", "E3", "E4", "E5"]);
+});
+
+test("fewer enemies than players means some turns draw no attack", () => {
+	// One goblin against three characters attacks once per round, not three times.
+	const enemies = horde(1);
+	const players = economyParty(3);
+
+	const counts = [0, 1, 2].map((turnIndex) =>
+		resolveEnemyAttacks({ enemies, players, turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 }).attacks.length);
+
+	assert.deepEqual(counts, [1, 0, 0]);
+});
+
+test("a turn index beyond the party wraps rather than silencing the enemies", () => {
+	const { attacks } = resolveEnemyAttacks({
+		enemies: horde(2), players: economyParty(2), turnIndex: 5, partySize: 2, rollD20: () => 10, rollDamage: () => 1,
+	});
+
+	assert.equal(attacks.length, 1);
+});
+
+test("without a turn index the whole roster acts, as it did before", () => {
+	// Callers that do not know the turn — the timer path, an admin-forced round —
+	// keep the old behaviour rather than silently dropping attacks.
+	const { attacks } = resolveEnemyAttacks({ enemies: horde(3), players: economyParty(3), rollD20: () => 10, rollDamage: () => 1 });
+
+	assert.equal(attacks.length, 3);
+});
+
+test("dead enemies are skipped without stealing a living one's turn", () => {
+	// If the slice were taken before filtering the dead, a corpse would absorb a slot
+	// and the survivors would attack less often than they should.
+	const enemies = horde(3);
+	enemies.E1.status = "dead";
+	enemies.E1.hp = 0;
+
+	const swings = [0, 1, 2].flatMap((turnIndex) =>
+		resolveEnemyAttacks({ enemies, players: economyParty(3), turnIndex, partySize: 3, rollD20: () => 10, rollDamage: () => 1 })
+			.attacks.map((a) => a.enemy));
+
+	assert.deepEqual(swings.sort(), ["E0", "E2"]);
+});
+
+// ===== No character is deleted in one blow =====
+//
+// At a damage multiplier of 2.0 a CR 2 ogre one-shot a level 3 character in 82% of
+// simulated fights: 2d6+4 tops out at 16, doubled is 32, against 26 hit points. Being
+// killed outright by a low-level enemy from full health is the thing the operator
+// named as unacceptable, and it also makes the difficulty dial unusable — the only
+// way to make a fight harder was to make it arbitrary.
+
+test("a single blow cannot take a character from full health to dead", () => {
+	const players = { Ayla: { name: "Ayla", stats: { hp: 26, max_hp: 26, dex: 10 }, armor: null } };
+	const ogre = { Ogre: { name: "Ogre", hp: 59, max_hp: 59, ac: 11, str: 19, cr: "2", status: "active" } };
+
+	// Maximum damage roll, always hitting, at the harshest setting.
+	const { attacks } = resolveEnemyAttacks({
+		enemies: ogre, players, difficulty: "merciless", rollD20: () => 20, rollDamage: () => 12,
+	});
+
+	assert.ok(attacks[0].damage < 26, `one blow dealt ${attacks[0].damage} against 26 maximum hit points`);
+});
+
+test("the cap is a share of maximum health, not a flat number", () => {
+	// A level 1 character and a level 10 one must both survive their first hit.
+	for (const maxHp of [8, 12, 26, 40, 80]) {
+		const players = { Ayla: { name: "Ayla", stats: { hp: maxHp, max_hp: maxHp, dex: 10 }, armor: null } };
+		const brute = { Brute: { name: "Brute", hp: 99, max_hp: 99, ac: 11, str: 20, cr: "12", status: "active" } };
+
+		const { attacks } = resolveEnemyAttacks({
+			enemies: brute, players, difficulty: "merciless", rollD20: () => 20, rollDamage: () => 30,
+		});
+
+		assert.ok(attacks[0].damage < maxHp, `${maxHp} hit points took ${attacks[0].damage} from one blow`);
+	}
+});
+
+test("a wounded character can still be killed by one blow", () => {
+	// The cap protects against deletion from full health, not against dying. A
+	// character on their last legs is still in danger, which is the entire point.
+	const players = { Ayla: { name: "Ayla", stats: { hp: 3, max_hp: 26, dex: 10 }, armor: null } };
+	const ogre = { Ogre: { name: "Ogre", hp: 59, max_hp: 59, ac: 11, str: 19, cr: "2", status: "active" } };
+
+	const { damage } = resolveEnemyAttacks({
+		enemies: ogre, players, difficulty: "merciless", rollD20: () => 20, rollDamage: () => 12,
+	});
+
+	assert.ok(damage.Ayla > 3, `${damage.Ayla} would not finish a character on 3 hit points`);
+});
+
+test("the cap does not interfere with ordinary blows", () => {
+	// A goblin hitting for 3 must still hit for 3; the rail is for the outliers.
+	const players = { Ayla: { name: "Ayla", stats: { hp: 26, max_hp: 26, dex: 10 }, armor: null } };
+	const goblin = { G: { name: "G", hp: 7, max_hp: 7, ac: 15, str: 10, cr: "1/4", status: "active" } };
+
+	const { attacks } = resolveEnemyAttacks({
+		enemies: goblin, players, difficulty: "standard", rollD20: () => 20, rollDamage: () => 3,
+	});
+
+	assert.equal(attacks[0].damage, 3);
+});
+
+test("a character with no stated maximum is not shielded by a nonsense cap", () => {
+	const players = { Ayla: { name: "Ayla", stats: { hp: 20, dex: 10 }, armor: null } };
+	const ogre = { Ogre: { name: "Ogre", hp: 59, max_hp: 59, ac: 11, str: 19, cr: "2", status: "active" } };
+
+	const { attacks } = resolveEnemyAttacks({
+		enemies: ogre, players, difficulty: "merciless", rollD20: () => 20, rollDamage: () => 12,
+	});
+
+	assert.ok(attacks[0].damage >= 1 && Number.isInteger(attacks[0].damage));
 });
