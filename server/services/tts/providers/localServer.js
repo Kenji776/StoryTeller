@@ -143,6 +143,15 @@ export const localServerProvider = {
 	id: "local",
 	label: "Local TTS server",
 
+	// Credential metadata, read by services/credentials/. A self-hosted server
+	// costs nothing and needs no account — only an address, which the operator
+	// supplies and which passes the private-network guard before it is dialled.
+	requiresApiKey: false,
+	requiresBaseUrl: true,
+	defaultBaseUrl: null,
+	isLocal: true,
+	keyUrl: null,
+
 	/**
 	 * Buffered PCM, so the client must collect the frames and play one blob rather
 	 * than feeding MediaSource — which cannot decode WAV in any browser.

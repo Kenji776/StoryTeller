@@ -140,6 +140,12 @@ export const ollamaProvider = {
 	defaultBaseUrl: "http://localhost:11434",
 	supportsImages: false,
 	keyUrl: null,
+	// The only chat provider that is a self-hosted service rather than an account.
+	// `services/credentials/` reads this to default it to the `local` policy, where
+	// availability rather than a credential decides whether it can be offered.
+	// Absent means false, which is correct for every other adapter — including the
+	// OpenAI-compatible one, whose base URL may just as easily be a hosted gateway.
+	isLocal: true,
 	chat,
 	listModels,
 };

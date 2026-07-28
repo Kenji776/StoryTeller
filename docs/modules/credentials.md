@@ -22,6 +22,7 @@ for how long they live.
 | `sessionKeys.js` | Holds a lobby host's key in memory, and what the lobby has spent. |
 | `resolve.js` | Decides whose credential serves one call, or refuses with a reason. |
 | `capabilities.js` | Describes what the instance can do — one shape for players, one for the operator. |
+| `index.js` | Composition root: assembles the above and is the only file here that knows the registries. |
 
 Every one of them takes `fsImpl`, the clock, and the logger as parameters, so the
 whole module is exercised without a disk, a clock, or a key (`CQ-5`, `TDD-8`).
@@ -223,7 +224,7 @@ with no adapter is ignored rather than offered.
 
 ## Testing
 
-`npm test` — 172 tests, no network, no disk, no real clock. The filesystem
+`npm test` — 198 tests, no network, no disk, no real clock. The filesystem
 double matches the one in `services/tts/localConfig.test.js`; time is a
 hand-driven clock, so expiry is asserted at an instant rather than slept through.
 
@@ -244,3 +245,58 @@ the admin write path — which **must** carry the private-network guard describe
 above — and the host-facing consent and limit UI.
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._
+
+## Assembling it
+
+`index.js` is the composition root and the only file here that knows the
+registries exist. Everything else takes providers as data, which is why it can be
+tested without one.
+
+```js
+createCredentialSystem({ fsImpl, dataDir, secret, env, log, now, onPurge })
+  → { vault, sessionKeys, resolver,
+      providersFor, providerFor,
+      getPolicy, setPolicy, setAvailability,
+      describe, describeForPlayers }
+```
+
+One table maps each capability to its registry — chat to `services/llm/`, speech
+to `services/tts/`, image to `services/images/` — and normalises away their
+differences: the chat registry throws on an unknown id where the others return
+null, and the speech registry has no `list` that strips adapter functions, so
+this module supplies one.
+
+`getPolicy` is a closure over a mutable binding rather than a snapshot. An admin
+saving a policy takes effect on the very next resolution, with nothing rebuilt.
+
+### Importing what an install already has
+
+On construction, keys sitting in the environment are imported into empty vault
+slots and the operator is told the variables can be removed:
+
+| Variable | Provider |
+|---|---|
+| `OPENAI_API_KEY` | `openai` |
+| `ANTHROPIC_API_KEY`, `CLAUDE_API_KEY` | `anthropic` |
+| `ELEVENLABS_API_KEY`, `ELEVEN_API_KEY` | `elevenlabs` |
+
+`CLAUDE_API_KEY` is the legacy spelling: the old service called the provider
+"claude" and the registry calls it "anthropic", so the import is also the rename.
+
+**The environment never overwrites a key already in the vault.** A key entered
+through the admin console is the current one, and a stale variable left in a
+compose file must not win on the next restart — the same rule ADR 0006
+established for the speech server's address.
+
+The import runs *before* the first-run policy is derived, so a key that arrived
+from `.env` produces a `shared` default and an existing install keeps behaving
+exactly as it did.
+
+### `isLocal` has to survive the registry projection
+
+`defaultPolicyDocument` decides which providers default to `local` by reading
+`isLocal` off each descriptor. Each registry's `list` function projects a fixed
+set of fields, so a descriptor flag that is not in that projection is silently
+dropped — which is exactly what happened when this was first wired: Ollama
+arrived without `isLocal` and defaulted to `byok`, making a free self-hosted model
+look like a paid account. A test now pins it.

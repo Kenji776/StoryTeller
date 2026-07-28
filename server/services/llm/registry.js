@@ -67,7 +67,7 @@ export function getProvider(id) {
 export function listProviders({ includeTest = false } = {}) {
 	return [...PROVIDERS.values()]
 		.filter(provider => includeTest || !HIDDEN_BY_DEFAULT.has(provider.id))
-		.map(({ id, label, requiresApiKey, requiresBaseUrl, defaultBaseUrl, supportsImages, keyUrl }) => ({
+		.map(({ id, label, requiresApiKey, requiresBaseUrl, defaultBaseUrl, supportsImages, keyUrl, isLocal }) => ({
 			id,
 			label,
 			requiresApiKey,
@@ -75,6 +75,10 @@ export function listProviders({ includeTest = false } = {}) {
 			defaultBaseUrl,
 			supportsImages,
 			keyUrl: keyUrl ?? null,
+			// Absent on every adapter but Ollama. `services/credentials/` reads it to
+			// decide which providers default to the `local` policy, so dropping it
+			// here would silently make a self-hosted model look like a paid account.
+			isLocal: Boolean(isLocal),
 		}));
 }
 

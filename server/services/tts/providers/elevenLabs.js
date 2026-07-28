@@ -146,6 +146,15 @@ export const elevenLabsProvider = {
 	id: "elevenlabs",
 	label: "ElevenLabs",
 
+	// Credential metadata, read by services/credentials/. Narration here is billed
+	// per character, so whether the instance pays or the host does is a policy
+	// decision like any other rather than the fixed operator key it once was.
+	requiresApiKey: true,
+	requiresBaseUrl: false,
+	defaultBaseUrl: null,
+	isLocal: false,
+	keyUrl: "https://elevenlabs.io/app/settings/api-keys",
+
 	/** MP3, which MediaSource can accept incrementally. */
 	audioFormat: "mpeg",
 
