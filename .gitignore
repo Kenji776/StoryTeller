@@ -10,6 +10,12 @@ server/data/lobbies/
 server/data/charkey.pem
 # Runtime TTS config — holds this machine's speech server address
 server/data/tts-config.json
+# Operator credential vault. Encrypted, but an encrypted key is still a key —
+# and this is ignored before the file can be created, not after (GIT-5).
+server/data/credentials.enc
+# Which providers this instance offers and who pays for them. No secrets, but it
+# is per-install runtime state rather than source.
+server/data/provider-policy.json
 client/config/voices_cache.json
 # Key material. keyfile.age has sat untracked and unignored in the repo root since
 # before this was written; anything running `git add -A` would have committed it.
