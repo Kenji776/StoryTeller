@@ -9,6 +9,9 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+// The same slot maths the feasibility gate and the advisor use. Deriving it
+// separately here is what let the three engines disagree in front of players.
+import { slotCapacity, remainingSlots, DEFAULT_SLOT_BASE } from "../characterCapability.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MUSIC_MOODS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "..", "client", "config", "music_moods.json"), "utf8")).moods;
@@ -55,6 +58,53 @@ const LEVEL_FLAVOR = {
  */
 function levelFlavorTag(lvl) {
 	return LEVEL_FLAVOR[lvl] || LEVEL_FLAVOR[Math.min(25, Math.max(1, lvl))] || "adventurer";
+}
+
+/**
+ * Builds the authoritative party status block handed to the Dungeon Master.
+ *
+ * @description The DM is told this block overrides its own judgement, so anything
+ *   wrong here becomes wrong in the fiction. It previously derived the ability pool
+ *   from character level alone — one `max` variable served as both the level and the
+ *   pool — so a lobby configured for three uses reported "slots: 0/1 ⚠️ NO SLOTS
+ *   REMAINING" and the DM narrated abilities failing that the feasibility gate had
+ *   just confirmed were affordable. Level and pool are now computed separately, and
+ *   the pool comes from `slotCapacity`, the same function the gate and advisor use,
+ *   so the three cannot disagree.
+ * @param {object} lobby - The lobby record; `players` and `abilitySlotsBase` are read.
+ * @returns {string} One line per party member, or "" when there is no party.
+ */
+export function describePartyForDM(lobby) {
+	const base = lobby?.abilitySlotsBase ?? DEFAULT_SLOT_BASE;
+
+	return Object.values(lobby?.players ?? {}).map((p) => {
+		const level = Number(p.level) || 1;
+
+		const capacity = slotCapacity(p, base);
+		const slotStr = capacity === Infinity
+			// Infinity renders as "Infinity" and does not survive JSON; the DM needs a
+			// word it can reason about, not a number it might treat as a budget.
+			? "slots: unlimited"
+			: `slots: ${remainingSlots(p, base)}/${capacity}`;
+		const warning = capacity !== Infinity && remainingSlots(p, base) === 0
+			? " ⚠️ NO SLOTS REMAINING — all spell/ability uses fail"
+			: "";
+
+		const spellList = (p.abilities || []).map((a) => a.name || a).filter(Boolean);
+		const spellStr = spellList.length ? spellList.join(", ") : "none";
+
+		const wpnStr = p.weapon ? `weapon: ${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "weapon: unarmed";
+		const armStr = p.armor  ? `armor: ${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "armor: unarmored (AC 10)";
+		const trnStr = p.trinket ? `trinket: ${p.trinket.name}${p.trinket.description ? ` (${p.trinket.description})` : ""}` : "trinket: none";
+
+		const currentHp = Number(p.stats?.hp ?? 0);
+		const maxHp = Number(p.stats?.max_hp ?? p.stats?.hp ?? 10);
+		const hpStr = p.dead ? "HP: 0 — ☠️ DEAD" : `HP: ${currentHp}/${maxHp}`;
+		const hpWarning = !p.dead && currentHp > 0 && currentHp <= Math.floor(maxHp * 0.25) ? " ⚠️ CRITICALLY LOW HP" : "";
+
+		return `  - ${p.name} (${p.class || "?"} Lv ${level}, ${levelFlavorTag(level)}): ${hpStr}${hpWarning}`
+			+ ` | ${wpnStr} | ${armStr} | ${trnStr} | abilities/spells known: [${spellStr}] | ${slotStr}${warning}`;
+	}).join("\n");
 }
 
 export const promptMethods = {
@@ -212,6 +262,11 @@ Schema: {
   "combat_over": boolean,
   "sfx": string[]
 };
+
+XP: the server awards XP for defeated enemies automatically, from each enemy's "cr".
+Do NOT put combat kills in "xp" — that would pay the party twice for one kill. Use
+"xp" only for non-combat achievements: solving a puzzle, a hard-won negotiation,
+reaching a milestone. Leave it empty when nothing like that happened.
 `;
 
 		const flavorParts = [];
@@ -349,23 +404,7 @@ The player can then choose to equip weapons, armor, and trinkets from their inve
 		}
 
 		// Spell slot context — give the LLM current slot status, weapon, HP, and each player's spell list
-		const spellLines = Object.values(s.players || {}).map(p => {
-			const max = Number(p.level) || 1;
-			const used = Number(p.spellSlotsUsed) || 0;
-			const remaining = Math.max(0, max - used);
-			const spellList = (p.abilities || []).map(a => a.name || a).filter(Boolean);
-			const spellStr = spellList.length ? spellList.join(", ") : "none";
-			const warning = remaining === 0 ? " ⚠️ NO SLOTS REMAINING — all spell/ability uses fail" : "";
-			const wpnStr = p.weapon ? `weapon: ${p.weapon.name} (${p.weapon.damage} ${p.weapon.damageType}, ${p.weapon.range || "melee"})` : "weapon: unarmed";
-			const armStr = p.armor  ? `armor: ${p.armor.name} (AC ${p.armor.ac}, ${p.armor.type})` : "armor: unarmored (AC 10)";
-			const trnStr = p.trinket ? `trinket: ${p.trinket.name}${p.trinket.description ? ` (${p.trinket.description})` : ""}` : "trinket: none";
-			const currentHp = Number(p.stats?.hp ?? 0);
-			const maxHp = Number(p.stats?.max_hp ?? p.stats?.hp ?? 10);
-			const hpStr = p.dead ? "HP: 0 — ☠️ DEAD" : `HP: ${currentHp}/${maxHp}`;
-			const hpWarning = !p.dead && currentHp > 0 && currentHp <= Math.floor(maxHp * 0.25) ? " ⚠️ CRITICALLY LOW HP" : "";
-			const tier = levelFlavorTag(max);
-			return `  - ${p.name} (${p.class || "?"} Lv ${max}, ${tier}): ${hpStr}${hpWarning} | ${wpnStr} | ${armStr} | ${trnStr} | abilities/spells known: [${spellStr}] | slots: ${remaining}/${max}${warning}`;
-		}).join("\n");
+		const spellLines = describePartyForDM(s);
 
 		// Collect dead player names for explicit death instructions
 		const deadPlayers = Object.values(s.players || {}).filter(p => p.dead).map(p => p.name);

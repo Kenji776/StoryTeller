@@ -379,3 +379,94 @@ test("the total is the die plus the modifier", () => {
 	const p = store.autoRollIfNeeded(lobbyId, "s1", "I search the room.");
 	assert.equal(p.value, p.detail.base + p.detail.bonus);
 });
+
+// ===== updateEnemies: reporting kills =====
+//
+// The store knew exactly when an enemy died and told nobody, so XP could only ever
+// be awarded if the Dungeon Master volunteered it. Across a 30-turn playtest it
+// never did and every character finished at zero XP. `updateEnemies` now reports
+// the transition, once, so an award can be made deterministically.
+
+/**
+ * @description Adds an enemy roster to a store built by `makeStore`.
+ * @param {object} store - The host.
+ * @param {object} enemies - Enemy records keyed by name.
+ * @returns {void}
+ */
+function withEnemies(store, enemies) {
+	store.index.lob1.enemies = enemies;
+}
+
+test("an enemy dropped to zero HP is reported as newly dead", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" } });
+
+	const dead = store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 0 }]);
+
+	assert.equal(dead.length, 1);
+	assert.equal(dead[0].name, "Goblin");
+	assert.equal(dead[0].cr, "1/4");
+});
+
+test("an enemy marked dead by status is reported even with HP left", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" } });
+
+	const dead = store.updateEnemies(lobbyId, [{ name: "Goblin", status: "dead" }]);
+	assert.deepEqual(dead.map((e) => e.name), ["Goblin"]);
+});
+
+test("the same corpse is never reported twice", () => {
+	// The model re-sends enemy blocks after combat ends. Without a guard the party
+	// would be paid again for the same kill on every subsequent turn.
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" } });
+
+	assert.equal(store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 0 }]).length, 1);
+	assert.equal(store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 0 }]).length, 0);
+	assert.equal(store.updateEnemies(lobbyId, [{ name: "Goblin", status: "dead" }]).length, 0);
+});
+
+test("wounding an enemy without killing it reports nothing", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" } });
+
+	assert.deepEqual(store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 3 }]), []);
+});
+
+test("an enemy that flees is not reported as a kill", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" } });
+
+	assert.deepEqual(store.updateEnemies(lobbyId, [{ name: "Goblin", status: "fled" }]), []);
+});
+
+test("several kills in one update are all reported", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, {
+		Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" },
+		Wolf:   { name: "Wolf",   hp: 5, max_hp: 5, cr: "1/4", status: "active" },
+	});
+
+	const dead = store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 0 }, { name: "Wolf", hp: 0 }]);
+	assert.deepEqual(dead.map((e) => e.name).sort(), ["Goblin", "Wolf"]);
+});
+
+test("a purged enemy re-sent as dead is not resurrected into a payday", () => {
+	// updateEnemies deliberately skips unknown dead enemies; they must not be
+	// reported as kills either, or the model could mint XP by naming corpses.
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, {});
+
+	assert.deepEqual(store.updateEnemies(lobbyId, [{ name: "Ghost", hp: 0, cr: "5" }]), []);
+});
+
+test("a malformed update yields no kills rather than throwing", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, {});
+
+	for (const bad of [null, undefined, "x", 7, {}]) {
+		assert.deepEqual(store.updateEnemies(lobbyId, bad), [], JSON.stringify(bad));
+	}
+	assert.deepEqual(store.updateEnemies("nope", [{ name: "Goblin", hp: 0 }]), []);
+});

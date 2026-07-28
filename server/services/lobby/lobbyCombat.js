@@ -357,12 +357,15 @@ export const combatMethods = {
 	 * Each entry can introduce a new enemy, update HP/status, or mark one dead/fled.
 	 * @param {string} lobbyId - The lobby identifier.
 	 * @param {Array<{ name: string, hp?: number, max_hp?: number, ac?: number, str?: number, dex?: number, con?: number, int?: number, wis?: number, cha?: number, cr?: string|number, status?: string }>} enemyUpdates - Array of enemy stat blocks or partial updates from the LLM.
-	 * @returns {void}
+	 * @returns {Array<{name: string, cr: string|number}>} Enemies that died on this
+	 *   update, each reported exactly once so XP can be awarded without paying the
+	 *   party twice for a corpse the model re-sends. Empty on a malformed call.
 	 */
 	updateEnemies(lobbyId, enemyUpdates) {
 		const s = this.index[lobbyId];
-		if (!s || !Array.isArray(enemyUpdates)) return;
+		if (!s || !Array.isArray(enemyUpdates)) return [];
 		s.enemies = s.enemies || {};
+		const newlyDead = [];
 		for (const e of enemyUpdates) {
 			if (!e?.name) continue;
 			const key = e.name;
@@ -395,8 +398,17 @@ export const combatMethods = {
 				s.enemies[key].status = "dead";
 				s.enemies[key].hp = 0;
 			}
+
+			// Report the transition to dead exactly once. The model re-sends enemy
+			// blocks after combat ends, so without the flag the party would be paid
+			// again for the same corpse on every later turn.
+			if (s.enemies[key].status === "dead" && !s.enemies[key].xpAwarded) {
+				s.enemies[key].xpAwarded = true;
+				newlyDead.push({ name: key, cr: s.enemies[key].cr });
+			}
 		}
 		this.persist(lobbyId);
+		return newlyDead;
 	},
 
 	/**

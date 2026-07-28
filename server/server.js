@@ -45,6 +45,7 @@ import { createIncidentLog } from "./services/incidents.js";
 import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
+import { xpForKills } from "./services/experience.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
 
@@ -1046,7 +1047,19 @@ io.on("connection", (socket) => {
 				broadcastGoldUpdates(busIo, store, lobbyId, u.gold);
 				broadcastConditionUpdates(busIo, store, lobbyId, u.conditions);
 				broadcastAbilityUpdates(busIo, store, lobbyId, u.abilities);
-				if (Array.isArray(u.enemies)) store.updateEnemies(lobbyId, u.enemies);
+				if (Array.isArray(u.enemies)) {
+					// XP for kills is awarded here rather than left to the narrator. Asked
+					// to volunteer an `updates.xp` block, the model went a full 30-turn
+					// playtest without ever doing so — including for a confirmed kill —
+					// leaving every character at zero XP and the whole progression system
+					// unreachable. The enemy blocks carry a challenge rating; read it.
+					const killed = store.updateEnemies(lobbyId, u.enemies);
+					const living = Object.values(store.index[lobbyId]?.players || {})
+						.filter((p) => !p.dead)
+						.map((p) => p.name);
+					const earned = xpForKills(killed, living);
+					if (earned.length) broadcastXPUpdates(busIo, store, lobbyId, earned);
+				}
 				if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 
 				if (dmObj.spellUsed === true) {
