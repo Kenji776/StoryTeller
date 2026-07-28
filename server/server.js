@@ -248,7 +248,11 @@ const LOG_DIR = path.join(__dirname, "logs");
  * Nothing in the game loop reads this yet; the routes below are the first caller.
  */
 const credentials = createCredentialSystem({
-	dataDir: path.join(__dirname, "data"),
+	// Its own directory, not `data/` itself: the deploy mounts this path so an
+	// operator's configuration survives a redeploy, and mounting the whole of
+	// `data/` would shadow charkey.pem and the canned test responses baked into
+	// the image.
+	dataDir: path.join(__dirname, "data", "credentials"),
 	secret: process.env.STORYTELLER_SECRET
 		|| (process.env.STORYTELLER_SECRET_FILE && fs.existsSync(process.env.STORYTELLER_SECRET_FILE)
 			? fs.readFileSync(process.env.STORYTELLER_SECRET_FILE, "utf8").trim()
