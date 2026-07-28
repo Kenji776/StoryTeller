@@ -166,6 +166,61 @@ function pickAffix(slot, tier, rng) {
 	return pick(inWindow.length ? inWindow : eligible, rng);
 }
 
+/** Where each slot's base items come from. */
+const BASES = {
+	weapon: () => WEAPONS,
+	armor: () => ARMOURS,
+	trinket: () => tables.trinketBases,
+};
+
+/**
+ * @description Builds the attribute block for a base item in a slot.
+ * @param {string} slot - "weapon", "armor" or "trinket".
+ * @param {object} base - The catalogue entry.
+ * @param {number} bonus - The enchantment bonus.
+ * @param {object|undefined} affix - The affix, if any.
+ * @returns {object} The attributes.
+ */
+function attributesFor(slot, base, bonus, affix) {
+	if (slot === "weapon") {
+		return {
+			item_type: "weapon",
+			damage: base.damage,
+			damage_type: base.damageType,
+			range: base.range || "melee",
+		};
+	}
+	if (slot === "armor") {
+		return {
+			item_type: "armor",
+			// Folded into `ac` because `enemyTurns.js` rolls against that field and reads
+			// nothing else. A bonus kept beside it would be decoration.
+			ac: Number(base.ac) + bonus + Number(affix?.attributes?.ac_bonus || 0),
+			armor_type: base.type,
+		};
+	}
+	return { ...base.attributes };
+}
+
+/**
+ * @description Names an item.
+ * @param {object} base - The catalogue entry.
+ * @param {number} bonus - The enchantment bonus.
+ * @param {object|undefined} affix - The affix, if any.
+ * @returns {string} The name.
+ */
+function nameFor(base, bonus, affix) {
+	// An affix that is a proper noun *is* the name — "Javelin the Sunderer" and
+	// "Dagger Whisperfang" both came out of real rolls. The base survives in
+	// `baseName` so the UI and the narrator still know what kind of thing it is.
+	const prefix = bonus ? `+${bonus} ` : "";
+	const stem = affix?.naming === "proper"
+		? affix.label
+		: `${base.name}${affix ? ` ${affix.label}` : ""}`;
+
+	return `${prefix}${stem}`.trim();
+}
+
 /**
  * @description Builds one item at a given tier.
  * @param {number} tier - The tier index.
@@ -175,8 +230,7 @@ function pickAffix(slot, tier, rng) {
 function buildItem(tier, rng) {
 	// A plain trinket is a ring with no ring in it. Trinkets carry an effect or they
 	// do not appear, so the bottom tier is weapons and armour only.
-	const slots = tier === 0 ? ["weapon", "armor"] : ["weapon", "armor", "trinket"];
-	const slot = pick(slots, rng);
+	const slot = pick(tier === 0 ? ["weapon", "armor"] : ["weapon", "armor", "trinket"], rng);
 
 	const bonus = slot === "trinket" ? 0 : TIER_BONUS[tier];
 	const affix = tier === 0 ? undefined : pickAffix(slot, tier, rng);
@@ -185,49 +239,18 @@ function buildItem(tier, rng) {
 	// rarity would promise something the stats do not deliver.
 	if (tier > 0 && !affix && !bonus) return null;
 
-	let base;
-	let attributes;
-	if (slot === "weapon") {
-		base = pick(WEAPONS, rng);
-		if (!base) return null;
-		attributes = {
-			item_type: "weapon",
-			damage: base.damage,
-			damage_type: base.damageType,
-			range: base.range || "melee",
-		};
-	} else if (slot === "armor") {
-		base = pick(ARMOURS, rng);
-		if (!base) return null;
-		attributes = {
-			item_type: "armor",
-			// The bonus is folded into `ac` because `enemyTurns.js` rolls against that
-			// field and reads nothing else. A bonus kept beside it would be decoration.
-			ac: Number(base.ac) + bonus + Number(affix?.attributes?.ac_bonus || 0),
-			armor_type: base.type,
-		};
-	} else {
-		base = pick(tables.trinketBases, rng);
-		if (!base) return null;
-		attributes = { ...base.attributes };
-	}
+	const base = pick(BASES[slot](), rng);
+	if (!base) return null;
 
+	const attributes = attributesFor(slot, base, bonus, affix);
 	if (bonus) attributes.bonus = bonus;
 	if (affix) Object.assign(attributes, affix.attributes);
-	// A table field, not an item attribute: it is already inside `ac` above, and
-	// leaving it here invites the DM to add it a second time.
+	// A table field, not an item attribute: it is already inside `ac`, and leaving it
+	// here invites the DM to add it a second time.
 	delete attributes.ac_bonus;
 
-	// An affix that is a proper noun *is* the name — "Javelin the Sunderer" and
-	// "Dagger Whisperfang" both came out of real rolls. The base survives in
-	// `baseName` so the UI and the narrator still know what kind of thing it is.
-	const bonusLabel = bonus ? `+${bonus} ` : "";
-	const name = affix?.naming === "proper"
-		? `${bonusLabel}${affix.label}`
-		: `${bonusLabel}${base.name}${affix ? ` ${affix.label}` : ""}`;
-
 	return {
-		name: name.trim(),
+		name: nameFor(base, bonus, affix),
 		rarity: RARITIES[tier],
 		slot,
 		baseName: base.name,
