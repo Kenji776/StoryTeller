@@ -24,6 +24,54 @@ function compareInitiative(a, b) {
 	return a.name.localeCompare(b.name);
 }
 
+/**
+ * Actions that are an attack and so call for an attack roll.
+ *
+ * @description "fire" is deliberately not matched on its own: a player lighting a
+ *   campfire or casting a fire bolt is not making a bow attack. It counts only when
+ *   followed by something one actually fires, or by "at".
+ */
+const ATTACK_ACTION = new RegExp([
+	String.raw`\b(?:attacks?|strikes?|shoots?|swings?|stabs?|slashes|lunges?|hacks?)\b`,
+	String.raw`\bfires?\s+(?:at\b|(?:an?\s+|my\s+|the\s+)?(?:arrow|bolt|shot|round|bow|crossbow)\b)`,
+	String.raw`\blooses?\s+(?:an?\s+)?(?:arrow|bolt)\b`,
+].join("|"), "i");
+
+/** Melee weapons that let a character swap strength for dexterity. */
+const FINESSE_WEAPONS = /\b(dagger|shortsword|rapier|scimitar|whip|sickle)\b/i;
+
+/** Verbs and implements that mean the attack is made at range. */
+const RANGED_ACTION = /\b(shoot|shoots|shooting|fire|fires|firing|loose|bow|arrow|crossbow|sling|dart|javelin)\b/i;
+
+/**
+ * Chooses the ability score an attack is made with.
+ *
+ * @description The stat depends on the character and their weapon, not on the verb
+ *   the player typed. Attacks used to be hardcoded to strength, which made a Rogue's
+ *   Sneak Attack — matched on the literal word "Attack" — roll her worst stat, and
+ *   made every bow shot a strength check.
+ *
+ *   Sneak Attack is named explicitly because it is a Rogue's signature and is always
+ *   dexterity-based, regardless of what they happen to be holding.
+ * @param {object} sheet - The character sheet.
+ * @param {string} lower - The action text, lowercased.
+ * @returns {string} `"str"` or `"dex"`.
+ */
+function attackStat(sheet, lower) {
+	if (/sneak\s*attack/.test(lower)) return "dex";
+	if (RANGED_ACTION.test(lower)) return "dex";
+
+	const weapon = sheet?.weapon;
+	if (weapon?.range && String(weapon.range).toLowerCase() === "ranged") return "dex";
+
+	// A finesse weapon may use either, so use whichever the character is better at.
+	if (weapon?.name && FINESSE_WEAPONS.test(weapon.name)) {
+		return mod(Number(sheet?.stats?.dex) || 10) > mod(Number(sheet?.stats?.str) || 10) ? "dex" : "str";
+	}
+
+	return "str";
+}
+
 export const combatMethods = {
 	// ==== Phase / Turn ====
 	/**
@@ -190,9 +238,15 @@ export const combatMethods = {
 		let kind = null,
 			statKey = null;
 
-		if (/(attack|strike|shoot|swing)/.test(lower)) {
+		if (ATTACK_ACTION.test(lower)) {
 			kind = "attack";
-			statKey = "str";
+			// Which stat an attack uses depends on the character and the weapon, not
+			// on the verb. Hardcoding "str" here made a Rogue's Sneak Attack roll her
+			// worst stat — it matched this branch on the literal word "Attack" before
+			// the stealth branch could be reached — and made every bow shot a strength
+			// check. Note this stays an attack: reordering the chain so "sneak" won
+			// would have turned it into a stealth roll against the wrong DC.
+			statKey = attackStat(sheet, lower);
 		} else if (/(sneak|stealth|hide)/.test(lower)) {
 			kind = "stealth";
 			statKey = "dex";

@@ -470,3 +470,97 @@ test("a malformed update yields no kills rather than throwing", () => {
 	}
 	assert.deepEqual(store.updateEnemies("nope", [{ name: "Goblin", hp: 0 }]), []);
 });
+
+// ── Which stat an attack rolls ───────────────────────────────────────────────
+//
+// The keyword chain tested /attack|strike|shoot|swing/ before /sneak|stealth|hide/
+// and hardcoded str for the whole branch. So a Rogue's Sneak Attack matched the
+// attack branch on the literal word "Attack" and rolled STR — her worst stat — while
+// plain sneaking on the same character correctly used DEX. Every ranged attack rolled
+// STR too.
+
+/**
+ * @description Builds a roll store for a character with a chosen weapon.
+ * @param {object} stats - Ability scores.
+ * @param {object|null} weapon - The equipped weapon.
+ * @returns {{store: object, lobbyId: string}} The host.
+ */
+function makeArmedStore(stats, weapon) {
+	const { store, lobbyId } = makeRollStore(stats);
+	store.index[lobbyId].players.Ayla.weapon = weapon;
+	return { store, lobbyId };
+}
+
+const ROGUE = { str: 10, dex: 16 };
+const FINESSE = { name: "Shortsword", damage: "1d6", damageType: "piercing", range: "melee" };
+
+test("a rogue's Sneak Attack rolls dexterity, not strength", () => {
+	const { store, lobbyId } = makeArmedStore(ROGUE, FINESSE);
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I use Sneak Attack on the distracted guard.");
+	assert.equal(payload.detail.stat, "dex");
+	assert.equal(payload.detail.bonus, 3);
+});
+
+test("a sneak attack is still an attack, not a stealth check", () => {
+	// Fixing the stat by reordering the chain would have turned it into a stealth
+	// roll against the wrong DC. It is an attack made with dexterity.
+	const { store, lobbyId } = makeArmedStore(ROGUE, FINESSE);
+	assert.match(store.autoRollIfNeeded(lobbyId, "s1", "I use Sneak Attack on the guard.").kind, /ATTACK/i);
+});
+
+test("a ranged attack rolls dexterity whatever the character's strength", () => {
+	const { store, lobbyId } = makeArmedStore({ str: 18, dex: 14 }, { name: "Longbow", range: "ranged" });
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I shoot the goblin.");
+	assert.equal(payload.detail.stat, "dex");
+});
+
+test("shooting is a dexterity attack even with no weapon recorded", () => {
+	const { store, lobbyId } = makeArmedStore({ str: 18, dex: 14 }, null);
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I fire an arrow at it.").detail.stat, "dex");
+});
+
+test("a finesse weapon uses whichever of strength or dexterity is better", () => {
+	const strong = makeArmedStore({ str: 18, dex: 10 }, FINESSE);
+	assert.equal(strong.store.autoRollIfNeeded(strong.lobbyId, "s1", "I attack the goblin.").detail.stat, "str");
+
+	const quick = makeArmedStore({ str: 10, dex: 18 }, FINESSE);
+	assert.equal(quick.store.autoRollIfNeeded(quick.lobbyId, "s1", "I attack the goblin.").detail.stat, "dex");
+});
+
+test("a heavy melee weapon still rolls strength", () => {
+	const { store, lobbyId } = makeArmedStore({ str: 10, dex: 18 }, { name: "Greataxe", range: "melee" });
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I swing at the goblin.").detail.stat, "str");
+});
+
+test("an unarmed character attacking rolls strength", () => {
+	const { store, lobbyId } = makeArmedStore({ str: 14, dex: 16 }, null);
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I attack the goblin with my fists.").detail.stat, "str");
+});
+
+test("plain sneaking is still a dexterity stealth check", () => {
+	const { store, lobbyId } = makeArmedStore(ROGUE, FINESSE);
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I sneak past the guard.");
+	assert.equal(payload.detail.stat, "dex");
+	assert.match(payload.kind, /STEALTH/i);
+});
+
+test("the roll label names the stat actually used", () => {
+	const { store, lobbyId } = makeArmedStore(ROGUE, FINESSE);
+	assert.match(store.autoRollIfNeeded(lobbyId, "s1", "I use Sneak Attack.").kind, /dex\+3/);
+});
+
+test("lighting a fire is not an attack", () => {
+	// "fire" is matched only when followed by something you fire, or by "at".
+	// Matching it bare would have turned every campfire and fire bolt into an
+	// attack roll against a target that does not exist.
+	const { store, lobbyId } = makeArmedStore({ str: 12, dex: 12 }, null);
+	for (const text of ["I light a fire in the hearth.", "I set fire to the rope."]) {
+		const payload = store.autoRollIfNeeded(lobbyId, "s1", text);
+		assert.ok(payload === null || payload.kind.toLowerCase().includes("attack") === false, `${text} -> ${payload?.kind}`);
+	}
+});
+
+test("firing at a target is an attack", () => {
+	const { store, lobbyId } = makeArmedStore({ str: 18, dex: 14 }, null);
+	assert.match(store.autoRollIfNeeded(lobbyId, "s1", "I fire at the goblin.").kind, /ATTACK/i);
+});
