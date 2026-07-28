@@ -1,0 +1,237 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { createIllustrationRunner } from "./illustrationRunner.js";
+
+const LOBBY = "lobby-1";
+const T0 = Date.UTC(2026, 6, 28, 12, 0, 0);
+const MINUTE = 60_000;
+const PNG = "iVBORw0KGgo=";
+
+const PARTY = [
+	{ name: "Brannor Ironfoot", imageCharacterId: "chr_1" },
+	{ name: "Kaeda Ashfall", imageCharacterId: "chr_2" },
+];
+
+/**
+ * Assembles a runner over fakes.
+ *
+ * @param {object} [options] - Overrides.
+ * @returns {object} The runner and everything it touched.
+ */
+function makeRunner({ mode = "key-moments", lastAt = null, scene, image, now = () => T0 } = {}) {
+	const emitted = [];
+	const saved = [];
+	const lobby = { illustrationMode: mode, lastIllustrationAt: lastAt };
+
+	const runner = createIllustrationRunner({
+		gateway: {
+			generateCharacterScene: scene ?? (async () => ({ b64: PNG, model: "krea2" })),
+			generateImage: image ?? (async () => ({ b64: PNG, model: "krea2" })),
+		},
+		partyOf: () => PARTY,
+		settingsOf: () => lobby,
+		markIllustrated: (id, at) => { lobby.lastIllustrationAt = at; },
+		saveImage: async (name, b64) => { saved.push({ name, b64 }); return `/character-images/${name}.png`; },
+		emit: (lobbyId, event, payload) => emitted.push({ lobbyId, event, payload }),
+		now,
+		log: () => {},
+	});
+
+	return { runner, emitted, saved, lobby };
+}
+
+/** A DM reply asking for the party to be drawn. */
+const REPLY = { illustrate: { moment: "raising the warhammer over the slain troll", characters: ["Brannor Ironfoot"], mood: "triumphant" } };
+
+// ── Deciding not to draw ─────────────────────────────────────────────────────
+
+test("a reply with no directive draws nothing and emits nothing", async () => {
+	const { runner, emitted } = makeRunner();
+	assert.equal(await runner.consider(LOBBY, { text: "You open the door." }), null);
+	assert.deepEqual(emitted, []);
+});
+
+test("illustrations switched off draw nothing", async () => {
+	const { runner, emitted } = makeRunner({ mode: "off" });
+	assert.equal(await runner.consider(LOBBY, REPLY), null);
+	assert.deepEqual(emitted, []);
+});
+
+test("a directive too soon after the last one draws nothing", async () => {
+	const { runner, emitted } = makeRunner({ lastAt: T0 - MINUTE });
+	assert.equal(await runner.consider(LOBBY, REPLY), null);
+	assert.deepEqual(emitted, [], "a refused illustration should be silent, not a visible failure");
+});
+
+// ── The placeholder comes first ──────────────────────────────────────────────
+
+test("a placeholder is announced before anything is generated", async () => {
+	let generatedAt = -1;
+	let order = 0;
+	const { runner, emitted } = makeRunner({
+		scene: async () => { generatedAt = order++; return { b64: PNG }; },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+
+	const pendingAt = emitted.findIndex((e) => e.event === "illustration:pending");
+	assert.notEqual(pendingAt, -1, "no placeholder was announced");
+	assert.equal(pendingAt, 0, "the placeholder must arrive before the wait, not after it");
+	assert.ok(generatedAt >= 0);
+});
+
+test("the placeholder carries an id the finished image is matched on", async () => {
+	const { runner, emitted } = makeRunner();
+	await runner.consider(LOBBY, REPLY);
+
+	const pending = emitted.find((e) => e.event === "illustration:pending");
+	const ready = emitted.find((e) => e.event === "illustration:ready");
+
+	assert.ok(pending.payload.id);
+	assert.equal(ready.payload.id, pending.payload.id);
+});
+
+test("the placeholder says how many images are coming, so the space can be reserved", async () => {
+	const { runner, emitted } = makeRunner();
+	await runner.consider(LOBBY, { illustrate: { moment: "back to back", characters: ["Brannor Ironfoot", "Kaeda Ashfall"] } });
+
+	assert.equal(emitted.find((e) => e.event === "illustration:pending").payload.expected, 2);
+});
+
+test("the placeholder carries a caption, so it is not a blank grey box", async () => {
+	const { runner, emitted } = makeRunner();
+	await runner.consider(LOBBY, REPLY);
+
+	assert.match(emitted.find((e) => e.event === "illustration:pending").payload.caption, /warhammer|troll/i);
+});
+
+// ── Drawing ──────────────────────────────────────────────────────────────────
+
+test("a character directive poses each named character from their likeness", async () => {
+	const posed = [];
+	const { runner } = makeRunner({
+		scene: async ({ characterId }) => { posed.push(characterId); return { b64: PNG }; },
+	});
+
+	await runner.consider(LOBBY, { illustrate: { moment: "back to back", characters: ["Brannor Ironfoot", "Kaeda Ashfall"] } });
+	assert.deepEqual(posed, ["chr_1", "chr_2"]);
+});
+
+test("a scene directive uses plain generation", async () => {
+	let prompt = null;
+	const { runner } = makeRunner({ image: async (req) => { prompt = req.prompt; return { b64: PNG }; } });
+
+	await runner.consider(LOBBY, { illustrate: { subject: "a ruined watchtower at dusk" } });
+	assert.match(prompt, /ruined watchtower/);
+});
+
+test("finished images are saved and announced with their urls", async () => {
+	const { runner, emitted, saved } = makeRunner();
+	await runner.consider(LOBBY, REPLY);
+
+	assert.equal(saved.length, 1);
+	const ready = emitted.find((e) => e.event === "illustration:ready");
+	assert.equal(ready.payload.images.length, 1);
+	assert.match(ready.payload.images[0].url, /^\/character-images\//);
+});
+
+test("drawing marks the lobby, so the cooldown starts from now", async () => {
+	const { runner, lobby } = makeRunner();
+	await runner.consider(LOBBY, REPLY);
+	assert.equal(lobby.lastIllustrationAt, T0);
+});
+
+test("the cooldown is marked before the wait, so two turns cannot both slip through", async () => {
+	// The generation takes seconds. If the mark happened afterwards, a second turn
+	// arriving in the meantime would pass the gate and draw again.
+	let markedDuringGeneration = null;
+	const { runner, lobby } = makeRunner({
+		scene: async () => { markedDuringGeneration = lobby.lastIllustrationAt; return { b64: PNG }; },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	assert.equal(markedDuringGeneration, T0);
+});
+
+// ── When it goes wrong ───────────────────────────────────────────────────────
+
+test("a failure is announced, so the placeholder never spins forever", async () => {
+	const { runner, emitted } = makeRunner({ scene: async () => { throw new Error("backend down"); } });
+
+	await runner.consider(LOBBY, REPLY);
+
+	const failed = emitted.find((e) => e.event === "illustration:failed");
+	assert.ok(failed, "a failed illustration left its placeholder with nothing to resolve it");
+	assert.equal(failed.payload.id, emitted[0].payload.id);
+});
+
+test("one character failing still delivers the others", async () => {
+	const { runner, emitted } = makeRunner({
+		scene: async ({ characterId }) => {
+			if (characterId === "chr_1") throw new Error("nope");
+			return { b64: PNG };
+		},
+	});
+
+	await runner.consider(LOBBY, { illustrate: { moment: "back to back", characters: ["Brannor Ironfoot", "Kaeda Ashfall"] } });
+
+	const ready = emitted.find((e) => e.event === "illustration:ready");
+	assert.equal(ready.payload.images.length, 1);
+	assert.equal(ready.payload.images[0].name, "Kaeda Ashfall");
+});
+
+test("a failure message never carries key material", async () => {
+	const { runner, emitted } = makeRunner({
+		scene: async () => { throw new Error("bad key sk-abc123def456ghi"); },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	assert.ok(!JSON.stringify(emitted).includes("sk-abc123def456ghi"));
+});
+
+test("a failure does not block the next illustration once the cooldown passes", async () => {
+	let clock = T0;
+	const { runner, emitted } = makeRunner({
+		scene: async () => { throw new Error("down"); },
+		now: () => clock,
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	clock = T0 + 30 * MINUTE;
+	await runner.consider(LOBBY, REPLY);
+
+	assert.equal(emitted.filter((e) => e.event === "illustration:pending").length, 2);
+});
+
+// ── It must never break the turn ─────────────────────────────────────────────
+
+test("a runner whose gateway is missing entirely does not throw", async () => {
+	const runner = createIllustrationRunner({
+		gateway: {},
+		partyOf: () => PARTY,
+		settingsOf: () => ({ illustrationMode: "key-moments" }),
+		markIllustrated: () => {},
+		saveImage: async () => "/x.png",
+		emit: () => {},
+		now: () => T0,
+		log: () => {},
+	});
+
+	await assert.doesNotReject(() => runner.consider(LOBBY, REPLY));
+});
+
+test("a save that fails does not throw into the turn", async () => {
+	const runner = createIllustrationRunner({
+		gateway: { generateCharacterScene: async () => ({ b64: PNG }) },
+		partyOf: () => PARTY,
+		settingsOf: () => ({ illustrationMode: "key-moments" }),
+		markIllustrated: () => {},
+		saveImage: async () => { throw new Error("EACCES"); },
+		emit: () => {},
+		now: () => T0,
+		log: () => {},
+	});
+
+	await assert.doesNotReject(() => runner.consider(LOBBY, REPLY));
+});

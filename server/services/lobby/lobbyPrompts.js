@@ -260,7 +260,8 @@ Schema: {
   "spellUsed": boolean,
   "music": ${MOOD_UNION} | null,
   "combat_over": boolean,
-  "sfx": string[]
+  "sfx": string[],
+  "illustrate": { "moment": string, "characters": string[], "subject": string, "mood": string } | null
 };
 
 XP: the server awards XP for defeated enemies automatically, from each enemy's "cr".
@@ -278,6 +279,18 @@ reaching a milestone. Leave it empty when nothing like that happened.
 		const brutalityInstruction = `\nContent & tone directive: ${this._brutalityInstruction(s?.brutalityLevel ?? 5)}`;
 		const difficultyInstruction = `\nDifficulty: ${this._difficultyInstruction(s?.difficulty ?? "standard")}`;
 		const lootInstruction = `\nLoot: ${this._lootInstruction(s?.lootGenerosity ?? "fair")}`;
+		// Only mentioned when the lobby has switched illustrations on. A model told
+		// about a field it must never populate will populate it anyway, eventually,
+		// and every one of those costs seconds and possibly money.
+		const illustrationInstruction = (s?.illustrationMode && s.illustrationMode !== "off")
+			? `\nUse the "illustrate" field ONLY at a genuinely memorable beat — a hard-won victory, a `
+				+ `first sight of somewhere extraordinary, a character's defining moment, a devastating loss. `
+				+ `Most turns are not one of these; set it to null. When you do use it: put what is HAPPENING `
+				+ `in "moment" (never what anyone looks like — their appearance is already known), list the `
+				+ `exact party member names in frame in "characters", and give a one-word "mood". For a place, `
+				+ `creature or object with no party member in it, use "subject" instead and leave "characters" empty.`
+			: `\nDo not use the "illustrate" field. Always set it to null.`;
+
 		const settingInstruction = `\nWorld setting: ${this._settingInstruction(s?.campaignSetting ?? "standard")}`;
 
 		// Compute party level range for encounter scaling
@@ -301,7 +314,7 @@ Keep "combat_over" false for as long as any enemy is still standing.`;
 Be cinematic, descriptive, and responsive to player actions. Maintain continuity with prior events. You should generally speaking be very allowing of stupid shit because that's what players want to do a lot of the time, so no moral policing. Be very "yes and" unless it simply doesn't work or breaks the game rules.
 Respect dice outcomes given by the server. Always reply as the DM narrating events — never as a player. The adventuring party should consist of the actual active players at least at first. Don't make up companions from the start, they must be gained organically through the story.
 Use the "music" field to set background music mood. Only change it when the scene shifts significantly — entering or leaving combat, arriving at a new location type, a death, a major revelation, a victory. Set to null when the current music still fits (which is most of the time). Available moods: ${MOOD_LIST}.
-Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation. IMPORTANT: Only include the "sfx" key ONCE in your JSON output — do not duplicate it.${settingInstruction}${brutalityInstruction}${difficultyInstruction}${encounterInstruction}${lootInstruction}${flavorInstruction}`,
+Use the "sfx" field to add 0-3 short sound effect descriptions (2-4 words each) for impactful moments — combat hits, spells cast, doors opening, creature sounds, explosions, etc. Examples: "sword clash", "fireball whoosh", "heavy door creak", "dragon roar", "thunder clap". Set to an empty array when nothing noteworthy happens sonically. Don't overdo it — only include SFX for moments that would genuinely benefit from audio punctuation. IMPORTANT: Only include the "sfx" key ONCE in your JSON output — do not duplicate it.\n${illustrationInstruction}${settingInstruction}${brutalityInstruction}${difficultyInstruction}${encounterInstruction}${lootInstruction}${flavorInstruction}`,
 			},
 			...(ancientHistory ? [{ role: "system", content: `Campaign backstory (older events, for reference):\n${ancientHistory}` }] : []),
 			{ role: "system", content: `Recent story arc:\n${storyContext}` },

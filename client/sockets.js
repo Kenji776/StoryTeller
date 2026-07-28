@@ -494,6 +494,81 @@ function registerSocketEvents() {
 		if (me.name === player) showToast(`Your turn was skipped — ${reason}.`, "warning", 6000);
 	});
 
+	// ── Illustrations ────────────────────────────────────────────────────────
+	// The placeholder arrives first and is replaced in place when the image is
+	// ready. Generation takes seconds, so the alternative is either a story beat
+	// that stalls or a picture that appears from nowhere long after the moment.
+
+	socket.on("illustration:pending", ({ id, caption, expected }) => {
+		const log = document.getElementById("storyLog");
+		if (!log || !id) return;
+
+		const frame = document.createElement("div");
+		frame.className = "illustration is-pending";
+		frame.id = `illustration-${id}`;
+
+		const slots = document.createElement("div");
+		slots.className = "illustration-slots";
+		for (let i = 0; i < Math.max(1, Number(expected) || 1); i += 1) {
+			const slot = document.createElement("div");
+			slot.className = "illustration-slot";
+			slots.appendChild(slot);
+		}
+		frame.appendChild(slots);
+
+		const label = document.createElement("div");
+		label.className = "illustration-caption";
+		label.textContent = caption ? `Illustrating: ${caption}` : "Illustrating this moment\u2026";
+		frame.appendChild(label);
+
+		log.appendChild(frame);
+		log.scrollTop = log.scrollHeight;
+	});
+
+	socket.on("illustration:ready", ({ id, caption, images }) => {
+		const frame = document.getElementById(`illustration-${id}`);
+		if (!frame) return;
+
+		frame.className = "illustration is-ready";
+		frame.replaceChildren();
+
+		const slots = document.createElement("div");
+		slots.className = "illustration-slots";
+		for (const image of images ?? []) {
+			const img = document.createElement("img");
+			img.className = "illustration-image";
+			img.src = image.url;
+			img.alt = image.name ? `${image.name} \u2014 ${caption ?? ""}` : (caption ?? "Scene illustration");
+			img.loading = "lazy";
+			slots.appendChild(img);
+		}
+		frame.appendChild(slots);
+
+		if (caption) {
+			const label = document.createElement("div");
+			label.className = "illustration-caption";
+			label.textContent = caption;
+			frame.appendChild(label);
+		}
+
+		const log = document.getElementById("storyLog");
+		if (log) log.scrollTop = log.scrollHeight;
+	});
+
+	socket.on("illustration:failed", ({ id, error }) => {
+		const frame = document.getElementById(`illustration-${id}`);
+		if (!frame) return;
+
+		// Resolved to something, always. A placeholder left spinning is worse than
+		// an honest line saying it did not work.
+		frame.className = "illustration is-failed";
+		frame.replaceChildren();
+		const label = document.createElement("div");
+		label.className = "illustration-caption";
+		label.textContent = error ? `The illustration could not be drawn: ${error}` : "The illustration could not be drawn.";
+		frame.appendChild(label);
+	});
+
 	// The server's verdict on whether this lobby can start. It arrives unprompted
 	// when the host supplies a key, and on request when the settings window opens.
 	socket.on("ai:state", (state) => {

@@ -6,6 +6,7 @@
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import { getDefaultLLMSettings } from "../llm/defaults.js";
 import { TTS_PROVIDERS } from "../tts/registry.js";
+import { ILLUSTRATION_MODES } from "../images/illustration.js";
 
 /** The registry is the single source of truth for which provider ids are legal. */
 const TTS_PROVIDER_IDS = TTS_PROVIDERS.map((p) => p.id);
@@ -408,6 +409,36 @@ export const settingsMethods = {
 		const s = this.index[lobbyId];
 		if (!s) return;
 		s.adventureName = name;
+		this.persist(lobbyId);
+	},
+
+	/**
+	 * Sets how freely the Dungeon Master may call for illustrations.
+	 *
+	 * @description Off by default. An image costs seconds of wall clock and, on a
+	 *   paid provider, money — so a game only draws them once someone has asked for
+	 *   it, rather than the first session surprising a host with a bill.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @param {"off"|"key-moments"|"generous"} value - How often to illustrate.
+	 * @returns {void}
+	 */
+	setIllustrationMode(lobbyId, value) {
+		const s = this.index[lobbyId];
+		if (!s) return;
+		s.illustrationMode = ILLUSTRATION_MODES.includes(value) ? value : "off";
+		this.persist(lobbyId);
+	},
+
+	/**
+	 * @description Records when this lobby last drew something, for the cooldown.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @param {number} at - Epoch milliseconds.
+	 * @returns {void}
+	 */
+	markIllustrated(lobbyId, at) {
+		const s = this.index[lobbyId];
+		if (!s) return;
+		s.lastIllustrationAt = at;
 		this.persist(lobbyId);
 	},
 

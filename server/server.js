@@ -16,6 +16,7 @@ import dotenv from "dotenv";
 import { Server } from "socket.io";
 import { LobbyStore } from "./services/lobbyStore.js";
 import { createLLMGateway } from "./services/llmGateway.js";
+import { createIllustrationRunner } from "./services/images/illustrationRunner.js";
 import { roll } from "./helpers/dice.js";
 import fetch from "node-fetch";
 import { randomUUID, generateKeyPairSync, createSign, createVerify, createPublicKey } from "crypto";
@@ -292,6 +293,28 @@ const { getLLMResponse, generateImage, ensureCharacterImage, generateCharacterSc
 			});
 		}
 	},
+});
+
+/**
+ * Draws the pictures the Dungeon Master asks for.
+ *
+ * Deliberately never awaited by a turn: generation takes seconds, and a story
+ * beat that stalls for twenty of them is worse than one with no picture. The
+ * placeholder goes out first and the finished image follows. See
+ * docs/modules/images.md.
+ */
+const illustrations = createIllustrationRunner({
+	gateway: { generateCharacterScene, generateImage },
+	partyOf: (lobbyId) => Object.values(store.index[lobbyId]?.players ?? {}),
+	settingsOf: (lobbyId) => store.index[lobbyId] ?? {},
+	markIllustrated: (lobbyId, at) => store.markIllustrated(lobbyId, at),
+	saveImage: async (name, b64) => {
+		const filename = `${name}.png`;
+		fs.writeFileSync(path.join(IMAGES_DIR, filename), Buffer.from(b64, "base64"));
+		return `/character-images/${filename}`;
+	},
+	emit: (lobbyId, event, payload) => busIo.to(room(lobbyId)).emit(event, payload),
+	log,
 });
 
 /**
@@ -613,7 +636,7 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, abilitySlotsBase, llmProvider, llmModel }) => {
+	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, abilitySlotsBase, illustrationMode, llmProvider, llmModel }) => {
 		if (!store.isHost(lobbyId, socket.id)) return;
 		store.setTimerSettings(lobbyId, timerEnabled, timerMinutes, maxMissedTurns);
 		// Provider first: switching engines swaps in that engine's remembered voice,
@@ -627,6 +650,7 @@ io.on("connection", (socket) => {
 		if (campaignSetting !== undefined) store.setCampaignSetting(lobbyId, campaignSetting);
 		if (startingLevel  !== undefined) store.setStartingLevel(lobbyId, startingLevel);
 		if (abilitySlotsBase !== undefined) store.setAbilitySlotsBase(lobbyId, abilitySlotsBase);
+		if (illustrationMode !== undefined) store.setIllustrationMode(lobbyId, illustrationMode);
 		if (llmProvider || llmModel) store.setLLMSettings(lobbyId, llmProvider, llmModel);
 		sendState(lobbyId);
 		broadcastLobbies();
@@ -1334,6 +1358,10 @@ io.on("connection", (socket) => {
 						if (sfxFiles.length) busIo.to(room(lobbyId)).emit("sfx:play", { effects: sfxFiles });
 					}).catch(err => log("⚠️ SFX resolve error:", err.message));
 				}
+				// Not awaited: the turn continues while the picture is drawn, and the
+				// runner announces a placeholder immediately so the gap is visible
+				// rather than mysterious. It never rejects.
+				illustrations.consider(lobbyId, dmObj);
 			} else {
 				console.warn("⚠️ LLM reply not structured or parse failed");
 				console.log("Raw reply text:", replyText);
