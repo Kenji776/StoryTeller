@@ -562,6 +562,24 @@
 	     disagreeing with the server. -->
 	<div id="aiServices"></div>
 
+	<hr class="divider" />
+
+	<div class="option-row" id="illustrationRow">
+		<div class="option-label">
+			<span>Illustrations</span>
+			<small>Let the Dungeon Master draw memorable moments</small>
+		</div>
+		<div class="option-control" style="flex:1;min-width:0;">
+			<select id="illustrationMode" data-sound="Page Turn" style="flex:1;min-width:0;">
+				<option value="off">Off</option>
+				<option value="key-moments">Key moments only</option>
+				<option value="generous">Often</option>
+				<option value="every-scene">Whenever it wants</option>
+			</select>
+		</div>
+	</div>
+	<p class="ai-note" id="illustrationHint"></p>
+
 	<p class="ai-note" id="aiConsentTerms"></p>
 </div>
 
@@ -589,6 +607,7 @@ const elTTSHint        = document.getElementById("ttsProviderHint");
 const elLocalTtsRow    = document.getElementById("localTtsRow");
 const elLocalTtsUrl    = document.getElementById("localTtsUrl");
 const elLocalTtsStatus = document.getElementById("localTtsStatus");
+const elIllustrationMode = document.getElementById("illustrationMode");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
 const elStartingLevel      = document.getElementById("startingLevelSlider");
@@ -742,6 +761,7 @@ function emitSettings() {
 		campaignSetting: selectedSetting?.id || "standard",
 		llmProvider:     selectedProvider,
 		llmModel:        aiSelection.model,
+		illustrationMode: elIllustrationMode.value,
 	});
 }
 
@@ -804,6 +824,9 @@ function applyState(state) {
 	const sLevel = state.startingLevel ?? 1;
 	elStartingLevel.value = sLevel;
 	updateLevelFlavor();
+
+	elIllustrationMode.value = state.illustrationMode || "off";
+	describeIllustrationMode();
 
 	// The lobby's stored choice seeds the panel; the panel owns it from then on.
 	aiSelection.providerId = state.llmProvider || aiSelection.providerId;
@@ -1464,6 +1487,10 @@ function renderAiPanel() {
 
 	const terms = document.getElementById("aiConsentTerms");
 	if (terms) terms.textContent = aiConsentTerms ? "If you supply a key: " + aiConsentTerms : "";
+
+	// The illustration hint depends on whether an image service exists, which only
+	// this state knows.
+	describeIllustrationMode();
 }
 
 /**
@@ -1496,6 +1523,39 @@ async function initAiPanel() {
 	requestAiState();
 	renderAiPanel();
 }
+
+/** What each illustration setting actually costs, in the host's terms. */
+const ILLUSTRATION_HINTS = {
+	off: "No pictures. The story stays in text.",
+	"key-moments": "A picture at a genuinely big beat, at most one every ten minutes.",
+	generous: "A picture at most every few minutes.",
+	"every-scene": "Whenever the Dungeon Master thinks a moment deserves one. Nothing waits for a picture, and only one is drawn at a time.",
+};
+
+/**
+ * @description Explains the chosen setting, and warns when nothing can draw.
+ * @returns {void}
+ */
+function describeIllustrationMode() {
+	const hint = document.getElementById("illustrationHint");
+	if (!hint) return;
+
+	const mode = elIllustrationMode.value;
+	const imageReady = (aiState?.services ?? []).some((s) => s.capability === "image" && s.state !== "unavailable" && s.state !== "needs-key");
+
+	if (mode !== "off" && !imageReady) {
+		hint.textContent = "No image service is available for this game, so nothing will be drawn.";
+		hint.style.color = "#e8c88a";
+		return;
+	}
+	hint.textContent = ILLUSTRATION_HINTS[mode] ?? "";
+	hint.style.color = "";
+}
+
+elIllustrationMode.addEventListener("change", () => {
+	describeIllustrationMode();
+	emitSettings();
+});
 
 initAiPanel();
 boot();

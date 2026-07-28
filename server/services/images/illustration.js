@@ -21,12 +21,22 @@
  */
 
 /** How freely the DM may call for pictures. */
-export const ILLUSTRATION_MODES = Object.freeze(["off", "key-moments", "generous"]);
+export const ILLUSTRATION_MODES = Object.freeze(["off", "key-moments", "generous", "every-scene"]);
 
-/** Minimum gap between illustrations, per mode. */
+/**
+ * Minimum gap between illustrations, per mode.
+ *
+ * `every-scene` has none. Nothing in the game waits on an illustration, so there
+ * is no pacing reason to refuse one — the only real constraint is that the image
+ * server draws one at a time, and that is a backlog question rather than a clock
+ * question. `illustrationRunner` answers it by refusing to start a second
+ * illustration for a lobby that is still drawing its first, which is a truer
+ * limit than any interval guessed here.
+ */
 const COOLDOWN_MS = Object.freeze({
 	"key-moments": 10 * 60 * 1000,
 	generous: 3 * 60 * 1000,
+	"every-scene": 0,
 });
 
 /**

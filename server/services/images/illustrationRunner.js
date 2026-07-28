@@ -60,6 +60,17 @@ export function createIllustrationRunner({
 	log = () => {},
 }) {
 	/**
+	 * Lobbies with an illustration still being drawn.
+	 *
+	 * The image server works on one request at a time. With no time cooldown, a
+	 * fast sequence of turns would queue images faster than they can be drawn, and
+	 * the last would arrive minutes after the moment it illustrates. Refusing while
+	 * one is in flight is a truer limit than any interval, because it measures what
+	 * is actually happening rather than guessing at it.
+	 */
+	const drawing = new Set();
+
+	/**
 	 * @description Draws one character from their stored likeness.
 	 * @param {string} lobbyId - The lobby.
 	 * @param {object} directive - The parsed directive.
@@ -128,6 +139,11 @@ export function createIllustrationRunner({
 				return null;
 			}
 
+			if (drawing.has(lobbyId)) {
+				log(`🖼️ Illustration skipped for ${lobbyId}: one is still being drawn`);
+				return null;
+			}
+
 			const id = `ill_${now()}_${Math.round(now() % 100000)}`;
 			const caption = directive.kind === "characters" ? directive.moment : directive.prompt;
 			const targets = directive.kind === "characters" ? directive.characters : [null];
@@ -140,6 +156,7 @@ export function createIllustrationRunner({
 				log(`⚠️ Could not record the illustration cooldown: ${safeMessage(err)}`);
 			}
 
+			drawing.add(lobbyId);
 			emit(lobbyId, "illustration:pending", { id, caption, expected: targets.length });
 
 			try {
@@ -168,6 +185,10 @@ export function createIllustrationRunner({
 				// outcome worth guarding against absolutely.
 				emit(lobbyId, "illustration:failed", { id, error: safeMessage(err) });
 				return { id, caption, drawn: 0 };
+			} finally {
+				// In a finally, or one failure would block the lobby from ever
+				// illustrating again.
+				drawing.delete(lobbyId);
 			}
 		},
 	};

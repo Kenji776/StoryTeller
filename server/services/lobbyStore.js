@@ -140,6 +140,10 @@ export class LobbyStore {
 			campaignSetting: "standard",
 			startingLevel: 1,
 			abilitySlotsBase: 1,
+			// Off until a host asks for it: an image costs seconds and, on a paid
+			// provider, money, and a first session should not surprise anyone.
+			illustrationMode: "off",
+			lastIllustrationAt: null,
 			llmProvider: getDefaultLLMSettings().provider,
 			llmModel:    getDefaultLLMSettings().model,
 		};
@@ -204,6 +208,7 @@ export class LobbyStore {
 			campaignSetting: s.campaignSetting || "standard",
 			startingLevel:   s.startingLevel   ?? 1,
 			abilitySlotsBase: s.abilitySlotsBase ?? 1,
+			illustrationMode: s.illustrationMode ?? "off",
 			llmProvider: s.llmProvider || null,
 			llmModel:    s.llmModel    || null,
 			chat: s.chat?.slice(-50) || [],

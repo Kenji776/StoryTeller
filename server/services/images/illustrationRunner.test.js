@@ -235,3 +235,68 @@ test("a save that fails does not throw into the turn", async () => {
 
 	await assert.doesNotReject(() => runner.consider(LOBBY, REPLY));
 });
+
+// ── Not queueing up a backlog ────────────────────────────────────────────────
+
+test("a lobby already drawing does not start a second illustration", async () => {
+	// The image server works on one at a time. With no time cooldown, a fast
+	// sequence of turns would otherwise queue images faster than they can be
+	// drawn, and the last would arrive minutes after the moment it illustrates.
+	let release;
+	const held = new Promise((r) => { release = r; });
+	const { runner, emitted } = makeRunner({
+		mode: "every-scene",
+		scene: async () => { await held; return { b64: PNG }; },
+	});
+
+	const first = runner.consider(LOBBY, REPLY);
+	await runner.consider(LOBBY, REPLY);
+
+	assert.equal(emitted.filter((e) => e.event === "illustration:pending").length, 1,
+		"a second illustration started while the first was still drawing");
+
+	release();
+	await first;
+});
+
+test("a lobby is free to draw again once the previous one finishes", async () => {
+	const { runner, emitted } = makeRunner({ mode: "every-scene" });
+
+	await runner.consider(LOBBY, REPLY);
+	await runner.consider(LOBBY, REPLY);
+
+	assert.equal(emitted.filter((e) => e.event === "illustration:pending").length, 2);
+});
+
+test("a lobby is freed even when its illustration failed", async () => {
+	const { runner, emitted } = makeRunner({
+		mode: "every-scene",
+		scene: async () => { throw new Error("down"); },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	await runner.consider(LOBBY, REPLY);
+
+	assert.equal(emitted.filter((e) => e.event === "illustration:pending").length, 2,
+		"a failure left the lobby permanently blocked from illustrating");
+});
+
+test("one lobby drawing does not block another", async () => {
+	let release;
+	const held = new Promise((r) => { release = r; });
+	let call = 0;
+	const { runner, emitted } = makeRunner({
+		mode: "every-scene",
+		// Only the first lobby's draw is held open. Blocking both would deadlock the
+		// test itself rather than testing anything about the lobbies.
+		scene: async () => { if (call++ === 0) await held; return { b64: PNG }; },
+	});
+
+	const first = runner.consider(LOBBY, REPLY);
+	await runner.consider("lobby-2", REPLY);
+
+	assert.equal(emitted.filter((e) => e.event === "illustration:pending").length, 2,
+		"a second lobby was blocked by the first lobby's illustration");
+	release();
+	await first;
+});

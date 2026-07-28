@@ -111,8 +111,15 @@ test("more characters than the party has are capped, since each one is a separat
 
 // ── Deciding whether to actually draw it ─────────────────────────────────────
 
-test("the modes are the three an operator can choose between", () => {
-	assert.deepEqual([...ILLUSTRATION_MODES], ["off", "key-moments", "generous"]);
+test("the modes are the four a host can choose between", () => {
+	assert.deepEqual([...ILLUSTRATION_MODES], ["off", "key-moments", "generous", "every-scene"]);
+});
+
+test("every-scene has no time cooldown at all", () => {
+	// Nothing waits on an illustration, so there is no pacing reason to refuse one.
+	// The backlog guard lives in the runner instead, where it can see what is
+	// actually still drawing.
+	assert.equal(illustrationGate({ mode: "every-scene", lastAt: T0, now: T0 + 1 }).allowed, true);
 });
 
 test("illustrations are refused outright when the mode is off", () => {
