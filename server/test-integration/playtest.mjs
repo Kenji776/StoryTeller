@@ -16,6 +16,7 @@
  */
 
 import { io } from "socket.io-client";
+import { decideAction } from "./personas.mjs";
 import fs from "fs";
 import path from "path";
 
@@ -32,7 +33,14 @@ const MAX_ACTIONS = Number(arg("actions", 6));      // hard cap on LLM turns —
 const WALL_CLOCK_MS = Number(arg("timeout", 420)) * 1000;
 const PACE_MS = Number(arg("pace", 8)) * 1000;      // gap between beats, so a spectator can read
 const HOLD_MS = Number(arg("hold", 0)) * 1000;
-const NO_ACT = argv.includes("--noact");   // observe only: nobody acts, so the turn timer must do the work      // pause after lobby creation so a spectator can attach
+const NO_ACT = argv.includes("--noact");
+// With --personas each player decides its own turn from the story so far, instead
+// of walking a fixed list. That is what produces a narrative — and with it the
+// states a script never reaches: a fight going badly, a character dropping, the
+// party calling for a rest.
+const PERSONAS_ON = argv.includes("--personas");
+const BRUTALITY = Number(arg("brutality", 5));
+const DIFFICULTY = arg("difficulty", "standard");   // observe only: nobody acts, so the turn timer must do the work      // pause after lobby creation so a spectator can attach
 const LOG_DIR = path.join(process.cwd(), "server", "logs");
 
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-");
@@ -206,6 +214,9 @@ function makePlayer(spec, index) {
 		lobbyCode: null,
 		seen: [],
 		acted: 0,
+		story: [],        // narration this player has seen, oldest first
+		capability: null, // refreshed from advisor replies
+		dead: false,
 	};
 
 	socket.onAny((event, payload, meta) => {
@@ -219,6 +230,11 @@ function makePlayer(spec, index) {
 			}
 		}
 		if (event === "turn:update" && payload) p.currentTurn = payload.current ?? null;
+		if (event === "narration" && typeof payload?.content === "string" && payload.content.trim()) {
+			// Strip the DM's markup: a persona should read prose, not tags.
+			p.story.push(payload.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+			if (p.story.length > 40) p.story.shift();
+		}
 		if (NOISY.has(event)) return;
 		const tag = meta?.seq !== undefined ? ` (seq ${meta.seq})` : "";
 		log(p.short, `<- ${event}${tag} ${brief(payload)}`);
@@ -226,6 +242,21 @@ function makePlayer(spec, index) {
 
 	socket.on("connect", () => log(p.short, `** socket connected (${socket.id})`));
 	socket.on("session:token", ({ token }) => { p.sessionToken = token; });
+	socket.on("player:death", ({ player, message }) => {
+		if (player === p.name) { p.dead = true; log(p.short, `<- DIED: ${message}`); }
+		else log(p.short, `<- death: ${player}`);
+	});
+
+	// A rest vote stalls the table until everyone answers. A real player answers.
+	socket.on("rest:vote:start", (state) => {
+		log(p.short, `<- REST VOTE started (${state?.type ?? "?"})`);
+		// The cautious ones agree to rest; the reckless one grudgingly follows the party.
+		setTimeout(() => p.socket.emit("rest:vote", { lobbyId: p.lobbyId, vote: "yes" }), 600);
+	});
+	socket.on("rest:vote:result", ({ passed, type }) => log(p.short, `<- REST VOTE ${passed ? "passed" : "failed"} (${type})`));
+
+	socket.on("xp:update", ({ player, amount, reason }) => log(p.short, `<- XP: ${player} +${amount} (${reason})`));
+
 	socket.on("advisor:reply", ({ options, capability }) => {
 		log(p.short, `<- ADVISOR: ${options.length} option(s); ${capability?.slotsUnlimited ? "unlimited" : `${capability?.slotsRemaining}/${capability?.slotsMax}`} uses left`);
 		for (const o of options.slice(0, 2)) log(p.short, `     • ${o.title} — uses ${o.uses?.kind}${o.uses?.name ? ` (${o.uses.name})` : ""}`);
@@ -388,8 +419,22 @@ async function run() {
 
 	// ── Start ──
 	// A short timer so an expiry is observable; the store clamps below one minute.
-	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3, abilitySlotsBase: Number(arg("slots", 3)) });
-	await sleep(200);
+	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3, abilitySlotsBase: Number(arg("slots", 3)),
+		brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, lootGenerosity: "fair" });
+	await sleep(400);
+
+	// Read the settings back off the snapshot. The server's settings log line echoes
+	// only some of these, so a value that never landed is otherwise invisible until
+	// the run is over and the whole game was played under the wrong rules.
+	{
+		const s = host.state ?? {};
+		const want = { brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, abilitySlotsBase: Number(arg("slots", 3)) };
+		for (const [k, v] of Object.entries(want)) {
+			const got = s[k];
+			log("RUN", `settings check: ${k} = ${JSON.stringify(got)}${got === v ? "" : `  <-- WANTED ${JSON.stringify(v)}`}`);
+		}
+	}
+
 	host.socket.emit("game:start", { lobbyId: host.lobbyId });
 	const opening = await waitForNarration(host.socket, 90000);
 	log("RUN", `OPENING NARRATION: ${brief(opening, 900)}`);
@@ -426,6 +471,14 @@ async function run() {
 
 		const actor = players.find((p) => p.name === current);
 		if (!actor) { log("RUN", `current player "${current}" is not one of ours`); break; }
+		if (actor.dead) {
+			// The server should move past a dead player on its own; give it a moment
+			// rather than submitting on their behalf.
+			log("RUN", `${actor.short} is dead — waiting for the turn to move on`);
+			lastActedTurn = current;
+			await sleep(3000);
+			continue;
+		}
 		lastActedTurn = current;
 
 		// Midway through, drop a player and bring them back. This is the failure the
@@ -458,7 +511,20 @@ async function run() {
 		}
 
 		await sleep(700);
-		const text = chooseAction(actor, actions);
+		let text;
+		if (PERSONAS_ON) {
+			// The snapshot, not the advisor's flat summary: it carries the whole sheet,
+			// so a persona knows its own abilities, items, wounds and who else is hurt.
+			text = await decideAction({
+				player: actor,
+				story: actor.story,
+				state: actor.state,
+				apiKey: process.env.OPENAI_API_KEY,
+				log,
+			});
+		} else {
+			text = chooseAction(actor, actions);
+		}
 		log("RUN", `--- turn ${actions + 1}/${MAX_ACTIONS}: ${actor.short} acts ---`);
 		log(actor.short, `-> action:submit "${text}"`);
 		actor.socket.emit("action:submit", { lobbyId: actor.lobbyId, text });

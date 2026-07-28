@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { broadcastHPUpdates, broadcastGoldUpdates, configureUpdates } from "./gameUpdates.js";
 import { createIncidentLog } from "./incidents.js";
+import { progressionMethods } from "./lobby/lobbyProgression.js";
 
 /**
  * Builds the collaborators the broadcast helpers need.
@@ -28,8 +29,12 @@ function makeDeps(opts = {}) {
 		index: { lob1: lobby },
 		persist() {},
 		findPlayerKey: (id, name) => (lobby.players[name] ? name : null),
-		applyHPChange: (id, key, delta) => { lobby.players[key].stats.hp += delta; return lobby.players[key].stats.hp; },
-		applyGoldChange: (id, key, delta) => { lobby.players[key].gold += delta; return lobby.players[key].gold; },
+		// Delegated to the real implementations rather than reimplemented as `+=`.
+		// A hand-written double drifts from the code it stands in for: this one lacked
+		// the max_hp ceiling, so it would have gone on passing after the ceiling was
+		// added and hidden any regression in it.
+		applyHPChange: (...args) => progressionMethods.applyHPChange.call(store, ...args),
+		applyGoldChange: (...args) => progressionMethods.applyGoldChange.call(store, ...args),
 		markPlayerDead() {},
 		removeFromTurnOrder() {},
 		turnInfo: () => ({ current: "Ayla", order: ["Ayla"], round: 1 }),

@@ -102,7 +102,21 @@ export const progressionMethods = {
 	// ==== HP / Gold ====
 
 	/**
-	 * Applies a positive or negative delta to a player's current HP (minimum 0).
+	 * Applies a positive or negative delta to a player's current HP, bounded by 0
+	 * and the character's maximum.
+	 *
+	 * @description The ceiling matters as much as the floor. Without it, healing at
+	 *   full health was strictly profitable and a level-1 Fighter finished a playtest
+	 *   at 23/12 — inflation the Dungeon Master was then prompted with while still
+	 *   balancing encounters against a maximum of 12. Every other HP write path (short
+	 *   and long rest, the admin repairs) already clamps; this one did not.
+	 *
+	 *   `delta` arrives from LLM-authored JSON, so it is not necessarily a number.
+	 *   A non-numeric value is treated as no change: coercing it would set HP to NaN,
+	 *   which persists to disk and poisons every later comparison silently.
+	 *
+	 *   A sheet carrying no usable `max_hp` is left uncapped rather than clamped to a
+	 *   guess, since inventing a maximum would cap characters at a value nobody set.
 	 * @param {string} lobbyId - The lobby identifier.
 	 * @param {string} playerName - The player's name (resolved via findPlayerKey).
 	 * @param {number} delta - HP change amount; negative values deal damage, positive values heal.
@@ -114,8 +128,17 @@ export const progressionMethods = {
 		if (!l || !key) return 0;
 		const p = l.players[key];
 		p.stats = p.stats || { hp: 10 };
-		const before = Number(p.stats.hp || 0);
-		const after = Math.max(0, before + Number(delta || 0));
+
+		const before = Number(p.stats.hp) || 0;
+		const change = Number(delta);
+		const applied = Number.isFinite(change) ? change : 0;
+
+		const max = Number(p.stats.max_hp);
+		const ceiling = Number.isFinite(max) && max > 0 ? max : Infinity;
+
+		// Clamping downward as well as upward normalises characters already inflated
+		// by lobbies saved before this ceiling existed.
+		const after = Math.min(ceiling, Math.max(0, before + applied));
 		p.stats.hp = after;
 		this.persist(lobbyId);
 		return after;
