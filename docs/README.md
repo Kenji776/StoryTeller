@@ -48,6 +48,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [architecture.md](architecture.md) — system map, data flow, module boundaries
 - [modules/llm.md](modules/llm.md) — the AI provider layer
 - [modules/tts.md](modules/tts.md) — the narration provider layer
+- [modules/admin-console.md](modules/admin-console.md) — the operator interface
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
 - [worklog/](worklog/) — append-only session journal

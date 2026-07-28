@@ -80,13 +80,19 @@ Browser-side persistence is `localStorage`, used today for narration toggle and
 story font, and — as of the AI credentials work — for the player's AI
 configuration.
 
+The admin console is the exception to "no framework, no structure": it is a
+routed, state-driven application in its own right, and has its own document —
+[modules/admin-console.md](modules/admin-console.md).
+
 ## Not yet audited
 
 The following were not read end to end while writing this document and should be
-verified before being relied on: the admin panel (`client/admin/`,
-`server/routes/adminAuth.js`, `server/routes/adminEvents.js`), the map service,
-and the SFX resolution path. One known defect: `server/routes/turnTimer.js:175`
-dynamically imports `../services/sfxResolver.js`, which does not exist, so
-epilogue sound effects never play.
+verified before being relied on: the map service and the SFX resolution path. One
+known defect: `server/routes/turnTimer.js:175` dynamically imports
+`../services/sfxResolver.js`, which does not exist, so epilogue sound effects
+never play.
 
-_Last verified: 2026-07-27 against branch `Refactor` (634b6c1)._
+The admin panel is no longer on this list — it was read end to end and rebuilt;
+see the module document above.
+
+_Last verified: 2026-07-27 against branch `Refactor` (0856825)._
