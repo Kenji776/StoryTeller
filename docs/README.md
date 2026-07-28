@@ -16,10 +16,14 @@ npm run dev                            # http://localhost:3000 (PORT overrides)
 `--devmode` (or `DEV_MODE=TRUE`) suppresses narration and image generation to
 conserve API spend, and unlocks the canned-response test provider.
 
-Narration works through either a self-hosted TTS server (`LOCAL_TTS_URL`,
-default `http://127.0.0.1:8199`) or ElevenLabs. Both are probed at boot; a new
-lobby prefers whichever is up, local first, and the host can switch per lobby in
-the settings window. Neither is required — without one, the game plays silently.
+Narration works through either a self-hosted TTS server or ElevenLabs. Both are
+probed at boot; a new lobby prefers whichever is up, local first, and the host
+switches per lobby in the settings window. Neither is required — without one, the
+game plays silently.
+
+The local server can be on any machine and port on your network: enter its
+address in the settings window and press **Test**, which checks the connection,
+loads its voices, and saves the address. `LOCAL_TTS_URL` only seeds the first run.
 
 ## Tests
 

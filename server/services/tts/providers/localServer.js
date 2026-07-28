@@ -70,12 +70,23 @@ function fetchOf(deps) {
  * @returns {Promise<*>} Whatever `run` resolves to.
  * @throws {Error} Whatever `run` rejects with, including an abort error on timeout.
  */
-async function withTimeout(ms, run) {
+async function withTimeout(ms, run, what = "Request") {
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), ms);
+	let timedOut = false;
+	const timer = setTimeout(() => { timedOut = true; controller.abort(); }, ms);
 	if (typeof timer.unref === "function") timer.unref();
 	try {
 		return await run(controller.signal);
+	} catch (err) {
+		// "This operation was aborted" is what AbortSignal produces and it tells a
+		// host nothing. These messages are shown verbatim in the settings window, so
+		// they have to say what to check.
+		if (timedOut || err?.name === "AbortError") {
+			// Callers prefix this with the address they were dialling, so it says only
+			// what happened and not what to check.
+			throw new Error(`${what} timed out after ${ms / 1000}s`);
+		}
+		throw err;
 	} finally {
 		clearTimeout(timer);
 	}
@@ -118,7 +129,7 @@ async function requestSpeech(text, voiceId, deps) {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ input: text, voice: voiceId, response_format: "wav" }),
 			signal,
-		}));
+		}), "Speech synthesis");
 
 	if (!res.ok) throw new Error(await describeFailure(res, "Local TTS synthesis"));
 
@@ -151,7 +162,7 @@ export const localServerProvider = {
 		try {
 			const base = normalizeBaseUrl(deps.LOCAL_TTS_URL);
 			const res = await withTimeout(deps.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, (signal) =>
-				fetchOf(deps)(`${base}/health`, { signal }));
+				fetchOf(deps)(`${base}/health`, { signal }), "Health check");
 			if (!res.ok) return false;
 			const body = await res.json();
 			return body?.ok === true && body?.ready !== false;
@@ -175,7 +186,7 @@ export const localServerProvider = {
 	async listVoices(deps) {
 		const base = normalizeBaseUrl(deps.LOCAL_TTS_URL);
 		const res = await withTimeout(deps.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS, (signal) =>
-			fetchOf(deps)(`${base}/voices`, { signal }));
+			fetchOf(deps)(`${base}/voices`, { signal }), "Voice list request");
 
 		if (!res.ok) throw new Error(await describeFailure(res, "Local TTS voice list"));
 

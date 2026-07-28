@@ -13,7 +13,10 @@ import { registerTTSRoutes } from "./ttsService.js";
  */
 function makeApp() {
 	const routes = new Map();
-	const app = { get: (path, handler) => routes.set(path, handler) };
+	const app = {
+		get: (path, handler) => routes.set(`GET ${path}`, handler),
+		post: (path, handler) => routes.set(`POST ${path}`, handler),
+	};
 
 	/**
 	 * Invokes a registered handler and collects its response.
@@ -23,7 +26,7 @@ function makeApp() {
 	 * @returns {Promise<{status: number, body: *, headers: object}>} What the handler sent.
 	 */
 	const call = async (path, req = {}) => {
-		const handler = routes.get(path);
+		const handler = routes.get(path.includes(" ") ? path : `GET ${path}`);
 		assert.ok(handler, `no handler registered for ${path}`);
 		const out = { status: 200, body: undefined, headers: {} };
 		const res = {
@@ -32,7 +35,7 @@ function makeApp() {
 			send(payload) { out.body = payload; return res; },
 			setHeader(k, v) { out.headers[k.toLowerCase()] = v; return res; },
 		};
-		await handler({ query: {}, params: {}, ...req }, res);
+		await handler({ query: {}, params: {}, body: {}, ...req }, res);
 		return out;
 	};
 
@@ -56,6 +59,8 @@ function setup(opts = {}) {
 	const availability = opts.availability ?? { local: true, elevenlabs: true };
 	const logs = [];
 	const depsAsked = [];
+	const saved = [];
+	const localTts = { url: opts.url ?? "http://127.0.0.1:8199" };
 
 	// The registry holds the real adapters, so the seams are the dependency bundle
 	// each one receives. Overriding through providerDepsFor keeps the registry real.
@@ -70,11 +75,24 @@ function setup(opts = {}) {
 			depsAsked.push(id);
 			return { id, listVoices, preview };
 		},
+		localTts,
+		saveLocalUrl: (u) => {
+			if (opts.saveThrows) throw new Error("EACCES: permission denied");
+			saved.push(u);
+		},
+		// Injected so URL validation never touches a real resolver (`TDD-8`).
+		lookup: async (hostname) => {
+			const table = {
+				"192.168.1.50": [{ address: "192.168.1.50" }],
+				"127.0.0.1": [{ address: "127.0.0.1" }],
+				"tts.example.com": [{ address: "93.184.216.34" }],
+			};
+			if (!table[hostname]) throw Object.assign(new Error("ENOTFOUND"), { code: "ENOTFOUND" });
+			return table[hostname];
+		},
 	});
 
-	// Patch the adapters' network-facing methods to read from the injected bundle,
-	// so no test here reaches a real endpoint (`TDD-8`).
-	return { call, availability, logs, depsAsked };
+	return { call, availability, logs, depsAsked, saved, localTts };
 }
 
 /**
@@ -316,4 +334,141 @@ test("a preview does not leak the provider's error text to the browser", async (
 		const res = await call("/api/voice-preview/:id", { params: { id: "House" }, query: { provider: "local" } });
 		assert.equal(res.body, "Preview unavailable");
 	});
+});
+
+// ===== POST /api/tts/local/url =====
+
+test("saving a LAN address tests it and returns the voices it found", async () => {
+	await withStubbedAdapters(async () => {
+		const { call } = setup({ availability: { local: false, elevenlabs: false } });
+		const res = await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(res.body.ok, true);
+		assert.equal(res.body.url, "http://192.168.1.50:8199");
+		assert.deepEqual(res.body.voices, VOICES);
+	});
+});
+
+test("a working address is persisted so it survives a restart", async () => {
+	await withStubbedAdapters(async () => {
+		const { call, saved } = setup();
+		await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.deepEqual(saved, ["http://192.168.1.50:8199"]);
+	});
+});
+
+test("a working address becomes the one narration will use", async () => {
+	await withStubbedAdapters(async () => {
+		const { call, localTts } = setup();
+		await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(localTts.url, "http://192.168.1.50:8199");
+	});
+});
+
+test("a working address marks the local engine available", async () => {
+	await withStubbedAdapters(async () => {
+		const { call, availability } = setup({ availability: { local: false, elevenlabs: false } });
+		await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(availability.local, true);
+	});
+});
+
+test("a scheme-less address is accepted, since that is what people type", async () => {
+	await withStubbedAdapters(async () => {
+		const { call } = setup();
+		const res = await call("POST /api/tts/local/url", { body: { url: "192.168.1.50:8199" } });
+		assert.equal(res.body.ok, true);
+		assert.equal(res.body.url, "http://192.168.1.50:8199");
+	});
+});
+
+test("changing the address discards voices cached from the previous server", async () => {
+	// Two speech servers do not have the same voices built. Serving the old list
+	// would offer names the new server will reject as "not built".
+	await withStubbedAdapters(async () => {
+		let current = VOICES;
+		const { call } = setup({ listVoices: async () => current });
+		await call("/api/voices", { query: { provider: "local" } });
+
+		current = [{ id: "Fresh", name: "Fresh", category: "", accent: "", description: "", isDefault: true }];
+		await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+
+		const res = await call("/api/voices", { query: { provider: "local" } });
+		assert.deepEqual(res.body.voices.map((v) => v.id), ["Fresh"]);
+	});
+});
+
+test("a public address is refused and never dialled", async () => {
+	await withStubbedAdapters(async () => {
+		let dialled = false;
+		const { call, saved, localTts } = setup({ listVoices: async () => { dialled = true; return VOICES; } });
+		const res = await call("POST /api/tts/local/url", { body: { url: "http://tts.example.com:8199" } });
+		assert.equal(res.status, 400);
+		assert.equal(res.body.ok, false);
+		assert.match(res.body.error, /private network/i);
+		assert.equal(dialled, false, "an address we refuse must not be contacted at all");
+		assert.deepEqual(saved, []);
+		assert.equal(localTts.url, "http://127.0.0.1:8199", "the working address must be left alone");
+	});
+});
+
+test("an unresolvable host is refused with a message naming it", async () => {
+	await withStubbedAdapters(async () => {
+		const { call } = setup();
+		const res = await call("POST /api/tts/local/url", { body: { url: "http://nosuchbox:8199" } });
+		assert.equal(res.status, 400);
+		assert.match(res.body.error, /could not resolve.*nosuchbox/i);
+	});
+});
+
+test("an empty address is refused with instructions", async () => {
+	const { call } = setup();
+	const res = await call("POST /api/tts/local/url", { body: { url: "" } });
+	assert.equal(res.status, 400);
+	assert.match(res.body.error, /enter an address/i);
+});
+
+test("an address that resolves but does not answer is reported, not saved", async () => {
+	await withStubbedAdapters(async () => {
+		const { call, saved, localTts } = setup({ listVoices: async () => { throw new Error("connect ECONNREFUSED"); } });
+		const res = await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(res.body.ok, false);
+		assert.match(res.body.error, /ECONNREFUSED/);
+		assert.deepEqual(saved, [], "a server we could not reach is not the one to remember");
+		assert.equal(localTts.url, "http://127.0.0.1:8199");
+	});
+});
+
+test("an address that answers with no voices is reported, not saved", async () => {
+	await withStubbedAdapters(async () => {
+		const { call, saved } = setup({ listVoices: async () => [] });
+		const res = await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(res.body.ok, false);
+		assert.match(res.body.error, /no voices/i);
+		assert.deepEqual(saved, []);
+	});
+});
+
+test("a failed probe leaves the local engine marked unavailable", async () => {
+	await withStubbedAdapters(async () => {
+		const { call, availability } = setup({
+			availability: { local: false, elevenlabs: true },
+			listVoices: async () => { throw new Error("ECONNREFUSED"); },
+		});
+		await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(availability.local, false);
+	});
+});
+
+test("a connection that works but cannot be saved says so rather than claiming success", async () => {
+	await withStubbedAdapters(async () => {
+		const { call } = setup({ saveThrows: true });
+		const res = await call("POST /api/tts/local/url", { body: { url: "http://192.168.1.50:8199" } });
+		assert.equal(res.body.ok, false);
+		assert.match(res.body.error, /EACCES/, "a setting that will vanish on restart must not report success");
+	});
+});
+
+test("the provider list reports the address currently configured", async () => {
+	const { call } = setup({ url: "http://10.0.0.9:8199" });
+	assert.equal((await call("/api/tts/providers")).body.localTtsUrl, "http://10.0.0.9:8199");
 });

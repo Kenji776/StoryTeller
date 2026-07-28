@@ -356,3 +356,44 @@ test("the provider declares the wav format so the client picks buffered playback
 test("the provider declares the id the lobby setting stores", () => {
 	assert.equal(localServerProvider.id, "local");
 });
+
+// ===== timeout reporting =====
+
+test("a voice request that times out says so, rather than leaking the abort", async () => {
+	// "This operation was aborted" is what AbortSignal produces, and it tells a host
+	// nothing about what to fix. The address field shows this message verbatim.
+	const { deps } = makeDeps({
+		"/voices": () => { throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" }); },
+	});
+	await assert.rejects(() => localServerProvider.listVoices(deps), { message: /timed out/i });
+});
+
+test("a synthesis request that times out says so too", async () => {
+	const { deps } = makeDeps({
+		"/v1/audio/speech": () => { throw Object.assign(new Error("This operation was aborted"), { name: "AbortError" }); },
+	});
+	await assert.rejects(
+		() => collect(localServerProvider.synthesize("Hello.", "House", deps)),
+		{ message: /timed out/i },
+	);
+});
+
+test("a timeout message names how long it waited, so the number is not a mystery", async () => {
+	const { deps } = makeDeps(
+		{ "/voices": () => { throw Object.assign(new Error("aborted"), { name: "AbortError" }); } },
+		{ probeTimeoutMs: 5000 },
+	);
+	await assert.rejects(() => localServerProvider.listVoices(deps), { message: /5s/ });
+});
+
+test("a connection refusal is passed through unchanged, since it is already clear", async () => {
+	const { deps } = makeDeps({ "/voices": () => { throw new Error("connect ECONNREFUSED 127.0.0.1:9999"); } });
+	await assert.rejects(() => localServerProvider.listVoices(deps), { message: /ECONNREFUSED/ });
+});
+
+test("isAvailable still reports false on a timeout rather than surfacing it", async () => {
+	const { deps } = makeDeps({
+		"/health": () => { throw Object.assign(new Error("aborted"), { name: "AbortError" }); },
+	});
+	assert.equal(await localServerProvider.isAvailable(deps), false);
+});

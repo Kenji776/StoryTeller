@@ -8,6 +8,7 @@
  */
 
 import { TTS_PROVIDERS, resolveTTSProvider, normalizeProviderId } from "../services/tts/registry.js";
+import { validateLocalTtsUrl } from "../services/tts/localConfig.js";
 
 /**
  * Registers the TTS HTTP routes.
@@ -23,14 +24,17 @@ import { TTS_PROVIDERS, resolveTTSProvider, normalizeProviderId } from "../servi
  *   at boot is retried on the next request, which is how a Docker container whose
  *   network came up late recovers without a restart.
  * @param {object} app - Express application instance.
- * @param {{providerDepsFor: Function, availability: object, devMode: boolean, log: Function}} deps
+ * @param {{providerDepsFor: Function, availability: object, devMode: boolean, log: Function, localTts: object, saveLocalUrl: Function, lookup?: Function}} deps
  *   - `providerDepsFor` Receives a provider id, returns that provider's dependency bundle.
  *   - `availability`    Live map of provider id to boolean; mutated by the caller's boot probe.
  *   - `devMode`         When true, previews return 204 and spend nothing.
+ *   - `localTts`        Mutable holder for the local server's address, shared with `providerDepsFor`.
+ *   - `saveLocalUrl`    Persists a verified address; throws if it cannot.
+ *   - `lookup`          DNS resolver, injected for testability.
  * @returns {void}
  */
 export function registerTTSRoutes(app, deps) {
-	const { providerDepsFor, availability, devMode, log } = deps;
+	const { providerDepsFor, availability, devMode, log, localTts, saveLocalUrl, lookup } = deps;
 
 	/** Memoised voice lists, keyed by provider id. Empty results are not cached. */
 	const voiceCache = new Map();
@@ -89,7 +93,52 @@ export function registerTTSRoutes(app, deps) {
 			})),
 			// What a lobby with no stored choice will actually narrate with.
 			defaultProvider: normalizeProviderId(null, availability),
+			// Pre-fills the address field so a host can see and correct what is set.
+			localTtsUrl: localTts?.url || "",
 		});
+	});
+
+	app.post("/api/tts/local/url", async (req, res) => {
+		let url;
+		try {
+			url = await validateLocalTtsUrl(req.body?.url, { lookup });
+		} catch (err) {
+			// A rejected address is never contacted. These messages are written to be
+			// shown to the host verbatim, so they go out as-is.
+			return res.status(400).json({ ok: false, error: err.message });
+		}
+
+		const provider = resolveTTSProvider("local");
+		let voices;
+		try {
+			voices = await provider.listVoices({ ...providerDepsFor("local"), LOCAL_TTS_URL: url });
+		} catch (err) {
+			log(`⚠️  Local TTS test failed for ${url}: ${err.message}`);
+			return res.json({ ok: false, error: `Could not reach a speech server at ${url} — ${err.message}` });
+		}
+
+		if (!voices.length) {
+			return res.json({ ok: false, error: `${url} answered, but has no voices built` });
+		}
+
+		try {
+			saveLocalUrl(url);
+		} catch (err) {
+			// The connection works, but a setting that vanishes on the next restart is
+			// not a success and must not be reported as one.
+			log(`💥 Could not persist local TTS address: ${err.message}`);
+			return res.json({ ok: false, error: `Connected to ${url}, but the address could not be saved — ${err.message}` });
+		}
+
+		localTts.url = url;
+		availability.local = true;
+		// Two speech servers do not have the same voices built; serving the previous
+		// server's list would offer names this one will reject as "not built".
+		voiceCache.delete("local");
+		voiceCache.set("local", voices);
+
+		log(`✅ Local TTS server set to ${url} (${voices.length} voices)`);
+		res.json({ ok: true, url, voices });
 	});
 
 	app.get("/api/voices", async (req, res) => {

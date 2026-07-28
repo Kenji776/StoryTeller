@@ -32,6 +32,7 @@ import { registerAdminEvents } from "./routes/adminEvents.js";
 import { registerTTSRoutes } from "./routes/ttsService.js";
 import { streamNarrationToClients } from "./services/tts/narrate.js";
 import { resolveTTSProvider, normalizeProviderId, probeAvailability } from "./services/tts/registry.js";
+import { loadLocalTtsUrl, saveLocalTtsUrl } from "./services/tts/localConfig.js";
 import { createTimerSystem } from "./routes/turnTimer.js";
 import { registerChatEvents } from "./routes/chatEvents.js";
 import { createActionGate } from "./services/actionGate.js";
@@ -128,10 +129,13 @@ if (devMode) log("🧩 Developer mode enabled — skipping ElevenLabs TTS.");
 
 const ELEVEN_API_KEY = process.env.ELEVEN_API_KEY;
 const ELEVEN_VOICE_ID = process.env.ELEVEN_VOICE_ID || "dAcds2QMcvmv86jQMC3Y";
-// The local TTS server's address is operator configuration, never a lobby setting:
-// the server issues the request, so a host-editable field would be an SSRF vector.
-// See docs/decisions/0005-pluggable-tts-with-a-local-server.md.
+// Seed address for the local speech server. A host can point the game somewhere
+// else from the settings window, and that choice is persisted and wins from then
+// on — a self-hosted server can be on any machine and port and there is no way to
+// guess it. Every supplied address must resolve onto a private network before the
+// server will dial it; see docs/decisions/0006-host-configurable-local-tts-address.md.
 const LOCAL_TTS_URL = process.env.LOCAL_TTS_URL || "http://127.0.0.1:8199";
+const TTS_CONFIG_FILE = path.join(__dirname, "data", "tts-config.json");
 const REJECTED_REQUEST_STATUS = 204;
 const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60000;
 const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 2;
@@ -153,6 +157,14 @@ const ttsDefaultVoice = { local: null, elevenlabs: ELEVEN_VOICE_ID };
 /** Spoken player lines fall back to this ElevenLabs voice when a sheet carries none. */
 const PLAYER_FALLBACK_VOICE_ID = "nVR3DsQbqULlGfUZGjwn";
 
+/**
+ * Live address of the local speech server, shared by mutation with the TTS routes.
+ *
+ * A saved address beats the environment: once a host has pointed the game at a real
+ * server, a stale `LOCAL_TTS_URL` in a compose file must not win on the next restart.
+ */
+const localTts = { url: loadLocalTtsUrl({ configPath: TTS_CONFIG_FILE, fallback: LOCAL_TTS_URL }) };
+
 // ── Configure sub-modules ────────────────────────────────────────────────────
 
 configureAssets({ musicDir: MUSIC_DIR, sfxDir: SFX_DIR, log });
@@ -166,7 +178,7 @@ configureAssets({ musicDir: MUSIC_DIR, sfxDir: SFX_DIR, log });
  * @returns {object} The bundle for that provider.
  */
 const providerDepsFor = (id) => (id === "local"
-	? { LOCAL_TTS_URL, log }
+	? { LOCAL_TTS_URL: localTts.url, log }
 	: { ELEVEN_API_KEY, VOICE_CACHE_FILE, log });
 
 /**
@@ -241,7 +253,14 @@ if (!fs.existsSync(IMAGES_DIR)) fs.mkdirSync(IMAGES_DIR, { recursive: true });
 app.use("/character-images", express.static(IMAGES_DIR));
 
 // TTS routes (/api/tts/providers, /api/voices, /api/voice-preview/:id)
-registerTTSRoutes(app, { providerDepsFor, availability: ttsAvailability, devMode, log });
+registerTTSRoutes(app, {
+	providerDepsFor,
+	availability: ttsAvailability,
+	devMode,
+	log,
+	localTts,
+	saveLocalUrl: (url) => saveLocalTtsUrl(url, { configPath: TTS_CONFIG_FILE }),
+});
 
 // Populated once the session registry is constructed below; the timer system is
 // created first, so it reaches the check through this indirection.
@@ -1414,12 +1433,12 @@ async function probeTTS() {
 		try {
 			const voices = await resolveTTSProvider("local").listVoices(providerDepsFor("local"));
 			ttsDefaultVoice.local = (voices.find((v) => v.isDefault) || voices[0])?.id || null;
-			log(`  ✅ Local TTS server is ready at ${LOCAL_TTS_URL} (${voices.length} voices, default "${ttsDefaultVoice.local}")`);
+			log(`  ✅ Local TTS server is ready at ${localTts.url} (${voices.length} voices, default "${ttsDefaultVoice.local}")`);
 		} catch (err) {
 			log(`  ⚠️  Local TTS server answered /health but not /voices: ${err.message}`);
 		}
 	} else {
-		log(`  ❌ Local TTS: not reachable at ${LOCAL_TTS_URL}`);
+		log(`  ❌ Local TTS: not reachable at ${localTts.url} — set its address in the game's settings window`);
 	}
 
 	if (!ELEVEN_API_KEY) log("  ❌ ElevenLabs: No API key configured");

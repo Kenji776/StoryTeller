@@ -444,6 +444,20 @@
 		</div>
 	</div>
 
+	<div id="localTtsRow" style="display:none;flex-direction:column;gap:0.4rem;">
+		<hr class="divider" />
+		<div class="option-label">
+			<span>Speech server address</span>
+			<small>Where the local server is running — any machine and port on your network</small>
+		</div>
+		<div class="voice-row">
+			<input type="text" id="localTtsUrl" placeholder="http://192.168.1.50:8199" spellcheck="false"
+				style="flex:1;min-width:0;background:#1a1530;border:1px solid #3a2a5a;border-radius:4px;color:#e8dfc8;padding:0.35em 0.6em;font-size:0.88em;font-family:inherit;" />
+			<button class="preview-btn" id="testLocalTtsBtn" data-sound="Gem Socket" data-sound-hover="Magical Shimmer" title="Test the connection and load its voices">Test</button>
+		</div>
+		<small id="localTtsStatus" style="font-size:0.72em;color:#5a4a7a;">&nbsp;</small>
+	</div>
+
 	<hr class="divider" />
 
 	<div class="option-row">
@@ -553,6 +567,9 @@ const elMaxMissed      = document.getElementById("maxMissedTurns");
 const elNarratorVoice  = document.getElementById("narratorVoiceSelect");
 const elTTSProvider    = document.getElementById("ttsProviderSelect");
 const elTTSHint        = document.getElementById("ttsProviderHint");
+const elLocalTtsRow    = document.getElementById("localTtsRow");
+const elLocalTtsUrl    = document.getElementById("localTtsUrl");
+const elLocalTtsStatus = document.getElementById("localTtsStatus");
 const elLLMModel       = document.getElementById("llmModelSelect");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
@@ -678,15 +695,11 @@ function applyFeatureGating() {
 		populateLLMModels("test", null);
 	}
 
-	// Disable the narration controls only when no engine at all can speak — an
-	// absent ElevenLabs key no longer means silence, since the local server may be up.
-	if (features.tts && !features.tts.any) {
-		elTTSProvider.innerHTML = '<option value="">No speech engine available</option>';
-		elTTSProvider.disabled = true;
-		elNarratorVoice.innerHTML = '<option value="">Narration unavailable</option>';
-		elNarratorVoice.disabled = true;
-		document.getElementById("previewNarratorBtn").disabled = true;
-	}
+	// Deliberately nothing to gate here. An absent ElevenLabs key no longer means
+	// silence, and "no engine connected" is a state the host can fix from this very
+	// window by pointing the local engine at their speech server — so the controls
+	// must stay live. loadTTSProviders and loadNarratorVoices already show what is
+	// and is not reachable.
 }
 
 // Campaign flavor state — full objects stored so prompt text is sent to server
@@ -909,26 +922,20 @@ async function loadTTSProviders() {
 		const data = await res.json();
 		if (!data.ok) throw new Error("Provider load failed");
 		ttsProviders = data.providers || [];
+		elLocalTtsUrl.value = data.localTtsUrl || "";
 
-		const usable = ttsProviders.filter(p => p.available);
-		if (!usable.length) {
-			elTTSProvider.innerHTML = '<option value="">No speech engine available</option>';
-			elTTSProvider.disabled = true;
-			return null;
-		}
-
-		elTTSProvider.innerHTML = usable
-			.map(p => `<option value="${p.id}">${p.label}</option>`)
-			.join("");
-		// Engines that exist but are not reachable are shown greyed out rather than
-		// hidden, so a host can see that ElevenLabs is configured-but-down.
-		for (const p of ttsProviders.filter(p => !p.available)) {
+		elTTSProvider.innerHTML = "";
+		for (const p of ttsProviders) {
 			const opt = document.createElement("option");
 			opt.value = p.id;
-			opt.textContent = `${p.label} (unavailable)`;
-			opt.disabled = true;
+			opt.textContent = p.available ? p.label : `${p.label} (not connected)`;
+			// The local engine stays selectable even when it is not answering —
+			// selecting it is how the host reaches the address field to point it at
+			// the right machine. Disabling it would hide the only way to fix it.
+			opt.disabled = !p.available && p.id !== "local";
 			elTTSProvider.appendChild(opt);
 		}
+		elTTSProvider.disabled = false;
 		return data.defaultProvider;
 	} catch (err) {
 		elTTSProvider.innerHTML = '<option value="">Error loading engines</option>';
@@ -937,6 +944,85 @@ async function loadTTSProviders() {
 	}
 }
 
+/**
+ * Shows the address field only for engines that have one, and reports its state.
+ *
+ * @returns {void}
+ */
+function syncLocalTtsRow() {
+	const isLocal = elTTSProvider.value === "local";
+	elLocalTtsRow.style.display = isLocal ? "flex" : "none";
+	if (!isLocal) return;
+	const detail = ttsProviders.find(p => p.id === "local");
+	if (detail && !detail.available) {
+		setLocalTtsStatus("Not connected — enter the address of your speech server and press Test.", "warn");
+	}
+}
+
+/**
+ * Writes a message under the address field.
+ *
+ * @param {string} text - Message to show.
+ * @param {"ok"|"warn"|"error"|"busy"} [tone] - Controls the colour.
+ * @returns {void}
+ */
+function setLocalTtsStatus(text, tone) {
+	const colours = { ok: "#5c9c5c", warn: "#b8912f", error: "#c95c5c", busy: "#7a8ac0" };
+	elLocalTtsStatus.style.color = colours[tone] || "#5a4a7a";
+	elLocalTtsStatus.textContent = text || " ";
+}
+
+/**
+ * Tests the typed address, and on success saves it and loads its voices.
+ *
+ * @description The server does the dialling, so it is also what validates the
+ *   address — it will only contact private, LAN-local addresses. Everything the
+ *   host needs to know comes back in one round trip: reachable or not, and how
+ *   many voices it has.
+ * @returns {Promise<void>}
+ */
+async function testAndSaveLocalTts() {
+	const url = elLocalTtsUrl.value.trim();
+	const btn = document.getElementById("testLocalTtsBtn");
+	btn.disabled = true;
+	setLocalTtsStatus("Testing…", "busy");
+
+	try {
+		const res = await fetch("/api/tts/local/url", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ url }),
+		});
+		const data = await res.json();
+
+		if (!data.ok) {
+			setLocalTtsStatus(data.error || "Could not connect.", "error");
+			return;
+		}
+
+		elLocalTtsUrl.value = data.url;
+		setLocalTtsStatus(`Connected — ${data.voices.length} voice${data.voices.length === 1 ? "" : "s"} available.`, "ok");
+
+		// The engine is reachable now, so re-list it as such and load its voices.
+		const detail = ttsProviders.find(p => p.id === "local");
+		if (detail) detail.available = true;
+		const opt = [...elTTSProvider.options].find(o => o.value === "local");
+		if (opt) { opt.textContent = detail?.label || "Local TTS server"; opt.disabled = false; }
+
+		await loadNarratorVoices();
+		emitSettings();
+	} catch (err) {
+		setLocalTtsStatus(`Could not reach the game server: ${err.message}`, "error");
+	} finally {
+		btn.disabled = false;
+	}
+}
+
+document.getElementById("testLocalTtsBtn").addEventListener("click", testAndSaveLocalTts);
+elLocalTtsUrl.addEventListener("keydown", (e) => {
+	if (e.key === "Enter") { e.preventDefault(); testAndSaveLocalTts(); }
+});
+
 // Load voices for the selected engine and populate the narrator dropdown.
 async function loadNarratorVoices() {
 	const provider = elTTSProvider.value;
@@ -944,6 +1030,17 @@ async function loadNarratorVoices() {
 		elNarratorVoice.innerHTML = '<option value="">No speech engine available</option>';
 		elNarratorVoice.disabled = true;
 		document.getElementById("previewNarratorBtn").disabled = true;
+		return;
+	}
+
+	// Asking for voices from a server we have not located yet only produces a
+	// confusing connection error; point at the field that fixes it instead.
+	const chosen = ttsProviders.find(p => p.id === provider);
+	if (chosen && !chosen.available && provider === "local") {
+		elNarratorVoice.innerHTML = '<option value="">Set the server address above, then press Test</option>';
+		elNarratorVoice.disabled = true;
+		document.getElementById("previewNarratorBtn").disabled = true;
+		elTTSHint.textContent = "Not connected to a speech server yet";
 		return;
 	}
 
@@ -979,6 +1076,7 @@ async function loadNarratorVoices() {
 }
 
 elTTSProvider.addEventListener("change", async () => {
+	syncLocalTtsRow();
 	// Tell the server first: switching engines swaps in that engine's remembered
 	// voice, and applyState will feed it back as the pending selection.
 	emitSettings();
@@ -1189,9 +1287,14 @@ async function boot() {
 		elTTSProvider.value = lobbyProvider;
 	} else if (defaultProvider) {
 		elTTSProvider.value = defaultProvider;
+	} else {
+		// Nothing is connected. Land on the local engine, because it is the one the
+		// host can actually do something about from here.
+		elTTSProvider.value = "local";
 	}
 	if (state?.narratorVoiceId) elNarratorVoice.dataset.pendingVoice = state.narratorVoiceId;
 
+	syncLocalTtsRow();
 	await loadNarratorVoices();
 
 	applyFeatureGating();

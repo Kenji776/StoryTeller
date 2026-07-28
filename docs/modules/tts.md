@@ -12,6 +12,7 @@ The adapter shape deliberately mirrors `services/llm/`
 | File | Responsibility |
 |---|---|
 | `registry.js` | The only list of which providers exist, plus the selection policy. |
+| `localConfig.js` | Where the local server lives, and whether we are willing to dial it. |
 | `narrate.js` | Turns a provider's frame stream into Socket.IO events. Knows no engine. |
 | `wavTiming.js` | Reads a RIFF/WAVE header; approximates word timings from a clip duration. |
 | `providers/localServer.js` | Self-hosted OpenAI-compatible server: `/health`, `/voices`, `/v1/audio/speech`. |
@@ -109,10 +110,35 @@ provider which is no longer reachable, degrades to the default rather than leavi
 the lobby mute. A lobby persisted while the local server was running therefore
 still narrates after it is switched off.
 
-The local server's URL is **not** a lobby setting — it comes from `LOCAL_TTS_URL`
-in the server environment. The server, not the browser, issues the request, so a
-host-editable field would let a lobby host aim it at any address the server can
-reach. ADR 0005 records the reasoning.
+## Locating the local server
+
+The address is entered by the host in the settings window, tested on demand, and
+persisted server-wide to `server/data/tts-config.json`. A saved address beats
+`LOCAL_TTS_URL`, which is only a seed for a first run —
+[ADR 0006](../decisions/0006-host-configurable-local-tts-address.md) explains why
+this reverses ADR 0005's env-var-only decision.
+
+`POST /api/tts/local/url` does the whole flow in one round trip: validate,
+resolve, dial, list voices, persist, and mark the engine available. Nothing is
+persisted unless the server actually answered with voices — a setting that will
+not work on the next restart is not a success and is not reported as one.
+
+**The server dials only private addresses.** `validateLocalTtsUrl` resolves the
+hostname and requires *every* returned address to be loopback, RFC1918, CGNAT
+(`100.64/10`, which is what Tailscale hands out), or IPv6 unique local. Link-local
+is refused, because `169.254.169.254` is where clouds serve instance credentials.
+Requiring all resolved addresses rather than any is what stops a name that
+resolves to one LAN address and one public address.
+
+Two UI rules follow from this and are easy to break by accident:
+
+- The local engine stays **selectable while disconnected**. Selecting it is how a
+  host reaches the address field, so disabling it hides the only way to fix it.
+  This was the original defect: an unreachable engine rendered as a disabled
+  option with no path forward.
+- Changing the address **clears the memoised voice list**. Two speech servers do
+  not have the same voices built, and serving the old list would offer names the
+  new server rejects as "not built".
 
 ## Adapter contract
 

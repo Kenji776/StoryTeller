@@ -8,6 +8,8 @@ server/.env
 server/data/images/
 server/data/lobbies/
 server/data/charkey.pem
+# Runtime TTS config — holds this machine's speech server address
+server/data/tts-config.json
 client/config/voices_cache.json
 # Key material. keyfile.age has sat untracked and unignored in the repo root since
 # before this was written; anything running `git add -A` would have committed it.

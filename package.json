@@ -6,9 +6,9 @@
   "scripts": {
     "dev": "node server/server.js",
     "start": "NODE_ENV=production node server/server.js",
-    "test": "node --test server/ client/",
+    "test": "node --test server/helpers/ server/routes/ server/services/ client/",
     "test:integration": "node --test server/test-integration/",
-    "coverage": "node --test --experimental-test-coverage server/ client/"
+    "coverage": "node --test --experimental-test-coverage server/helpers/ server/routes/ server/services/ client/"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
