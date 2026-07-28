@@ -17,6 +17,7 @@ import { Server } from "socket.io";
 import { LobbyStore } from "./services/lobbyStore.js";
 import { createLLMGateway } from "./services/llmGateway.js";
 import { createIllustrationRunner } from "./services/images/illustrationRunner.js";
+import { createGallery } from "./services/images/gallery.js";
 import { roll } from "./helpers/dice.js";
 import fetch from "node-fetch";
 import { randomUUID, generateKeyPairSync, createSign, createVerify, createPublicKey } from "crypto";
@@ -296,6 +297,14 @@ const { getLLMResponse, generateImage, ensureCharacterImage, generateCharacterSc
 });
 
 /**
+ * What each game looked like, kept after the game is over.
+ *
+ * Deliberately outside `server/data/lobbies`: lobby state is deleted when a game
+ * ends, and a keepsake that vanishes with the game is not a keepsake.
+ */
+const galleries = createGallery({ dir: path.join(__dirname, "data", "galleries"), log });
+
+/**
  * Draws the pictures the Dungeon Master asks for.
  *
  * Deliberately never awaited by a turn: generation takes seconds, and a story
@@ -317,6 +326,13 @@ const illustrations = createIllustrationRunner({
 	// A party member who never generated a portrait still appears in the opening
 	// picture, drawn from their sheet.
 	appearanceOf: (player) => player?.imageAppearance || buildAppearance(player?.sheet ?? player) || player?.name,
+	// The picture and what it illustrates are kept together, so afterwards the
+	// gallery reads as a story rather than a folder of PNGs.
+	onDrawn: (lobbyId, record) => galleries.record(lobbyId, {
+		...record,
+		adventureName: store.index[lobbyId]?.adventureName ?? null,
+		code: store.index[lobbyId]?.code ?? null,
+	}),
 	onCharacterCreated: (lobbyId, name, made) => {
 		const key = store.findPlayerKey(lobbyId, name);
 		const record = key ? store.index[lobbyId]?.players[key] : null;
@@ -1649,6 +1665,17 @@ app.get("/api/features", (req, res) => {
 		devMode,
 		version:    process.env.APP_VERSION || "0.0",
 	});
+});
+
+// === GAME GALLERIES ===
+// Public, like /api/lobby/:code/story: a gallery holds pictures and narration
+// that were already broadcast to everyone in the game.
+app.get("/api/galleries", (req, res) => res.json({ galleries: galleries.list() }));
+
+app.get("/api/gallery/:lobbyId", (req, res) => {
+	const gallery = galleries.read(req.params.lobbyId);
+	if (!gallery) return res.status(404).json({ error: "No gallery for that game." });
+	res.json(gallery);
 });
 
 registerMapEndpoints(app, store);

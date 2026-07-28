@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StoryTeller — Game Galleries</title>
+<link rel="stylesheet" href="/style.css" />
+<style>
+	/* A gallery is for looking at, so the pictures get the room and the chrome
+	   stays out of the way. */
+	body { margin: 0; background: #14111c; color: #e8e3f0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+	a { color: #b79bf0; }
+
+	.wrap { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+	header.top { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+	header.top h1 { font-size: 1.35rem; margin: 0; font-weight: 600; letter-spacing: 0.01em; }
+	header.top .sub { opacity: 0.6; font-size: 0.88rem; }
+
+	.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+	.card {
+		background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.09);
+		border-radius: 8px; overflow: hidden; text-decoration: none; color: inherit; display: block;
+	}
+	.card:hover { border-color: rgba(183,155,240,0.6); }
+	.card img { width: 100%; height: 190px; object-fit: cover; display: block; background: #0d0b12; }
+	.card .meta { padding: 0.65rem 0.75rem; }
+	.card .name { font-weight: 600; font-size: 0.95rem; }
+	.card .count { opacity: 0.55; font-size: 0.8rem; margin-top: 0.15rem; }
+
+	/* ── Slideshow ────────────────────────────────────────────────────────── */
+	.slide { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+	@media (min-width: 900px) { .slide { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; } }
+
+	.frames { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: center; }
+	.frames img {
+		flex: 1 1 260px; max-width: 100%; border-radius: 6px; display: block;
+		border: 1px solid rgba(255,255,255,0.1); background: #0d0b12;
+	}
+	.story { font-size: 0.95rem; line-height: 1.55; }
+	.story .caption { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.5rem; }
+	.story .who { font-size: 0.82rem; opacity: 0.65; margin-bottom: 0.75rem; }
+	.story .narration { opacity: 0.88; white-space: pre-wrap; }
+	.story .when { font-size: 0.78rem; opacity: 0.5; margin-top: 0.9rem; }
+
+	.controls { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0 0.5rem; flex-wrap: wrap; }
+	.controls button {
+		background: rgba(122,80,200,0.28); color: #e8e3f0; border: 1px solid rgba(122,80,200,0.5);
+		border-radius: 5px; padding: 0.4rem 0.85rem; font-size: 0.9rem; cursor: pointer;
+	}
+	.controls button:disabled { opacity: 0.35; cursor: default; }
+	.controls .pos { opacity: 0.6; font-size: 0.85rem; }
+
+	.filmstrip { display: flex; gap: 0.4rem; overflow-x: auto; padding: 0.75rem 0 0.25rem; }
+	.filmstrip img {
+		height: 62px; width: auto; border-radius: 4px; cursor: pointer; flex: 0 0 auto;
+		border: 2px solid transparent; opacity: 0.5;
+	}
+	.filmstrip img.is-current { border-color: #b79bf0; opacity: 1; }
+
+	.empty { opacity: 0.6; padding: 2rem 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+	<header class="top">
+		<h1 id="title">Game Galleries</h1>
+		<span class="sub" id="subtitle"></span>
+		<span style="margin-left:auto"><a href="/gallery.html" id="backLink" hidden>← All games</a></span>
+	</header>
+	<div id="host"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="module">
+	import { galleryIndexView, slideView } from "/galleryView.js";
+
+	const host = document.getElementById("host");
+	const title = document.getElementById("title");
+	const subtitle = document.getElementById("subtitle");
+	const backLink = document.getElementById("backLink");
+
+	/**
+	 * @description Replaces the page contents.
+	 * @param {...Node} nodes - What to show.
+	 * @returns {void}
+	 */
+	const show = (...nodes) => host.replaceChildren(...nodes.filter(Boolean));
+
+	/**
+	 * @description Builds an element with properties and children.
+	 * @param {string} tag - Tag name, optionally with a `.class`.
+	 * @param {object} [props] - Properties to assign.
+	 * @param {...*} children - Child nodes or text.
+	 * @returns {HTMLElement} The element.
+	 */
+	function h(tag, props = {}, ...children) {
+		const [name, ...classes] = tag.split(".");
+		const el = document.createElement(name);
+		if (classes.length) el.className = classes.join(" ");
+		for (const [k, v] of Object.entries(props)) {
+			if (v === null || v === undefined) continue;
+			if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2).toLowerCase(), v);
+			else if (k in el) el[k] = v;
+			else el.setAttribute(k, v);
+		}
+		for (const child of children.flat()) {
+			if (child === null || child === undefined || child === false) continue;
+			el.append(child instanceof Node ? child : document.createTextNode(String(child)));
+		}
+		return el;
+	}
+
+	/** The list of every game that produced pictures. */
+	async function renderIndex() {
+		const { galleries } = await (await fetch("/api/galleries")).json();
+		const cards = galleryIndexView(galleries);
+
+		title.textContent = "Game Galleries";
+		subtitle.textContent = cards.length ? `${cards.length} game${cards.length === 1 ? "" : "s"}` : "";
+		backLink.hidden = true;
+
+		if (!cards.length) {
+			show(h("p.empty", {}, "No games have been illustrated yet. Turn illustrations on in a game's settings and play a while."));
+			return;
+		}
+
+		show(h("div.cards", {}, cards.map((card) =>
+			h("a.card", { href: `/gallery.html?game=${encodeURIComponent(card.lobbyId)}` },
+				h("img", { src: card.cover, alt: card.title, loading: "lazy" }),
+				h("div.meta", {},
+					h("div.name", {}, card.title),
+					h("div.count", {}, card.subtitle))))));
+	}
+
+	/** One game, as a slideshow. */
+	async function renderGame(lobbyId) {
+		const res = await fetch(`/api/gallery/${encodeURIComponent(lobbyId)}`);
+		if (!res.ok) {
+			show(h("p.empty", {}, "That game has no gallery."));
+			return;
+		}
+		const gallery = await res.json();
+		const slides = slideView(gallery);
+
+		title.textContent = gallery.adventureName || "An untitled adventure";
+		subtitle.textContent = `${slides.length} moment${slides.length === 1 ? "" : "s"}${gallery.code ? ` · ${gallery.code}` : ""}`;
+		backLink.hidden = false;
+
+		let at = 0;
+
+		function draw() {
+			const slide = slides[at];
+			const frames = h("div.frames", {}, slide.images.map((image) =>
+				h("img", { src: image.url, alt: image.alt, loading: "lazy" })));
+
+			const story = h("div.story", {},
+				h("div.caption", {}, slide.caption),
+				slide.who ? h("div.who", {}, slide.who) : null,
+				slide.narration ? h("div.narration", {}, slide.narration) : null,
+				h("div.when", {}, slide.when));
+
+			const prev = h("button", { disabled: at === 0, onClick: () => { at -= 1; draw(); } }, "‹ Previous");
+			const next = h("button", { disabled: at >= slides.length - 1, onClick: () => { at += 1; draw(); } }, "Next ›");
+
+			const strip = h("div.filmstrip", {}, slides.map((s, i) =>
+				h("img", {
+					src: s.images[0]?.url,
+					alt: s.caption,
+					className: i === at ? "is-current" : "",
+					loading: "lazy",
+					onClick: () => { at = i; draw(); },
+				})));
+
+			show(
+				h("div.slide", {}, frames, story),
+				h("div.controls", {}, prev, h("span.pos", {}, `${at + 1} of ${slides.length}`), next),
+				strip,
+			);
+		}
+
+		document.addEventListener("keydown", (event) => {
+			if (event.key === "ArrowLeft" && at > 0) { at -= 1; draw(); }
+			if (event.key === "ArrowRight" && at < slides.length - 1) { at += 1; draw(); }
+		});
+
+		draw();
+	}
+
+	const game = new URLSearchParams(location.search).get("game");
+	(game ? renderGame(game) : renderIndex()).catch((err) => {
+		show(h("p.empty", {}, `Could not load the gallery: ${err.message}`));
+	});
+</script>
+</body>
+</html>

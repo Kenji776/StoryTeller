@@ -79,6 +79,8 @@ function safeMessage(err) {
  * @param {Function} options.markIllustrated - `(lobbyId, at)` records the cooldown.
  * @param {Function} options.saveImage - `(name, b64)` → the url it can be served from.
  * @param {Function} options.emit - `(lobbyId, event, payload)`.
+ * @param {Function} [options.onDrawn] - `(lobbyId, record)` once pictures exist,
+ *   so the game's gallery can keep them with what they illustrate.
  * @param {Function} [options.appearanceOf] - `(player)` → what is permanently
  *   true of them, for a party member who has no likeness yet.
  * @param {Function} [options.onCharacterCreated] - `(lobbyId, name, result)`,
@@ -95,6 +97,7 @@ export function createIllustrationRunner({
 	saveImage,
 	emit,
 	appearanceOf = (player) => player?.imageAppearance ?? player?.name ?? "an adventurer",
+	onDrawn = () => {},
 	onCharacterCreated = () => {},
 	now = () => Date.now(),
 	log = () => {},
@@ -109,6 +112,22 @@ export function createIllustrationRunner({
 	 * is actually happening rather than guessing at it.
 	 */
 	const drawing = new Set();
+
+	/**
+	 * @description Files a finished illustration in the game's gallery. Never
+	 *   throws: the pictures already exist, and losing the note of what they meant
+	 *   must not cost the turn that produced them.
+	 * @param {string} lobbyId - The game.
+	 * @param {object} record - Caption, narration, characters, images.
+	 * @returns {void}
+	 */
+	function remember(lobbyId, record) {
+		try {
+			onDrawn(lobbyId, record);
+		} catch (err) {
+			log(`⚠️ Could not file the illustration in the gallery: ${safeMessage(err)}`);
+		}
+	}
 
 	/**
 	 * @description Draws one character from their stored likeness.
@@ -217,6 +236,7 @@ export function createIllustrationRunner({
 				}
 
 				log(`🖼️ Drew the opening scene for ${lobbyId} (${images.length}/${party.length})`);
+				remember(lobbyId, { kind: "opening", caption: OPENING_CAPTION, images, characters: party.map((p) => p.name) });
 				emit(lobbyId, "illustration:ready", { id, caption: OPENING_CAPTION, images, failures: [] });
 				return { id, caption: OPENING_CAPTION, drawn: images.length };
 			} catch (err) {
@@ -303,6 +323,8 @@ export function createIllustrationRunner({
 				}
 
 				log(`🖼️ Illustrated "${caption.slice(0, 60)}" for ${lobbyId} (${images.length}/${targets.length})`);
+				// Kept before the emit: a browser closing must not cost the record.
+				remember(lobbyId, { kind: "scene", caption, images, narration: reply?.text, characters: targets.map((t) => t?.name).filter(Boolean) });
 				emit(lobbyId, "illustration:ready", { id, caption, images, failures });
 				return { id, caption, drawn: images.length };
 			} catch (err) {

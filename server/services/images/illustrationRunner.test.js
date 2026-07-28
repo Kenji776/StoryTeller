@@ -19,7 +19,7 @@ const PARTY = [
  * @param {object} [options] - Overrides.
  * @returns {object} The runner and everything it touched.
  */
-function makeRunner({ mode = "key-moments", lastAt = null, scene, image, ensure, party = PARTY, now = () => T0 } = {}) {
+function makeRunner({ mode = "key-moments", lastAt = null, scene, image, ensure, party = PARTY, onDrawn, now = () => T0 } = {}) {
 	const emitted = [];
 	const saved = [];
 	const lobby = { illustrationMode: mode, lastIllustrationAt: lastAt };
@@ -35,6 +35,7 @@ function makeRunner({ mode = "key-moments", lastAt = null, scene, image, ensure,
 		markIllustrated: (id, at) => { lobby.lastIllustrationAt = at; },
 		saveImage: async (name, b64) => { saved.push({ name, b64 }); return `/character-images/${name}.png`; },
 		emit: (lobbyId, event, payload) => emitted.push({ lobbyId, event, payload }),
+		...(onDrawn ? { onDrawn } : {}),
 		now,
 		log: () => {},
 	});
@@ -438,4 +439,48 @@ test("the opening scene is loosened the same way", async () => {
 
 	await runner.openingScene(LOBBY);
 	assert.ok(strength < 1);
+});
+
+// ── Filing pictures in the game's record ─────────────────────────────────────
+
+test("a finished illustration is filed with its caption and the narration around it", async () => {
+	const filed = [];
+	const { runner } = makeRunner({ onDrawn: (lobbyId, record) => filed.push({ lobbyId, ...record }) });
+
+	await runner.consider(LOBBY, { ...REPLY, text: "The troll folds like a dropped coat." });
+
+	assert.equal(filed.length, 1);
+	assert.equal(filed[0].lobbyId, LOBBY);
+	assert.match(filed[0].caption, /warhammer|troll/);
+	assert.match(filed[0].narration, /dropped coat/);
+	assert.deepEqual(filed[0].characters, ["Brannor Ironfoot"]);
+	assert.equal(filed[0].images.length, 1);
+});
+
+test("the opening is filed as an opening, so a slideshow can start there", async () => {
+	const filed = [];
+	const { runner } = makeRunner({ onDrawn: (lobbyId, record) => filed.push(record) });
+
+	await runner.openingScene(LOBBY);
+
+	assert.equal(filed[0].kind, "opening");
+	assert.equal(filed[0].images.length, 2);
+});
+
+test("a failed illustration files nothing", async () => {
+	const filed = [];
+	const { runner } = makeRunner({
+		scene: async () => { throw new Error("down"); },
+		onDrawn: (lobbyId, record) => filed.push(record),
+	});
+
+	await runner.consider(LOBBY, REPLY);
+	assert.deepEqual(filed, []);
+});
+
+test("a gallery that will not write does not cost the turn its picture", async () => {
+	const { runner, emitted } = makeRunner({ onDrawn: () => { throw new Error("EACCES"); } });
+
+	await assert.doesNotReject(() => runner.consider(LOBBY, REPLY));
+	assert.ok(emitted.some((e) => e.event === "illustration:ready"), "the picture was lost because the record failed");
 });
