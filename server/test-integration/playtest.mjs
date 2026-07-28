@@ -40,7 +40,9 @@ const NO_ACT = argv.includes("--noact");
 // party calling for a rest.
 const PERSONAS_ON = argv.includes("--personas");
 const BRUTALITY = Number(arg("brutality", 5));
-const DIFFICULTY = arg("difficulty", "standard");   // observe only: nobody acts, so the turn timer must do the work      // pause after lobby creation so a spectator can attach
+const DIFFICULTY = arg("difficulty", "standard");
+const PROVIDER = arg("provider", "openai");
+const MODEL = arg("model", "gpt-4o");   // observe only: nobody acts, so the turn timer must do the work      // pause after lobby creation so a spectator can attach
 const LOG_DIR = path.join(process.cwd(), "server", "logs");
 
 const STAMP = new Date().toISOString().replace(/[:.]/g, "-");
@@ -420,7 +422,12 @@ async function run() {
 	// ── Start ──
 	// A short timer so an expiry is observable; the store clamps below one minute.
 	host.socket.emit("lobby:settings", { lobbyId: host.lobbyId, timerEnabled: true, timerMinutes: 1, maxMissedTurns: 3, abilitySlotsBase: Number(arg("slots", 3)),
-		brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, lootGenerosity: "fair" });
+		brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, lootGenerosity: "fair",
+		// Named explicitly rather than inherited from the server's DEFAULT_LLM_PROVIDER.
+		// A run once opened against whichever provider the deployment happened to
+		// default to, found an invalid key, and played on for turns with
+		// "[Error: LLM unavailable or failed to respond]" as its narration.
+		llmProvider: PROVIDER, llmModel: MODEL });
 	await sleep(400);
 
 	// Read the settings back off the snapshot. The server's settings log line echoes
@@ -428,7 +435,8 @@ async function run() {
 	// the run is over and the whole game was played under the wrong rules.
 	{
 		const s = host.state ?? {};
-		const want = { brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, abilitySlotsBase: Number(arg("slots", 3)) };
+		const want = { brutalityLevel: BRUTALITY, difficulty: DIFFICULTY, abilitySlotsBase: Number(arg("slots", 3)),
+			llmProvider: PROVIDER, llmModel: MODEL };
 		for (const [k, v] of Object.entries(want)) {
 			const got = s[k];
 			log("RUN", `settings check: ${k} = ${JSON.stringify(got)}${got === v ? "" : `  <-- WANTED ${JSON.stringify(v)}`}`);
@@ -438,6 +446,15 @@ async function run() {
 	host.socket.emit("game:start", { lobbyId: host.lobbyId });
 	const opening = await waitForNarration(host.socket, 90000);
 	log("RUN", `OPENING NARRATION: ${brief(opening, 900)}`);
+
+	// Stop rather than play on against a dead narrator. The server publishes an LLM
+	// failure as ordinary narration and keeps the turn clock running, so a run whose
+	// provider key was invalid played turn after turn with
+	// "[Error: LLM unavailable or failed to respond]" as its entire story.
+	if (/LLM unavailable|failed to respond/i.test(JSON.stringify(opening ?? ""))) {
+		log("RUN", "!! ABORT: the DM is not answering — check the provider key. No turns were played.");
+		process.exit(2);
+	}
 
 	// ── Turns ──
 	let actions = 0;

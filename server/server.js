@@ -41,7 +41,8 @@ import { EventJournal } from "./services/eventJournal.js";
 import { createLobbyBus } from "./services/lobbyBus.js";
 import { PlayerSessions } from "./services/playerSessions.js";
 import { createSessionSystem } from "./routes/sessionEvents.js";
-import { createIncidentLog } from "./services/incidents.js";
+import { createIncidentLog, SEVERITY } from "./services/incidents.js";
+import { isLLMFailure } from "./services/llmFailure.js";
 import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
@@ -870,6 +871,30 @@ io.on("connection", (socket) => {
 			]);
 
 			log(`🔍 [DEBUG] Raw setup LLM response:\n${openingRaw}`);
+
+			// A dead provider must not become the story. The adapters return an error
+			// string rather than throwing, so without this check the failure was
+			// published as the opening narration, stored as the adventure's name,
+			// written to the durable history, and the turn clock started on top of it.
+			if (isLLMFailure(openingRaw)) {
+				log(`💥 Opening narration failed for lobby ${lobbyId} — refusing to publish the error as story`);
+				incidents.raise(lobbyId, {
+					kind: "llm_failure",
+					severity: SEVERITY.ERROR,
+					message: "The Dungeon Master could not be reached, so the adventure has not started.",
+					detail: { phase: "opening", provider: store.index[lobbyId]?.llmProvider ?? null, model: store.index[lobbyId]?.llmModel ?? null },
+					suggestedFix: "Check the lobby's AI provider and API key, then start the game again.",
+				});
+				busIo.to(room(lobbyId)).emit("toast", {
+					type: "error",
+					message: "The Dungeon Master is not responding. The game has not started — ask your host to check the AI settings.",
+				});
+				store.setPhase(lobbyId, "waiting");
+				busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
+				busIo.to(room(lobbyId)).emit("ui:unlock");
+				return;
+			}
+
 			let cleanText = "[Error: no content returned]";
 			let setupMusic = null;
 			let setupSuggestions = [];
@@ -1008,9 +1033,21 @@ io.on("connection", (socket) => {
 
 			const replyText = typeof rawReply === "string" ? rawReply.trim() : "";
 			console.log(`📝 [LLM raw response] lobby=${lobbyId}:\n${replyText.slice(0, 2000)}${replyText.length > 2000 ? "…(truncated)" : ""}`);
-			if (!replyText) {
-				console.warn("⚠️ Empty LLM reply");
-				busIo.to(room(lobbyId)).emit("toast", { type: "error", message: "DM returned an empty reply." });
+
+			// Covers both an empty reply and the error strings the adapters return in
+			// place of throwing. Publishing one of those as narration put an error
+			// message into the players' story log and the DM's own context, where it
+			// then influenced every later turn.
+			if (isLLMFailure(replyText)) {
+				console.warn("⚠️ DM reply unusable — not publishing it as narration");
+				incidents.raise(lobbyId, {
+					kind: "llm_failure",
+					severity: SEVERITY.ERROR,
+					message: `The Dungeon Master did not answer ${actor.name}'s turn. Nothing was narrated and the turn was not consumed.`,
+					detail: { phase: "turn", player: actor.name, provider: store.index[lobbyId]?.llmProvider ?? null },
+					suggestedFix: "If this repeats, check the lobby's AI provider and API key.",
+				});
+				busIo.to(room(lobbyId)).emit("toast", { type: "error", message: "The Dungeon Master did not respond. Try your action again." });
 				busIo.to(room(lobbyId)).emit("ui:unlock");
 				return;
 			}
