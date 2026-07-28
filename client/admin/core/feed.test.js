@@ -98,9 +98,28 @@ test("a required roll states the die and the stats it draws on", () => {
 	assert.match(line.message, /Mira must roll d20 \(dex, wis\)/);
 });
 
-test("a roll result reports both the die and the total", () => {
-	assert.match(entry("dice:result", { player: "Mira", roll: 14, total: 17, sides: 20 }).message,
-		/Mira rolled d20: 14 \(total: 17\)/);
+test("a roll result reports the check, the total and the roll behind it", () => {
+	// This payload is exactly what the server emits (lobbyCombat.autoRollIfNeeded):
+	// {player, kind, value, detail:{base, bonus, stat, outcome}}. The previous version
+	// of this test invented {roll, total, sides} — fields the server has never sent —
+	// so it passed while the feed rendered "rolled dundefined: undefined (total:
+	// undefined)" in front of real operators.
+	const line = entry("dice:result", {
+		player: "Mira",
+		kind: "d20 PERCEPTION (wis+2)",
+		value: 16,
+		detail: { base: 14, bonus: 2, stat: "wis", outcome: "success" },
+	});
+	assert.equal(line.type, "roll");
+	assert.match(line.message, /Mira/);
+	assert.match(line.message, /d20 PERCEPTION/);
+	assert.match(line.message, /16/);
+	assert.ok(!line.message.includes("undefined"), line.message);
+});
+
+test("a roll result survives a payload with no detail block", () => {
+	const line = entry("dice:result", { player: "Mira", kind: "d20", value: 11 });
+	assert.ok(!line.message.includes("undefined"), line.message);
 });
 
 test("conditions list what the player now has, or that they have none", () => {

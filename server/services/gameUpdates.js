@@ -192,6 +192,9 @@ export function broadcastGoldUpdates(io, store, lobbyId, updates) {
 			player: key,
 			gold: goldNow,
 			delta,
+			// Carried like hp:update already does. Without it the admin feed defaulted
+			// to "Manual change", labelling every story-driven change as an admin edit.
+			reason: g.reason || "",
 		});
 	}
 }

@@ -84,7 +84,9 @@ const FORMATTERS = Object.freeze({
 		["hp", `${p.player} ${signed(p.delta)} HP (${p.reason || "Manual change"}) — now ${p.hp} HP`],
 
 	"gold:update": (p) =>
-		["gold", `${p.player} ${signed(p.delta)} gold (${p.reason || "Manual change"}) — now ${p.gold}`],
+		// Only say why when a reason was actually given. Defaulting to "Manual change"
+		// labelled every DM-driven change as an admin edit — the opposite of the truth.
+		["gold", `${p.player} ${signed(p.delta)} gold${p.reason ? ` (${p.reason})` : ""} — now ${p.gold}`],
 
 	"turn:update": (p) => ["turn", `Turn: ${p.current ?? "nobody"} | Order: ${list(p.order, "empty")}`],
 
@@ -111,7 +113,11 @@ const FORMATTERS = Object.freeze({
 
 	"roll:required": (p) => ["roll", `${p.player} must roll d${p.sides} (${list(p.stats, "no stat")})`],
 
-	"dice:result": (p) => ["roll", `${p.player} rolled d${p.sides}: ${p.roll} (total: ${p.total})`],
+	// {player, kind, value, detail:{base, bonus, stat, outcome}} — the shape the
+	// server sends. Reading {sides, roll, total} rendered every roll as "dundefined".
+	"dice:result": (p) => ["roll", `${p.player}: ${p.kind ?? "roll"} = ${p.value ?? "?"}`
+		+ (p.detail ? ` (${p.detail.base}${p.detail.bonus >= 0 ? "+" : ""}${p.detail.bonus})` : "")
+		+ (p.detail?.outcome ? ` [${p.detail.outcome}]` : "")],
 
 	"conditions:update": (p) => ["cond", `${p.player} conditions: ${list(p.conditions)}`],
 

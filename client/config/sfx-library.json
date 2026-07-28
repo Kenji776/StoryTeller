@@ -1762,6 +1762,32 @@
 				"durationSec": 3,
 				"generatedAt": "2026-07-28T00:32:25.572Z"
 			}
+		},
+		{
+			"name": "Guttural Growl",
+			"file": "guttural_growl_ms4005rhiey3.mp3",
+			"tags": [
+				"guttural",
+				"growl"
+			],
+			"_generated": {
+				"prompt": "A sound effect of guttural growl",
+				"durationSec": 3,
+				"generatedAt": "2026-07-28T01:49:47.698Z"
+			}
+		},
+		{
+			"name": "Murmured Whispers",
+			"file": "murmured_whispers_ms40hif7fd7h.mp3",
+			"tags": [
+				"murmured",
+				"whispers"
+			],
+			"_generated": {
+				"prompt": "A sound effect of murmured whispers",
+				"durationSec": 3,
+				"generatedAt": "2026-07-28T02:03:17.254Z"
+			}
 		}
 	]
 }

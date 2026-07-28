@@ -225,3 +225,21 @@ test("a non-array abilities field is ignored rather than throwing", async () => 
 	const { io, store } = makeAbilityDeps();
 	assert.doesNotThrow(() => broadcastAbilityUpdates(io, store, "lob1", "not a list"));
 });
+
+test("a gold change carries the reason the DM gave for it", async () => {
+	// Without a reason the admin feed labelled every story-driven gold change
+	// "Manual change" — stating the opposite of what happened, since a manual change
+	// is exactly what it was not.
+	configureUpdates({ incidents: null });
+	const { io, store, emitted } = makeDeps();
+	broadcastGoldUpdates(io, store, "lob1", [{ player: "Ayla", delta: 5, reason: "found in a buried box" }]);
+	const gold = emitted.find((e) => e.event === "gold:update");
+	assert.equal(gold.payload.reason, "found in a buried box");
+});
+
+test("a gold change with no stated reason sends an empty one, not a misleading default", () => {
+	configureUpdates({ incidents: null });
+	const { io, store, emitted } = makeDeps();
+	broadcastGoldUpdates(io, store, "lob1", [{ player: "Ayla", delta: 5 }]);
+	assert.equal(emitted.find((e) => e.event === "gold:update").payload.reason, "");
+});
