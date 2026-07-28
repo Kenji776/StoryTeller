@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createSocketBridge, MAX_FEED, FORWARDED_EVENTS } from "./socket.js";
+import { renderableEvents } from "./feed.js";
 import { createStore } from "./store.js";
 
 /**
@@ -125,6 +126,7 @@ test("every forwarded event name has a formatter behind it", () => {
 		"hp:update": { player: "a", delta: 1, hp: 1 },
 		"gold:update": { player: "a", delta: 1, gold: 1 },
 		"turn:update": { current: "a", order: ["a"] },
+		"player:action": { player: "a", text: "I open the door." },
 		"narration": { content: "The door opens." },
 		"player:death": { player: "a" },
 		"player:levelup": { newLevel: 2 },
@@ -132,7 +134,9 @@ test("every forwarded event name has a formatter behind it", () => {
 		"music:change": { mood: "calm" },
 		"sfx:play": { effects: [{ name: "clang" }] },
 		"roll:required": { player: "a", sides: 20, stats: [] },
-		"dice:result": { player: "a", roll: 1, total: 1, sides: 20 },
+		// The shape the server really sends (lobbyCombat.autoRollIfNeeded). This table
+		// previously carried {roll, total, sides}, which the server has never emitted.
+		"dice:result": { player: "a", kind: "d20 PERCEPTION (wis+2)", value: 16, detail: { base: 14, bonus: 2, stat: "wis", outcome: "success" } },
 		"conditions:update": { player: "a", conditions: [] },
 		"inventory:update": { player: "a", item: "x", change: 1, newCount: 1 },
 		"spellslots:update": { player: "a", spellSlotsUsed: 1, maxSlots: 2 },
@@ -327,4 +331,15 @@ test("events arriving after disposal change nothing", () => {
 	bridge.dispose();
 	socket.fire("xp:update", { player: "Mira", amount: 1, xp: 1 });
 	assert.equal(store.getState().feed.length, 0);
+});
+
+// ── Renderers and subscriptions must agree ───────────────────────────────────
+
+test("every event the feed can render is actually subscribed to", () => {
+	// A formatter for an event nobody forwards is dead code wearing the costume of a
+	// working feature: the unit test passes, the renderer is correct, and the line
+	// never appears in the log because the handler was never installed.
+	const forwarded = new Set(FORWARDED_EVENTS);
+	const unsubscribed = renderableEvents().filter((event) => !forwarded.has(event));
+	assert.deepEqual(unsubscribed, [], `renderers with no subscription: ${unsubscribed.join(", ")}`);
 });

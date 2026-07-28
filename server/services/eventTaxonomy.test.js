@@ -165,3 +165,10 @@ test("the three classes are distinct values", () => {
 test("classification is a pure function of the name", () => {
 	assert.equal(classifyEvent("hp:update"), classifyEvent("hp:update"));
 });
+
+test("player:action is durable because publicState does not carry it", () => {
+	// A player's own words are part of the story record. publicState carries the
+	// history the DM sees, not the per-action frames the room saw, so a client that
+	// misses one has a permanent hole in its log with no way to refetch it.
+	assert.equal(classifyEvent("player:action"), DURABLE);
+});

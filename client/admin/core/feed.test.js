@@ -215,3 +215,38 @@ test("matchesFilter rejects a missing entry rather than throwing", () => {
 	assert.equal(matchesFilter(null, "xp"), false);
 	assert.equal(matchesFilter(undefined, "all"), false);
 });
+
+// ── What the player actually asked to do ─────────────────────────────────────
+//
+// The action text was never broadcast at all: streamNarrationToClients carries the
+// speaker but not the words, so the room saw ui:lock, then dice, then the DM's
+// reply. An operator watching the feed could see whose turn it was and how the DM
+// responded, but never what the player had tried to do.
+
+test("a submitted action is shown with the player who submitted it", () => {
+	const line = entry("player:action", { player: "Sylvie Ashwren", text: "I scout ahead for traps." });
+	assert.equal(line.type, "action");
+	assert.match(line.message, /Sylvie Ashwren/);
+	assert.match(line.message, /I scout ahead for traps\./);
+});
+
+test("a long action is truncated rather than flooding the feed", () => {
+	const line = entry("player:action", { player: "Orrin", text: "I " + "wander ".repeat(200) });
+	assert.ok(line.message.length < 400, `feed line was ${line.message.length} chars`);
+});
+
+test("an action arriving as blank is not rendered at all", () => {
+	for (const text of ["", "   ", null, undefined]) {
+		assert.equal(entry("player:action", { player: "Orrin", text }), null, JSON.stringify(text));
+	}
+});
+
+test("an action with no player still renders the words", () => {
+	const line = entry("player:action", { text: "I open the door." });
+	assert.match(line.message, /I open the door\./);
+	assert.ok(!line.message.includes("undefined"), line.message);
+});
+
+test("action is an offered filter, so it can be read on its own", () => {
+	assert.ok(FEED_TYPES.some((t) => t.id === "action"), FEED_TYPES.map((t) => t.id).join(","));
+});

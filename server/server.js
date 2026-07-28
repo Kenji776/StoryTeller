@@ -1015,6 +1015,13 @@ io.on("connection", (socket) => {
 			}
 
 			store.appendUser(lobbyId, actor.name, text);
+
+			// The room needs to see what was actually attempted. Until now the only
+			// carrier of a player's words was streamNarrationToClients, which sends the
+			// speaker and the audio but not the text — so everyone else saw ui:lock,
+			// then dice, then the DM's reply, with the action that caused it missing.
+			busIo.to(room(lobbyId)).emit("player:action", { player: actor.name, text });
+
 			const rollPayload = store.autoRollIfNeeded(lobbyId, socket.id, text);
 			if (rollPayload) busIo.to(room(lobbyId)).emit("dice:result", rollPayload);
 

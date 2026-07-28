@@ -33,6 +33,10 @@ export const EVENT_CLASSES = {
 	// ── Story content ──
 	"narration": DURABLE,
 	"action:log": DURABLE,
+	// A player's own words. publicState carries the history the DM is given, not the
+	// per-action frames the room saw, so a client that misses one has a permanent
+	// hole in its log and no way to refetch it.
+	"player:action": DURABLE,
 	"adventure:name": DURABLE,
 
 	// ── Character and party state ──

@@ -525,6 +525,15 @@ function registerSocketEvents() {
 		console.groupEnd();
 	});
 
+	// What another player is attempting. Their words never used to reach the table:
+	// the only carrier was the TTS lifecycle, which sends the speaker and the audio
+	// but not the text, so everyone else saw the DM react to something they had not
+	// been shown. With audio off there was no trace of it at all.
+	socket.on("player:action", ({ player, text }) => {
+		if (typeof text !== "string" || !text.trim()) return;
+		appendLog(`${player || "Someone"}: ${text.trim()}\n\n`);
+	});
+
 	socket.on("narration", ({ content, status }) => {
 		let narrationContent = (content || "").trim();
 		if (narrationContent.startsWith('{')) {

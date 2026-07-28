@@ -25,6 +25,7 @@ export const FORWARDED_EVENTS = Object.freeze([
 	"hp:update",
 	"gold:update",
 	"turn:update",
+	"player:action",
 	"narration",
 	"player:death",
 	"player:levelup",

@@ -15,6 +15,10 @@ import { collapseWhitespace, truncate } from "./text.js";
 /** Longest narration excerpt kept in the feed, including its ellipsis. */
 const NARRATION_MAX = 300;
 
+/** Longest player action kept in the feed. Shorter than narration: an action is a
+ *  sentence, and anything longer is a player pasting. */
+const ACTION_MAX = 220;
+
 /** The filter vocabulary, in the order the filter control offers it. */
 export const FEED_TYPES = Object.freeze([
 	{ id: "all", label: "All activity" },
@@ -22,6 +26,7 @@ export const FEED_TYPES = Object.freeze([
 	{ id: "hp", label: "HP" },
 	{ id: "gold", label: "Gold" },
 	{ id: "turn", label: "Turns" },
+	{ id: "action", label: "Player actions" },
 	{ id: "dm", label: "Narration" },
 	{ id: "death", label: "Deaths" },
 	{ id: "roll", label: "Rolls" },
@@ -70,6 +75,19 @@ function moodLabel(mood) {
  * One formatter per socket event. Each returns `[type, message]`, or null when the
  * event carries nothing worth showing.
  */
+/**
+ * Every event this module knows how to render.
+ *
+ * @description Exported so a test can hold it against the list the socket layer
+ *   actually subscribes to. A renderer for an event nobody forwards is dead code
+ *   that looks like a working feature, which is how `player:action` could have been
+ *   written, tested, and still never appeared in the log.
+ * @returns {string[]} The event names with formatters.
+ */
+export function renderableEvents() {
+	return Object.keys(FORMATTERS);
+}
+
 const FORMATTERS = Object.freeze({
 	"xp:update": (p) => {
 		const amount = Number(p.amount) || 0;
@@ -89,6 +107,15 @@ const FORMATTERS = Object.freeze({
 		["gold", `${p.player} ${signed(p.delta)} gold${p.reason ? ` (${p.reason})` : ""} — now ${p.gold}`],
 
 	"turn:update": (p) => ["turn", `Turn: ${p.current ?? "nobody"} | Order: ${list(p.order, "empty")}`],
+
+	// What the player actually asked to do. Without this the feed showed whose turn
+	// it was and how the DM replied, with the player's own words missing from
+	// between them — the one line that explains why the turn went as it did.
+	"player:action": (p) => {
+		if (typeof p.text !== "string" || !p.text.trim()) return null;
+		const text = collapseWhitespace(p.text);
+		return text ? ["action", `${p.player ? `${p.player}: ` : ""}${truncate(text, ACTION_MAX)}`] : null;
+	},
 
 	"narration": (p, { toText }) => {
 		// The TTS path emits a contentless twin of every narration; rendering it
