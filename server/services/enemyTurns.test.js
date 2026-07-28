@@ -1,0 +1,195 @@
+/**
+ * Tests for resolving the enemies' turn.
+ *
+ * @description Combat had no stakes. Across two full games the Dungeon Master
+ *   emitted an `hp` block on 4 of 92 turns and a negative delta on 2, despite
+ *   constant fighting — the party killed everything and finished untouched, and
+ *   `player:death` never fired outside unit tests. Strengthening the prompt moved
+ *   damage from 0 turns in 57 to 2 in 92, which is not stakes.
+ *
+ *   So the enemies' attacks are rolled here, deterministically, before the DM writes
+ *   — the same shape as the player dice rolls the server already resolves and hands
+ *   over as facts. The model narrates the exchange it is given rather than inventing
+ *   one and forgetting the arithmetic.
+ */
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+import { resolveEnemyAttacks, describeAttacks } from "./enemyTurns.js";
+
+/** A die that returns a scripted sequence, so every test is exact (`TDD-8`). */
+const scripted = (...values) => { let i = 0; return () => values[i++ % values.length]; };
+
+/**
+ * @description Three goblins, all able to fight.
+ * @param {object} [over] - Fields merged onto each enemy.
+ * @returns {object} An enemy roster keyed by name.
+ */
+function goblins(over = {}) {
+	const make = (name) => ({ name, hp: 7, max_hp: 7, ac: 15, str: 12, dex: 14, cr: "1/4", status: "active", ...over });
+	return { "Goblin 1": make("Goblin 1"), "Goblin 2": make("Goblin 2"), "Goblin 3": make("Goblin 3") };
+}
+
+/**
+ * @description A party of two, one armoured and one not.
+ * @param {object} [over] - Fields merged onto every member.
+ * @returns {object} Players keyed by name.
+ */
+function party(over = {}) {
+	return {
+		Brannor: { name: "Brannor", stats: { hp: 12, max_hp: 12, dex: 10 }, armor: { name: "Chain Mail", ac: 16 }, ...over },
+		Sylvie: { name: "Sylvie", stats: { hp: 9, max_hp: 9, dex: 16 }, ...over },
+	};
+}
+
+// ===== Who swings =====
+
+test("every living enemy attacks once", () => {
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: party(), rollD20: scripted(10) });
+	assert.equal(result.attacks.length, 3);
+	assert.deepEqual(result.attacks.map((a) => a.enemy).sort(), ["Goblin 1", "Goblin 2", "Goblin 3"]);
+});
+
+test("dead and fled enemies do not attack", () => {
+	const enemies = goblins();
+	enemies["Goblin 2"].status = "dead";
+	enemies["Goblin 3"].status = "fled";
+	const result = resolveEnemyAttacks({ enemies, players: party(), rollD20: scripted(10) });
+	assert.deepEqual(result.attacks.map((a) => a.enemy), ["Goblin 1"]);
+});
+
+test("an enemy at zero hit points does not attack even if its status says otherwise", () => {
+	const enemies = goblins();
+	enemies["Goblin 1"].hp = 0;
+	const result = resolveEnemyAttacks({ enemies, players: party(), rollD20: scripted(10) });
+	assert.ok(!result.attacks.some((a) => a.enemy === "Goblin 1"), JSON.stringify(result.attacks));
+});
+
+test("no enemies means no attacks and no damage", () => {
+	for (const empty of [{}, null, undefined]) {
+		const result = resolveEnemyAttacks({ enemies: empty, players: party(), rollD20: scripted(20) });
+		assert.deepEqual(result.attacks, []);
+		assert.deepEqual(result.damage, {});
+	}
+});
+
+// ===== Who is hit =====
+
+test("attacks are spread across the party rather than focused on one character", () => {
+	// Three goblins all beating on one level-1 character is an instant kill and reads
+	// as the engine picking on somebody.
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: party(), rollD20: scripted(10) });
+	assert.equal(new Set(result.attacks.map((a) => a.target)).size, 2);
+});
+
+test("a downed character is not attacked further", () => {
+	const p = party();
+	p.Brannor.stats.hp = 0;
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: p, rollD20: scripted(10) });
+	assert.ok(result.attacks.every((a) => a.target === "Sylvie"), JSON.stringify(result.attacks));
+});
+
+test("a character flagged dead is not attacked", () => {
+	const p = party();
+	p.Brannor.dead = true;
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: p, rollD20: scripted(10) });
+	assert.ok(result.attacks.every((a) => a.target === "Sylvie"));
+});
+
+test("nobody left standing means nobody is attacked", () => {
+	const p = party();
+	p.Brannor.stats.hp = 0;
+	p.Sylvie.stats.hp = 0;
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: p, rollD20: scripted(20) });
+	assert.deepEqual(result.attacks, []);
+});
+
+// ===== Hitting and missing =====
+
+test("a roll that beats armour class hits, one that falls short misses", () => {
+	// Brannor is AC 16. A goblin's bonus is +3 (str 12 -> +1, proficiency +2).
+	const hit = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, ac: 15, str: 12, cr: "1/4", status: "active" } }, players: { Brannor: party().Brannor }, rollD20: scripted(15) });
+	assert.equal(hit.attacks[0].hit, true, JSON.stringify(hit.attacks[0]));
+
+	const miss = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, ac: 15, str: 12, cr: "1/4", status: "active" } }, players: { Brannor: party().Brannor }, rollD20: scripted(5) });
+	assert.equal(miss.attacks[0].hit, false, JSON.stringify(miss.attacks[0]));
+});
+
+test("a natural twenty always hits and a natural one always misses", () => {
+	const armoured = { Tank: { name: "Tank", stats: { hp: 20, max_hp: 20, dex: 10 }, armor: { ac: 99 } } };
+	const crit = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, ac: 15, str: 1, cr: "0", status: "active" } }, players: armoured, rollD20: scripted(20) });
+	assert.equal(crit.attacks[0].hit, true);
+
+	const naked = { Naked: { name: "Naked", stats: { hp: 20, max_hp: 20, dex: 1 } } };
+	const fumble = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, ac: 15, str: 20, cr: "5", status: "active" } }, players: naked, rollD20: scripted(1) });
+	assert.equal(fumble.attacks[0].hit, false);
+});
+
+test("armour class falls back to dexterity when nothing is worn", () => {
+	// Sylvie wears nothing and has dex 16, so AC 13. A total of 13 hits, 12 misses.
+	const only = { Sylvie: party().Sylvie };
+	assert.equal(resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, str: 12, cr: "1/4", status: "active" } }, players: only, rollD20: scripted(10) }).attacks[0].hit, true);
+	assert.equal(resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, str: 12, cr: "1/4", status: "active" } }, players: only, rollD20: scripted(9) }).attacks[0].hit, false);
+});
+
+// ===== Damage =====
+
+test("damage is dealt only on a hit", () => {
+	const missed = resolveEnemyAttacks({ enemies: goblins(), players: party(), rollD20: scripted(1) });
+	assert.deepEqual(missed.damage, {});
+	assert.ok(missed.attacks.every((a) => a.damage === 0));
+});
+
+test("a hit deals damage and it is totalled per character", () => {
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: party(), rollD20: scripted(20) });
+	assert.ok(Object.values(result.damage).every((n) => n > 0), JSON.stringify(result.damage));
+	const totalled = Object.values(result.damage).reduce((a, b) => a + b, 0);
+	assert.equal(totalled, result.attacks.reduce((n, a) => n + a.damage, 0));
+});
+
+test("a tougher enemy hits harder than a weaker one", () => {
+	// The stub must respect the dice it is handed — a flat `() => 4` returns the same
+	// number for 1d6 and 3d10, so it could not show the difference it was asserting.
+	const maxRoll = (count, sides) => count * sides;
+	const weak = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 9, str: 12, cr: "1/8", status: "active" } }, players: party(), rollD20: scripted(20), rollDamage: maxRoll });
+	const boss = resolveEnemyAttacks({ enemies: { b: { name: "b", hp: 9, str: 12, cr: "5", status: "active" } }, players: party(), rollD20: scripted(20), rollDamage: maxRoll });
+	assert.ok(boss.attacks[0].damage > weak.attacks[0].damage, `${boss.attacks[0].damage} vs ${weak.attacks[0].damage}`);
+});
+
+test("damage is never negative and never zero on a hit", () => {
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: party(), rollD20: scripted(20), rollDamage: () => 1 });
+	assert.ok(result.attacks.every((a) => a.damage >= 1), JSON.stringify(result.attacks));
+});
+
+// ===== Determinism =====
+
+test("the same rolls always produce the same result", () => {
+	// Both sources of randomness have to be injected. Leaving the damage dice real
+	// meant this compared two Math.random() draws and would have failed intermittently
+	// while appearing to test determinism.
+	const args = () => ({ enemies: goblins(), players: party(), rollD20: scripted(11, 4, 18), rollDamage: (c, s) => c * s });
+	assert.deepEqual(resolveEnemyAttacks(args()), resolveEnemyAttacks(args()));
+});
+
+// ===== What the DM is told =====
+
+test("the attacks are described as facts the DM can narrate", () => {
+	const result = resolveEnemyAttacks({ enemies: goblins(), players: party(), rollD20: scripted(20, 1, 20) });
+	const text = describeAttacks(result.attacks);
+
+	assert.match(text, /Goblin 1/);
+	assert.match(text, /hit|hits/i);
+	assert.match(text, /miss|misses/i);
+	assert.ok(!text.includes("undefined"), text);
+});
+
+test("nothing to describe yields an empty string, not a heading with no content", () => {
+	assert.equal(describeAttacks([]), "");
+	assert.equal(describeAttacks(null), "");
+});
+
+test("the description states the damage so the DM cannot invent a different number", () => {
+	const result = resolveEnemyAttacks({ enemies: { g: { name: "g", hp: 7, str: 12, cr: "1/4", status: "active" } }, players: party(), rollD20: scripted(20), rollDamage: () => 5 });
+	assert.match(describeAttacks(result.attacks), new RegExp(String(result.attacks[0].damage)));
+});

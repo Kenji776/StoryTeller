@@ -52,6 +52,7 @@ import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
+import { resolveEnemyAttacks, describeAttacks } from "./services/enemyTurns.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
 
@@ -1055,7 +1056,23 @@ io.on("connection", (socket) => {
 			const rollPayload = store.autoRollIfNeeded(lobbyId, socket.id, text);
 			if (rollPayload) busIo.to(room(lobbyId)).emit("dice:result", rollPayload);
 
+			// The enemies' turn, resolved before the DM writes rather than left to it.
+			// Asked to volunteer damage, the model produced a negative HP delta on 2 of
+			// 92 turns across two full games of constant fighting: the party killed
+			// everything and finished untouched, and player:death never fired. Rolling
+			// here and handing the results over as settled facts means the narration
+			// describes the blows that actually landed — resolving afterwards instead
+			// would let it describe a clean dodge while hit points fell.
+			const enemyTurn = resolveEnemyAttacks({
+				enemies: s.enemies,
+				players: s.players,
+			});
+
 			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload);
+			if (enemyTurn.attacks.length) {
+				msgs.push({ role: "system", content: describeAttacks(enemyTurn.attacks) });
+				console.log(`⚔️  Enemy round: ${enemyTurn.attacks.filter((a) => a.hit).length}/${enemyTurn.attacks.length} hit`);
+			}
 			console.log(`🎭 Action from ${actor.name}: "${text}"`);
 
 			// Player voice narration. A character sheet's voice_id is an ElevenLabs id,
@@ -1108,6 +1125,27 @@ io.on("connection", (socket) => {
 					if (typeof narrationText !== "string") narrationText = replyText;
 				} catch {
 					narrationText = replyText;
+				}
+			}
+
+			// The damage rolled before the DM wrote, applied now that it has been
+			// narrated. Routed through broadcastHPUpdates like any other HP change, so
+			// death, removal from the turn order and the wipe check all behave
+			// identically whether the blow came from an enemy or from the story.
+			const enemyDamage = Object.entries(enemyTurn.damage).map(([player, amount]) => ({
+				player,
+				delta: -amount,
+				reason: "Struck in combat",
+			}));
+			if (enemyDamage.length) {
+				broadcastHPUpdates(busIo, store, lobbyId, enemyDamage);
+				// Checked here as well as inside the block below, because that one only
+				// runs when the DM's JSON parsed. A party wiped out by the enemies'
+				// round must end the game whether or not the narrator made sense.
+				await checkAndEndIfAllDead(lobbyId);
+				if (store.index[lobbyId]?.phase === "wiped") {
+					busIo.to(room(lobbyId)).emit("ui:unlock");
+					return;
 				}
 			}
 
