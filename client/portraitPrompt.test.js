@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPortraitPrompt, finalisePrompt, NO_TEXT_GUARD } from "./portraitPrompt.js";
+import { buildPortraitPrompt, finalisePrompt, mergePromptUpdate, isPromptReady, NO_TEXT_GUARD } from "./portraitPrompt.js";
 
 /**
  * @description A fully populated sheet, as `buildCurrentSheet` produces one.
@@ -145,4 +145,82 @@ test("the same sheet always produces the same prompt", () => {
 	// The textarea is populated from this. A prompt that changed between renders
 	// would overwrite what the player had typed.
 	assert.equal(buildPortraitPrompt(sheet()), buildPortraitPrompt(sheet()));
+});
+
+// ── Keeping the player's additions while the sheet part stays current ────────
+//
+// The first version stopped refreshing the moment anyone typed, so a player who
+// added "in an epic pose" then changed their armour was left describing armour they
+// no longer wore. The box is a generated description followed by whatever they added:
+// the generated part is replaced on a change, the rest is theirs and is never touched.
+
+test("an empty box is filled with the generated description", () => {
+	assert.equal(mergePromptUpdate("", "", "A Dwarf Fighter."), "A Dwarf Fighter.");
+});
+
+test("the generated part is replaced and the player's addition survives", () => {
+	const merged = mergePromptUpdate(
+		"A Dwarf Fighter. In an epic pose, wearing a leather jacket.",
+		"A Dwarf Fighter.",
+		"A Dwarf Paladin.",
+	);
+	assert.equal(merged, "A Dwarf Paladin. In an epic pose, wearing a leather jacket.");
+});
+
+test("an addition spanning several lines survives", () => {
+	const addition = "\n\nStanding in the rain.\nHolding a lantern.";
+	const merged = mergePromptUpdate(`A Dwarf Fighter.${addition}`, "A Dwarf Fighter.", "A Dwarf Paladin.");
+	assert.equal(merged, `A Dwarf Paladin.${addition}`);
+});
+
+test("a box holding only the generated text is replaced cleanly", () => {
+	assert.equal(mergePromptUpdate("A Dwarf Fighter.", "A Dwarf Fighter.", "A Dwarf Paladin."), "A Dwarf Paladin.");
+});
+
+test("a player who rewrote the generated part keeps their version", () => {
+	// They have taken the description over. Overwriting it because they changed a
+	// dropdown would throw away deliberate work.
+	const theirs = "A completely different character of my own devising.";
+	assert.equal(mergePromptUpdate(theirs, "A Dwarf Fighter.", "A Dwarf Paladin."), theirs);
+});
+
+test("a first update with no previous generated text does not clobber existing writing", () => {
+	const theirs = "Something I typed before the sheet was filled in.";
+	assert.equal(mergePromptUpdate(theirs, "", "A Dwarf Fighter."), theirs);
+});
+
+test("nothing changes when the generated text has not changed", () => {
+	const text = "A Dwarf Fighter. In an epic pose.";
+	assert.equal(mergePromptUpdate(text, "A Dwarf Fighter.", "A Dwarf Fighter."), text);
+});
+
+test("malformed arguments yield something usable rather than throwing", () => {
+	assert.equal(mergePromptUpdate(null, null, "A Dwarf."), "A Dwarf.");
+	assert.equal(mergePromptUpdate(undefined, undefined, undefined), "");
+	assert.equal(mergePromptUpdate("mine", undefined, undefined), "mine");
+});
+
+// ── Is there enough here to draw? ───────────────────────────────────────────
+
+test("an empty or whitespace prompt is not worth generating from", () => {
+	// A portrait was being requested on page load from an empty box, spending a
+	// twenty-second call on nothing.
+	for (const empty of ["", "   ", "\n", null, undefined]) {
+		assert.equal(isPromptReady(empty), false, JSON.stringify(empty));
+	}
+});
+
+test("a prompt with only the house style is not worth generating from", () => {
+	// The style suffix is present even when no character choices have been made, so
+	// a non-empty box does not on its own mean there is a character to draw.
+	assert.equal(isPromptReady(buildPortraitPrompt(null)), false);
+	assert.equal(isPromptReady(buildPortraitPrompt({})), false);
+});
+
+test("a prompt describing an actual character is ready", () => {
+	assert.equal(isPromptReady(buildPortraitPrompt({ race: "Dwarf", class: "Fighter" })), true);
+});
+
+test("a prompt the player wrote themselves is ready", () => {
+	assert.equal(isPromptReady("A tall elf in silver armour, standing on a cliff."), true);
 });

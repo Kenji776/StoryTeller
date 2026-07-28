@@ -21,6 +21,7 @@ for how long they live.
 | `policy.js` | Records which providers are offered for each capability, and who pays. |
 | `sessionKeys.js` | Holds a lobby host's key in memory, and what the lobby has spent. |
 | `resolve.js` | Decides whose credential serves one call, or refuses with a reason. |
+| `capabilities.js` | Describes what the instance can do — one shape for players, one for the operator. |
 
 Every one of them takes `fsImpl`, the clock, and the logger as parameters, so the
 whole module is exercised without a disk, a clock, or a key (`CQ-5`, `TDD-8`).
@@ -91,19 +92,32 @@ The rules worth knowing:
   provider whose adapter does not exist yet, and this file stays testable without
   one.
 
-### The base URL is shape-checked here and safety-checked elsewhere
+### The base URL is shape-checked here and safety-checked at the write boundary
 
 `policy.js` validates that a local provider's address is a bare http(s) origin
 with no path and no embedded credentials. It does **not** check that the address
 resolves onto a private network, because that needs DNS and this function runs on
 every load including from disk.
 
-The server dials that address, so the private-network guard is mandatory — it
-belongs at the async admin write boundary, reusing what
-`services/tts/localConfig.js` already does for the speech server
-([ADR 0006](../decisions/0006-host-configurable-local-tts-address.md)). The two
-layers are complementary. **Anything adding a write path for `baseUrl` must
-apply it.**
+The server dials that address, so the private-network guard is mandatory. It
+lives in [`services/net/privateUrl.js`](../../server/services/net/privateUrl.js)
+— extracted from `services/tts/localConfig.js`, which now delegates to it, since
+the speech server is no longer the only self-hosted service an operator can aim
+this app at ([ADR 0006](../decisions/0006-host-configurable-local-tts-address.md)).
+
+```js
+await validatePrivateServiceUrl(raw, { lookup, serviceName: "Ollama server", example })
+```
+
+It resolves the hostname and requires **every** returned address to be private —
+requiring all rather than any is what refuses a name resolving to one LAN address
+and one public one, which is the shape a DNS rebinding attempt takes. Link-local
+is excluded, so `169.254.169.254` and its equivalents are unreachable.
+
+The two layers are complementary, not redundant: the shape check is synchronous
+and runs on every load; the network check needs I/O and runs once, when an
+operator submits an address. **Anything adding a write path for `baseUrl` must
+call the second one.**
 
 ## First-run defaults
 
@@ -182,16 +196,43 @@ ADR 0003 uses for an absent host — and explicitly not something the DM narrate
 `providerFor(capability, providerId)` is injected, so this module imports no
 registry and one path serves chat, speech and images alike.
 
+## Describing the instance
+
+`capabilities.js` answers two different questions and deliberately does not try
+to answer them with one shape:
+
+| | Player view | Operator view |
+|---|---|---|
+| Providers switched off | omitted | listed — that *is* the control |
+| Providers with no policy yet | omitted | listed, as `off` |
+| Vault metadata | none at all | `configured`, `last4`, `status`, `lastValidated` |
+| Policy knobs | the shared-model restriction only | all of them |
+
+`ready` is the field that matters to a player: can this provider serve a game
+right now without me supplying anything. `anyUsableWithoutPlayerKey` aggregates
+it per capability, and is what tells the browser to warn *before* someone builds
+a character that they will need to bring a key.
+
+An **unprobed** local service counts as ready. Reporting it broken because a boot
+probe has not finished would show "no AI available" on a fresh start — both wrong
+and the most alarming possible first impression. Readiness is withheld only when
+reachability is known to be `false`.
+
+The registry is the source of truth for what exists: a policy naming a provider
+with no adapter is ignored rather than offered.
+
 ## Testing
 
-`npm test` — 145 tests, no network, no disk, no real clock. The filesystem
+`npm test` — 172 tests, no network, no disk, no real clock. The filesystem
 double matches the one in `services/tts/localConfig.test.js`; time is a
 hand-driven clock, so expiry is asserted at an instant rather than slept through.
 
-Four tests assert security properties directly rather than implementation: the
+Six tests assert security properties directly rather than implementation: the
 plaintext key never appears in the bytes written to disk, `describe()` never
 carries it in any value on either store, the config handed out is a copy so a
-caller cannot mutate what is stored, and no failure message carries key material.
+caller cannot mutate what is stored, no failure message carries key material, the
+player-facing capability view carries no vault metadata at all, and neither
+capability view carries a key anywhere in its output.
 
 ## Not yet built
 

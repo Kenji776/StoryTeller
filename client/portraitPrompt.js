@@ -140,3 +140,55 @@ export function finalisePrompt(text) {
 	const room = MAX_PROMPT - NO_TEXT_GUARD.length - 1;
 	return `${body.slice(0, room).trim()} ${NO_TEXT_GUARD}`;
 }
+
+/**
+ * Refreshes the generated part of the box without disturbing the player's own words.
+ *
+ * @description The box is a generated description followed by whatever the player
+ *   added. The first version simply stopped refreshing the moment anyone typed, which
+ *   meant someone who added "in an epic pose" and then changed their armour was left
+ *   describing armour they no longer wore.
+ *
+ *   So the previously generated text is treated as a replaceable prefix: it is swapped
+ *   for the new one and everything after it is left exactly as written. If that prefix
+ *   is no longer there the player has rewritten the description themselves, and their
+ *   version stands — overwriting deliberate work because they touched a dropdown would
+ *   be the worse failure.
+ * @param {string} current - What is in the box now.
+ * @param {string} previous - The generated text last written into it.
+ * @param {string} next - The newly generated text.
+ * @returns {string} What the box should now contain.
+ */
+export function mergePromptUpdate(current, previous, next) {
+	const box = typeof current === "string" ? current : "";
+	const was = typeof previous === "string" ? previous : "";
+	const now = typeof next === "string" ? next : "";
+
+	if (!box.trim()) return now;
+	if (!was) return box;              // nothing of ours to replace; leave their writing
+	if (!box.startsWith(was)) return box;   // they rewrote the description itself
+
+	return now + box.slice(was.length);
+}
+
+/**
+ * Whether there is enough here to be worth a generation.
+ *
+ * @description A portrait was being requested on page load from an empty box,
+ *   spending a twenty-to-forty second call on nothing. An empty box is the obvious
+ *   case; the subtler one is a box holding only the house style, which
+ *   `buildPortraitPrompt` emits even for a sheet with no choices made yet, so
+ *   "not empty" is not the same as "describes somebody".
+ * @param {*} prompt - The prompt as it stands.
+ * @returns {boolean} True when it describes a character.
+ */
+export function isPromptReady(prompt) {
+	if (typeof prompt !== "string") return false;
+
+	const withoutStyle = prompt.replace(STYLE, "").replace(NO_TEXT_GUARD, "").trim();
+	if (!withoutStyle) return false;
+
+	// "A adventurer." is what an empty sheet yields once the style is removed: a
+	// placeholder, not a character.
+	return withoutStyle.replace(/^A\s+adventurer\.?$/i, "").trim().length > 0;
+}

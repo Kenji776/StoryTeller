@@ -45,6 +45,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 | `server/services/llm/` | Provider-agnostic AI layer — see [modules/llm.md](modules/llm.md) |
 | `server/services/tts/` | Provider-agnostic narration layer — see [modules/tts.md](modules/tts.md) |
 | `server/services/credentials/` | Operator key vault and provider policy — see [modules/credentials.md](modules/credentials.md) |
+| `server/services/net/` | The private-network guard for operator-supplied service addresses |
 | `server/helpers/` | Dice, DM JSON parsing/repair, class progression, asset downloads |
 | `client/` | Browser client (no build step; plain ESM and HTML fragments) |
 

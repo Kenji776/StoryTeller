@@ -754,9 +754,11 @@
 	     scripts are deferred like the rest and run in document order, so the globals
 	     exist before eventHandlers.js does anything with them. -->
 	<script type="module">
-		import { buildPortraitPrompt, finalisePrompt } from "/portraitPrompt.js";
+		import { buildPortraitPrompt, finalisePrompt, mergePromptUpdate, isPromptReady } from "/portraitPrompt.js";
 		window.buildPortraitPrompt = buildPortraitPrompt;
 		window.finalisePrompt = finalisePrompt;
+		window.mergePromptUpdate = mergePromptUpdate;
+		window.isPromptReady = isPromptReady;
 		document.dispatchEvent(new CustomEvent("portraitPrompt:ready"));
 	</script>
 	<script src="https://cdn.socket.io/4.7.5/socket.io.min.js" crossorigin="anonymous" defer></script>

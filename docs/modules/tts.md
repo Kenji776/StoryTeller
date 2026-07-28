@@ -123,8 +123,15 @@ resolve, dial, list voices, persist, and mark the engine available. Nothing is
 persisted unless the server actually answered with voices — a setting that will
 not work on the next restart is not a success and is not reported as one.
 
-**The server dials only private addresses.** `validateLocalTtsUrl` resolves the
-hostname and requires *every* returned address to be loopback, RFC1918, CGNAT
+**The server dials only private addresses.** `validateLocalTtsUrl` is now a thin
+wrapper over `services/net/privateUrl.js`, which owns the guard for every
+self-hosted service an operator can point this app at — the speech server, Ollama,
+and a local image server all need the identical check, and a second copy is how
+one of them ends up subtly weaker. The wrapper supplies only the wording, so a
+host still reads "speech server" rather than something generic.
+
+The guard resolves the hostname and requires *every* returned address to be
+loopback, RFC1918, CGNAT
 (`100.64/10`, which is what Tailscale hands out), or IPv6 unique local. Link-local
 is refused, because `169.254.169.254` is where clouds serve instance credentials.
 Requiring all resolved addresses rather than any is what stops a name that

@@ -1505,12 +1505,28 @@ registerMapEndpoints(app, store);
 app.post("/api/character-image", async (req, res) => {
 	try {
 		const { lobbyId, playerName, sheet, prompt } = req.body;
-		if (!lobbyId || !playerName) return res.status(400).json({ error: "Missing lobbyId or playerName" });
-		if (devMode) return res.status(REJECTED_REQUEST_STATUS).json({ message: "Character image generation disabled in developer mode." });
+
+		// Logged before any early exit. Every rejection below used to return silently
+		// as far as the log was concerned, so a portrait that never appeared left no
+		// trace at all and there was no way to tell a blocked request from one that
+		// never arrived.
+		log(`🎨 Portrait requested: lobby=${lobbyId ?? "?"} player=${playerName ?? "?"} promptChars=${typeof prompt === "string" ? prompt.length : 0}`);
+
+		if (!lobbyId || !playerName) {
+			log("   rejected: missing lobbyId or playerName");
+			return res.status(400).json({ error: "Missing lobbyId or playerName" });
+		}
+		if (devMode) {
+			log("   rejected: developer mode");
+			return res.status(REJECTED_REQUEST_STATUS).json({ message: "Character image generation disabled in developer mode." });
+		}
 		// Portraits are OpenAI-only, so check for that key specifically. hasLLM() is
 		// true for a Claude-only install, which passed this gate and then failed
 		// inside the service with a much less helpful message.
-		if (!hasOpenAI()) return res.status(503).json({ error: "Image generation unavailable — no OpenAI key configured" });
+		if (!hasOpenAI()) {
+			log("   rejected: no OpenAI key configured");
+			return res.status(503).json({ error: "Image generation unavailable — no OpenAI key configured" });
+		}
 
 		// The player edits the prompt before sending; the sheet is only the fallback
 		// for a client that did not supply one. finalisePrompt caps the length and

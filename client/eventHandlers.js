@@ -209,7 +209,9 @@ function handleSaveCharacterSheet() {
 	// Auto-generate portrait on first save if none exists yet
 	const hasImage = els.charImagePreview && !els.charImagePreview.classList.contains("hidden");
 	if (!hasImage) {
-		handleGenerateCharImage().catch((e) => console.warn("Auto image generation failed:", e));
+		// Automatic, so a missing name or an unfilled description skips quietly rather
+		// than interrupting with an alert the player did not ask for.
+		handleGenerateCharImage({ auto: true }).catch((e) => console.warn("Auto image generation failed:", e));
 	}
 }
 
@@ -572,18 +574,19 @@ function showCharacterImage(url) {
 // === Portrait prompt box ===
 
 /**
- * Whether the player has taken the prompt over.
+ * The generated text last written into the prompt box.
  *
- * @description Once they type in the box it stops refilling. Overwriting a
- *   description someone wrote by hand because they then changed their armour would
- *   be worse than letting the two fall out of step.
+ * @description Held so a refresh can replace exactly that much and leave whatever the
+ *   player added after it untouched. The earlier approach — stop refreshing entirely
+ *   once they typed — meant someone who added "in an epic pose" and then changed
+ *   their armour was left describing armour they no longer wore.
  */
-let portraitPromptEdited = false;
+let lastGeneratedPrompt = "";
 
 /**
- * @description Refreshes the portrait prompt from the current character choices,
- *   unless the player has edited it. Called whenever the sheet changes, so the box
- *   is already filled in by the time anyone opens it.
+ * @description Rewrites the generated part of the prompt box from the current
+ *   character choices, leaving anything the player added after it alone. Called on
+ *   every field change, so the box is current by the time anyone opens it.
  *
  *   `window.buildPortraitPrompt` rather than an import: this file is a classic
  *   script, and the builder is an ES module so the server can share it. The shim in
@@ -592,19 +595,30 @@ let portraitPromptEdited = false;
  */
 function refreshPortraitPrompt() {
 	const box = document.getElementById("portraitPrompt");
-	if (!box || portraitPromptEdited || typeof window.buildPortraitPrompt !== "function") return;
+	if (!box || typeof window.buildPortraitPrompt !== "function") return;
 
 	try {
 		const sheet = buildCurrentSheet();
 		sheet.name = (els.name?.value || "").trim();
-		box.value = window.buildPortraitPrompt(sheet);
+
+		const next = window.buildPortraitPrompt(sheet);
+		box.value = window.mergePromptUpdate(box.value, lastGeneratedPrompt, next);
+		lastGeneratedPrompt = next;
+
+		const hint = document.getElementById("portraitPromptHint");
+		if (hint && !hint.dataset.sticky) {
+			hint.textContent = box.value.startsWith(next) && box.value.length > next.length
+				? "Your additions are kept; the description above them follows your sheet."
+				: "";
+		}
 	} catch (err) {
 		console.warn("Could not build portrait prompt:", err.message);
 	}
 }
 
 /**
- * @description Wires the box up: typing claims it, the reset button hands it back.
+ * @description Wires the box up. The reset button discards the player's additions and
+ *   returns the box to the sheet.
  * @returns {void}
  */
 function initPortraitPrompt() {
@@ -613,16 +627,16 @@ function initPortraitPrompt() {
 	const reset = document.getElementById("resetPortraitPrompt");
 	if (!box) return;
 
-	box.addEventListener("input", () => {
-		portraitPromptEdited = true;
-		if (hint) hint.textContent = "Edited — this text will be used as written.";
-	});
-
 	if (reset) {
 		reset.addEventListener("click", () => {
-			portraitPromptEdited = false;
+			box.value = "";
+			lastGeneratedPrompt = "";
 			refreshPortraitPrompt();
-			if (hint) hint.textContent = "Reset from your character sheet.";
+			if (hint) {
+				hint.dataset.sticky = "1";
+				hint.textContent = "Reset from your character sheet.";
+				setTimeout(() => { delete hint.dataset.sticky; }, 2500);
+			}
 		});
 	}
 
@@ -630,12 +644,35 @@ function initPortraitPrompt() {
 }
 
 // === Generate Character Image ===
-async function handleGenerateCharImage() {
+/**
+ * @description Generates the portrait from whatever is in the prompt box.
+ * @param {object} [opts] - Options.
+ * @param {boolean} [opts.auto] - True when triggered automatically rather than by a
+ *   click, in which case an unmet precondition is skipped silently instead of
+ *   interrupting the player with an alert.
+ * @returns {Promise<void>}
+ */
+async function handleGenerateCharImage({ auto = false } = {}) {
+	/**
+	 * @description Reports a precondition failure, unless this was automatic.
+	 * @param {string} message - What is missing.
+	 * @returns {void}
+	 */
+	const stop = (message) => { if (!auto) alert(message); };
+
 	const name = (els.name?.value || "").trim();
-	if (!name) return alert("Enter a character name before generating an image.");
+	if (!name) return stop("Enter a character name before generating an image.");
 	// During mid-game join lobbyId isn't assigned yet — skip silently; image generates post-join
-	if (!lobbyId && !joiningInProgress) return alert("You must be in a lobby first.");
+	if (!lobbyId && !joiningInProgress) return stop("You must be in a lobby first.");
 	if (!lobbyId) return; // joiningInProgress: defer until join confirmed
+
+	// Nothing to draw yet. A portrait was being requested on page load from an empty
+	// box, spending a twenty-to-forty second call — and a charge — on a prompt that
+	// described nobody.
+	const readyBox = document.getElementById("portraitPrompt");
+	if (typeof window.isPromptReady === "function" && !window.isPromptReady(readyBox?.value || "")) {
+		return stop("Fill in your character first — the portrait description below is still empty.");
+	}
 
 	const btn = els.generateCharImageBtn;
 	const origText = btn.textContent;

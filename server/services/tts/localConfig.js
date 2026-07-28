@@ -14,117 +14,28 @@
 
 import fs from "fs";
 import path from "path";
-import dns from "dns";
+import { isPrivateAddress, validatePrivateServiceUrl } from "../net/privateUrl.js";
 
-/** Parses a dotted-quad into its four octets, or null if it is not one. */
-function ipv4Octets(ip) {
-	const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
-	if (!m) return null;
-	const parts = m.slice(1).map(Number);
-	return parts.every((n) => n >= 0 && n <= 255) ? parts : null;
-}
+/** How an address is described to a host configuring the speech server. */
+const SERVICE_NAME = "speech server";
+const EXAMPLE_URL = "http://192.168.1.50:8199";
 
-/**
- * Whether an IP address belongs to a network the server may reach.
- *
- * @description The allowlist is deliberately narrow: loopback, the three RFC1918
- *   ranges, the carrier-grade NAT block Tailscale hands out, and IPv6 unique local
- *   addresses. Everything else — including the whole 169.254.0.0/16 link-local
- *   range, which is where every major cloud serves instance credentials — is
- *   refused. Nobody runs a speech server on an autoconfiguration address, so
- *   excluding the range costs nothing and removes the metadata-endpoint problem
- *   outright.
- * @param {*} ip - An address string; anything else is not private.
- * @returns {boolean} True when the address is on an allowed private network.
- */
-export function isPrivateAddress(ip) {
-	if (typeof ip !== "string" || !ip) return false;
-
-	const lower = ip.toLowerCase();
-
-	// IPv4-mapped IPv6 (::ffff:192.168.1.1) is judged on the address it carries.
-	const mapped = /^::ffff:(.+)$/.exec(lower);
-	if (mapped) return isPrivateAddress(mapped[1]);
-
-	const v4 = ipv4Octets(lower);
-	if (v4) {
-		const [a, b] = v4;
-		if (a === 127) return true;                       // 127.0.0.0/8   loopback
-		if (a === 10) return true;                        // 10.0.0.0/8    private
-		if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 private
-		if (a === 192 && b === 168) return true;          // 192.168.0.0/16 private
-		if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT / Tailscale
-		return false;
-	}
-
-	if (lower === "::1") return true;                     // IPv6 loopback
-	if (/^f[cd][0-9a-f]{2}:/.test(lower)) return true;    // fc00::/7 unique local
-
-	return false;
-}
+export { isPrivateAddress };
 
 /**
  * Validates a host-supplied speech server address.
  *
- * @description Shape is checked first so an obvious typo gets an obvious message,
- *   then the hostname is resolved and *every* returned address must be private.
- *   Requiring all of them matters: a name resolving to one LAN address and one
- *   public address is the shape a DNS rebinding attempt takes, and accepting it
- *   because one entry looked fine would defeat the check.
- *
- *   A missing scheme is filled in rather than rejected, because typing
- *   `192.168.1.50:8199` is the obvious thing to do.
+ * @description The guard itself lives in `services/net/privateUrl.js`, because the
+ *   speech server is no longer the only self-hosted service an operator can point
+ *   this app at — Ollama and a local image server need exactly the same check, and
+ *   a second copy of an SSRF guard is how one of them ends up subtly weaker.
  * @param {string} raw - Whatever the host typed.
  * @param {{lookup?: Function}} [deps] - Injected DNS resolver, for testability.
  * @returns {Promise<string>} The canonical origin, with no trailing slash.
  * @throws {Error} With a message written to be shown directly to the host.
  */
 export async function validateLocalTtsUrl(raw, deps = {}) {
-	const lookup = deps.lookup || dns.promises.lookup;
-	const trimmed = typeof raw === "string" ? raw.trim() : "";
-
-	if (!trimmed) throw new Error("Enter an address for the speech server, like http://192.168.1.50:8199");
-
-	const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
-
-	let url;
-	try {
-		url = new URL(withScheme);
-	} catch {
-		throw new Error(`"${trimmed}" is not a valid address. Try something like http://192.168.1.50:8199`);
-	}
-
-	if (url.protocol !== "http:" && url.protocol !== "https:") {
-		throw new Error(`Only http and https addresses are supported, not "${url.protocol.replace(":", "")}"`);
-	}
-	if (url.username || url.password) {
-		throw new Error("Remove the username and password from the address — credentials are not supported here");
-	}
-	if (url.pathname && url.pathname !== "/") {
-		throw new Error(`Leave off the path ("${url.pathname}") — just the host and port, like http://192.168.1.50:8199`);
-	}
-
-	const hostname = url.hostname.replace(/^\[|\]$/g, "");
-
-	let addresses;
-	try {
-		const result = await lookup(hostname, { all: true, verbatim: true });
-		addresses = (Array.isArray(result) ? result : [result]).map((a) => a.address).filter(Boolean);
-	} catch (err) {
-		throw new Error(`Could not resolve "${hostname}" — check the name or use its IP address (${err.code || err.message})`);
-	}
-
-	if (!addresses.length) throw new Error(`Could not resolve "${hostname}" to any address`);
-
-	const offender = addresses.find((a) => !isPrivateAddress(a));
-	if (offender) {
-		throw new Error(
-			`"${hostname}" resolves to ${offender}, which is not on a private network. ` +
-			"The speech server must be on your LAN, a VPN, or this machine.",
-		);
-	}
-
-	return `${url.protocol}//${url.host}`;
+	return validatePrivateServiceUrl(raw, { lookup: deps.lookup, serviceName: SERVICE_NAME, example: EXAMPLE_URL });
 }
 
 /**
