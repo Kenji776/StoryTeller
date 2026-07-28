@@ -133,3 +133,55 @@ Nothing calls this. `/api/character-image` still routes through
 same phase that retires that file.
 
 _Last verified: 2026-07-27 against branch `Refactor` (501aaee)._
+
+## Keeping a hero looking like themselves
+
+The server stores a *character*: a reference portrait plus a remembered
+appearance. Posing one feeds that portrait back through the model, so the same
+face comes out in a new scene. Reusing prompts or seeds does **not** achieve this
+— it produces a different face every session.
+
+```
+portrait generated ──► createCharacter ──► chr_xxx stored on the player record
+                                              │
+epic battle ends ─────────────────────────────┴──► generateForCharacter({ scene })
+```
+
+**`generateForCharacter` takes no `prompt` parameter at all.** Restating
+appearance inside a scene is the documented cause of drift, so rather than
+documenting "don't", there is no argument through which a caller could. Same
+reasoning as `cfg` above.
+
+`characterRecords.js` owns the two decisions either side of the API:
+
+- **`characterPlan`** — reuse the stored likeness, or mint a new one. Case and
+  whitespace differences are not changes; a sheet re-saved with a stray space
+  must not throw away a working face. A genuine change returns the old id as
+  `retire`, because the API cannot edit a likeness and an orphan the game no
+  longer references is just litter. A stored id with *no* remembered appearance
+  predates this feature and is rebuilt rather than trusted.
+- **`sceneFor`** — trims, folds in a mood, and strips the character's own name.
+  The server already knows who this is; a name in the scene reads as a second
+  person in the frame. Whole words only, so a character called "Shallow" does not
+  turn "shallows" into "s".
+
+`buildAppearance` in `client/portraitPrompt.js` is what gets stored — the sheet's
+permanent traits with **no rendering style**. A stored description carrying
+"dramatic cinematic lighting" would fight the `style` preset on every future
+scene, which is another way faces drift.
+
+### Party scenes are one image per hero
+
+`POST /api/party-scene` draws each character separately and broadcasts the set.
+Continuity is per character — one likeness per generation — so a single group
+shot would be a nice picture of strangers. Characters with no stored likeness are
+skipped rather than drawn wrong, and the requests run sequentially because the
+server processes one at a time anyway; firing them in parallel only queues them
+and makes a failure harder to attribute.
+
+### A provider without continuity still works
+
+OpenAI's image API has no character concept. `ensureCharacterImage` falls through
+to a plain generation there and returns `characterId: null`, so the caller stores
+nothing it cannot use. The portrait appears; it simply carries no promise that
+the next one matches.

@@ -24,6 +24,7 @@ import fsDefault from "fs";
 
 import { redactLLMConfig } from "./llm/config.js";
 import { CredentialRequiredError } from "./credentials/resolve.js";
+import { characterPlan, sceneFor } from "./images/characterRecords.js";
 
 /**
  * Marks a reply that is a failure rather than narration.
@@ -123,6 +124,29 @@ export function createLLMGateway({
 		return `${AI_UNAVAILABLE_PREFIX} ${detail.message}`;
 	}
 
+	/**
+	 * @description Resolves an image credential, trying the configured providers in
+	 *   order when the caller names none. Shared by every image entry point so the
+	 *   fallback order cannot drift between them.
+	 * @param {string} lobbyId - Whose credential pays.
+	 * @param {string} [provider] - A specific provider to use.
+	 * @returns {{source: string, config: object, providerLabel: string}} The resolution.
+	 * @throws {Error} When no image provider is available.
+	 */
+	function resolveImage(lobbyId, provider) {
+		const candidates = provider ? [canonicalProviderId(provider)] : IMAGE_FALLBACK_ORDER;
+		const refusals = [];
+		for (const providerId of candidates) {
+			try {
+				return credentials.resolver.resolve({ lobbyId, capability: "image", providerId, model: null });
+			} catch (err) {
+				if (!(err instanceof CredentialRequiredError)) throw err;
+				refusals.push(err.userMessage());
+			}
+		}
+		throw new Error(`Image generation is unavailable. ${refusals.join(" ")}`.trim());
+	}
+
 	return {
 		/**
 		 * Runs one model call for a lobby.
@@ -213,6 +237,117 @@ export function createLLMGateway({
 		},
 
 		/**
+		 * Draws a player, keeping their face the same as last time.
+		 *
+		 * @description The whole point of the character API: a stored likeness is
+		 *   posed rather than re-invented, so the same hero looks like themselves in
+		 *   every image. `characterPlan` decides whether the likeness they have still
+		 *   applies; a permanent change mints a new one and retires the old.
+		 *
+		 *   Providers without a character API — OpenAI's, today — fall through to a
+		 *   plain generation. The portrait still appears; it simply carries no promise
+		 *   of continuity, and `characterId` comes back null so the caller stores
+		 *   nothing it cannot use.
+		 * @param {object} request - Who to draw.
+		 * @param {string} request.lobbyId - Whose credential pays.
+		 * @param {object} request.record - The player's stored record.
+		 * @param {string} request.name - The character's name.
+		 * @param {string} request.appearance - What is permanently true of them.
+		 * @param {string} [request.provider] - A specific image provider.
+		 * @param {boolean} [request.force=false] - Rebuild the likeness regardless.
+		 * @param {{width: number, height: number}} [request.size] - Image dimensions.
+		 * @param {AbortSignal} [request.signal] - Cancellation signal.
+		 * @returns {Promise<{b64: string, model: string|null, characterId: string|null,
+		 *   appearance: string, created: boolean}>} The portrait and the identity to store.
+		 * @throws {Error} When no image provider is available, or generation failed.
+		 */
+		async ensureCharacterImage({ lobbyId, record, name, appearance, provider, force = false, size, signal } = {}) {
+			const resolved = resolveImage(lobbyId, provider);
+			const adapter = credentials.providerFor("image", resolved.config.providerId);
+
+			if (!adapter?.createCharacter) {
+				// No continuity here, but a portrait is still better than a refusal.
+				const image = await adapter.generate({ prompt: appearance, config: resolved.config, size, signal, fetchImpl });
+				return { ...image, characterId: null, appearance, created: false };
+			}
+
+			const plan = characterPlan({ record, appearance, force });
+
+			if (plan.action === "reuse") {
+				const image = await adapter.generateForCharacter({
+					characterId: plan.characterId,
+					scene: "a formal character portrait, facing the viewer",
+					config: resolved.config,
+					size,
+					signal,
+					fetchImpl,
+				});
+				return { ...image, characterId: plan.characterId, appearance, created: false };
+			}
+
+			const character = await adapter.createCharacter({ name, appearance, config: resolved.config, signal, fetchImpl });
+
+			if (plan.retire) {
+				// Best effort. The new likeness already exists, and failing the portrait
+				// because an old record would not delete would be the wrong trade.
+				try {
+					await adapter.deleteCharacter({ characterId: plan.retire, config: resolved.config, fetchImpl });
+					log(`🎭 Retired the previous likeness ${plan.retire} for ${name}`);
+				} catch (err) {
+					log(`⚠️ Could not retire the previous likeness ${plan.retire}: ${err.message}`);
+				}
+			}
+
+			log(`🎭 Stored a likeness for ${name} as ${character.id}`);
+			return {
+				b64: character.b64,
+				model: null,
+				characterId: character.id,
+				appearance,
+				created: true,
+			};
+		},
+
+		/**
+		 * Draws a stored character in a new moment.
+		 *
+		 * @description This is what makes "the party, triumphant after the battle"
+		 *   possible with the right faces. Only the moment travels: the server
+		 *   prepends the appearance it stored, and `sceneFor` strips the character's
+		 *   own name rather than letting it read as a second person in the frame.
+		 * @param {object} request - What is happening.
+		 * @param {string} request.lobbyId - Whose credential pays.
+		 * @param {string} request.characterId - The stored likeness.
+		 * @param {string} request.moment - What they are doing.
+		 * @param {string} [request.mood] - How it should feel.
+		 * @param {string} [request.name] - Their name, removed from the scene.
+		 * @param {string} [request.provider] - A specific image provider.
+		 * @param {{width: number, height: number}} [request.size] - Image dimensions.
+		 * @param {AbortSignal} [request.signal] - Cancellation signal.
+		 * @returns {Promise<{b64: string, model: string|null, seed: number|null}>} The image.
+		 * @throws {Error} When the provider cannot pose characters, or generation failed.
+		 */
+		async generateCharacterScene({ lobbyId, characterId, moment, mood, name, provider, size, signal } = {}) {
+			const resolved = resolveImage(lobbyId, provider);
+			const adapter = credentials.providerFor("image", resolved.config.providerId);
+
+			if (!adapter?.generateForCharacter) {
+				throw new Error(
+					`${resolved.providerLabel} does not support character continuity, so it cannot draw a scene for a stored character.`,
+				);
+			}
+
+			return adapter.generateForCharacter({
+				characterId,
+				scene: sceneFor({ moment, mood, name }),
+				config: resolved.config,
+				size,
+				signal,
+				fetchImpl,
+			});
+		},
+
+		/**
 		 * Generates one image for a lobby.
 		 *
 		 * @description Unlike `getLLMResponse` this **throws**, because its only
@@ -232,31 +367,15 @@ export function createLLMGateway({
 		 * @throws {Error} When no image provider is available, or generation failed.
 		 */
 		async generateImage({ prompt, lobbyId, provider, size, signal } = {}) {
-			const candidates = provider ? [canonicalProviderId(provider)] : IMAGE_FALLBACK_ORDER;
-			const refusals = [];
-
-			for (const providerId of candidates) {
-				let resolved;
-				try {
-					resolved = credentials.resolver.resolve({ lobbyId, capability: "image", providerId, model: null });
-				} catch (err) {
-					if (!(err instanceof CredentialRequiredError)) throw err;
-					refusals.push(err.userMessage());
-					continue;
-				}
-
-				const adapter = credentials.providerFor("image", resolved.config.providerId);
-				if (!adapter?.generate) {
-					refusals.push(`No image adapter is registered for "${resolved.config.providerId}".`);
-					continue;
-				}
-
-				const result = await adapter.generate({ prompt, config: resolved.config, size, signal, fetchImpl });
-				log(`🎨 Generated an image with ${resolved.config.providerId}/${result.model} (${resolved.source})`);
-				return result;
+			const resolved = resolveImage(lobbyId, provider);
+			const adapter = credentials.providerFor("image", resolved.config.providerId);
+			if (!adapter?.generate) {
+				throw new Error(`No image adapter is registered for "${resolved.config.providerId}".`);
 			}
 
-			throw new Error(`Image generation is unavailable. ${refusals.join(" ")}`.trim());
+			const result = await adapter.generate({ prompt, config: resolved.config, size, signal, fetchImpl });
+			log(`🎨 Generated an image with ${resolved.config.providerId}/${result.model} (${resolved.source})`);
+			return result;
 		},
 	};
 }

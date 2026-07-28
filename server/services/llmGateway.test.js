@@ -357,3 +357,143 @@ test("a lobby with no model configured fails with a message naming the problem",
 	assert.equal(isLLMFailure(reply), true);
 	assert.match(reply, /model/i);
 });
+
+// ── Character continuity ─────────────────────────────────────────────────────
+
+/** Policy and vault for a lobby whose images come from the local server. */
+const IMAGE_SETUP = {
+	policy: { image: { "local-image": { policy: "local", baseUrl: "http://192.168.1.50:8189" } } },
+	vaultKeys: { "local-image": SERVER_KEY },
+};
+
+/**
+ * @description Builds a fetch double answering each call from a queue.
+ * @param {Array<object>} script - One response per call, in order.
+ * @returns {Function} A fetch-shaped function carrying a `calls` array.
+ */
+function makeScript(script) {
+	const queue = [...script];
+	const calls = [];
+	const impl = async (url, init) => {
+		const spec = queue.shift() ?? { body: {} };
+		calls.push({ url, init, payload: init?.body ? JSON.parse(init.body) : null });
+		const status = spec.status ?? 200;
+		return { ok: status >= 200 && status < 300, status, text: async () => JSON.stringify(spec.body ?? {}) };
+	};
+	impl.calls = calls;
+	return impl;
+}
+
+test("a player drawn for the first time gets a stored likeness", async () => {
+	const fetchImpl = makeScript([{ body: { id: "chr_1", image: "iVBORw0KGgo=" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf Paladin. Copper beard.",
+	});
+
+	assert.equal(result.characterId, "chr_1");
+	assert.equal(result.created, true);
+	assert.match(fetchImpl.calls[0].url, /\/characters$/);
+});
+
+test("a player drawn again with the same appearance keeps their likeness", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["iVBORw0KGgo="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
+		name: "Brannor",
+		appearance: "A Dwarf Paladin. Copper beard.",
+	});
+
+	assert.equal(result.characterId, "chr_1");
+	assert.equal(result.created, false);
+	assert.match(fetchImpl.calls[0].url, /\/characters\/chr_1\/generate$/, "an existing likeness should be posed, not recreated");
+});
+
+test("a permanently changed appearance mints a new likeness and retires the old", async () => {
+	const fetchImpl = makeScript([
+		{ body: { id: "chr_2", image: "iVBORw0KGgo=" } },
+		{ body: { ok: true } },
+	]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
+		name: "Brannor",
+		appearance: "A Dwarf Paladin. Copper beard, and a missing eye.",
+	});
+
+	assert.equal(result.characterId, "chr_2");
+	assert.ok(fetchImpl.calls.some((c) => /\/characters\/chr_1\/delete$/.test(c.url)), "the orphaned likeness was not cleaned up");
+});
+
+test("failing to retire an old likeness does not fail the new portrait", async () => {
+	const fetchImpl = makeScript([
+		{ body: { id: "chr_2", image: "iVBORw0KGgo=" } },
+		{ status: 500, body: { error: "boom" } },
+	]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_1", imageAppearance: "old" },
+		name: "Brannor",
+		appearance: "A Dwarf Paladin.",
+	});
+
+	assert.equal(result.characterId, "chr_2", "a cleanup failure must not lose the portrait that succeeded");
+});
+
+test("a provider with no character support falls back to a plain image", async () => {
+	const fetchImpl = makeScript([{ body: { data: [{ b64_json: "iVBORw0KGgo=" }] } }]);
+	const { gateway } = makeGateway({
+		policy: { image: { openai: "shared" } },
+		vaultKeys: { openai: SERVER_KEY },
+		fetchImpl,
+	});
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf Paladin.", provider: "openai",
+	});
+
+	assert.equal(result.characterId, null);
+	assert.ok(result.b64, "a provider without continuity should still draw a portrait");
+});
+
+test("posing a stored character sends only the scene", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["iVBORw0KGgo="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	await gateway.generateCharacterScene({
+		lobbyId: LOBBY, characterId: "chr_1", moment: "standing over a fallen troll", mood: "triumphant", name: "Brannor",
+	});
+
+	const payload = fetchImpl.calls[0].payload;
+	assert.match(payload.scene, /fallen troll/);
+	assert.match(payload.scene, /triumphant/);
+	assert.equal(Object.hasOwn(payload, "prompt"), false);
+	assert.doesNotMatch(payload.scene, /Brannor/);
+});
+
+test("posing a character the server has forgotten reports it clearly", async () => {
+	const fetchImpl = makeScript([{ status: 404, body: { error: "no such character" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	await assert.rejects(
+		() => gateway.generateCharacterScene({ lobbyId: LOBBY, characterId: "gone", moment: "fighting" }),
+		/character|not found|404/i,
+	);
+});
+
+test("scenes are unavailable on a provider that cannot pose a character", async () => {
+	const { gateway } = makeGateway({ policy: { image: { openai: "shared" } }, vaultKeys: { openai: SERVER_KEY } });
+
+	await assert.rejects(
+		() => gateway.generateCharacterScene({ lobbyId: LOBBY, characterId: "chr_1", moment: "fighting", provider: "openai" }),
+		/does not support|continuity|scene/i,
+	);
+});

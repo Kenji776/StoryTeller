@@ -85,7 +85,7 @@ function itemName(item) {
  * @param {object} sheet - The sheet, as `buildCurrentSheet` produces it.
  * @returns {string} A descriptive prompt, without the no-text guard. Never empty.
  */
-export function buildPortraitPrompt(sheet) {
+export function buildAppearance(sheet) {
 	const s = sheet ?? {};
 
 	const race = String(s.race ?? "").trim();
@@ -119,8 +119,22 @@ export function buildPortraitPrompt(sheet) {
 		bearing ? `${bearing.charAt(0).toUpperCase()}${bearing.slice(1)}.` : "",
 		seasoning ? `${seasoning}.` : "",
 		described ? `${described}${/[.!?]$/.test(described) ? "" : "."}` : "",
-		STYLE,
 	].filter(Boolean).join(" ").replace(/\s{2,}/g, " ").trim();
+}
+
+/**
+ * The finished prompt for a one-off portrait: what they look like, plus how to
+ * draw it.
+ *
+ * @description Kept as the appearance followed by the style so the two stay
+ *   separable. The image server's character records store only the appearance —
+ *   a stored description carrying "dramatic cinematic lighting" would fight the
+ *   style preset on every future scene, which is one of the ways a face drifts.
+ * @param {object} sheet - The character sheet.
+ * @returns {string} The prompt.
+ */
+export function buildPortraitPrompt(sheet) {
+	return `${buildAppearance(sheet)} ${STYLE}`.replace(/\s{2,}/g, " ").trim();
 }
 
 /**

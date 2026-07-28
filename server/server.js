@@ -50,7 +50,7 @@ import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
 // Shared with the browser, which populates the editable prompt box from the same
 // builder. Two implementations would drift, and the text the player edits has to be
 // the text that is sent.
-import { buildPortraitPrompt, finalisePrompt } from "../client/portraitPrompt.js";
+import { buildPortraitPrompt, finalisePrompt, buildAppearance } from "../client/portraitPrompt.js";
 import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
@@ -267,7 +267,7 @@ const credentials = createCredentialSystem({
  * that the credential now comes from the resolver rather than a module-load
  * client built from .env. See docs/modules/credentials.md.
  */
-const { getLLMResponse, generateImage } = createLLMGateway({
+const { getLLMResponse, generateImage, ensureCharacterImage, generateCharacterScene } = createLLMGateway({
 	credentials,
 	logDir: LOG_DIR,
 	fetchImpl: fetch,
@@ -1643,7 +1643,21 @@ app.post("/api/character-image", async (req, res) => {
 		const finalPrompt = finalisePrompt(typeof prompt === "string" && prompt.trim() ? prompt : buildPortraitPrompt(sheet));
 
 		log(`🎨 Generating character image for ${playerName} in lobby ${lobbyId}`);
-		const { b64, model } = await generateImage({ prompt: finalPrompt, lobbyId });
+		// A portrait is also where a character's likeness is registered, so every
+		// later scene shows the same face. The player's edited prompt still drives
+		// the picture; the appearance stored alongside it is the sheet's permanent
+		// traits, because a stored description carrying pose or lighting would fight
+		// every future scene. See docs/modules/images.md.
+		const key = store.findPlayerKey(lobbyId, playerName);
+		const player = key ? store.index[lobbyId]?.players[key] : null;
+
+		const { b64, model, characterId, appearance } = await ensureCharacterImage({
+			lobbyId,
+			record: player ?? {},
+			name: playerName,
+			appearance: buildAppearance(sheet) || finalPrompt,
+			force: Boolean(req.body?.regenerate),
+		});
 		log(`   model: ${model}`);
 
 		const safeName = playerName.replace(/[^a-zA-Z0-9]/g, "_");
@@ -1652,9 +1666,15 @@ app.post("/api/character-image", async (req, res) => {
 		fs.writeFileSync(filepath, Buffer.from(b64, "base64"));
 
 		const imageUrl = `/character-images/${filename}`;
-		const key = store.findPlayerKey(lobbyId, playerName);
 		if (key && store.index[lobbyId]?.players[key]) {
-			store.index[lobbyId].players[key].imageUrl = imageUrl;
+			const record = store.index[lobbyId].players[key];
+			record.imageUrl = imageUrl;
+			// The id is the only handle to this likeness; losing it means the
+			// character can only be recreated looking different.
+			if (characterId) {
+				record.imageCharacterId = characterId;
+				record.imageAppearance = appearance;
+			}
 			store.persist(lobbyId);
 			sendState(lobbyId);
 		}
@@ -1663,6 +1683,70 @@ app.post("/api/character-image", async (req, res) => {
 	} catch (err) {
 		console.error("💥 Character image generation failed:", err);
 		res.status(500).json({ error: err.message || "Image generation failed" });
+	}
+});
+
+// === PARTY SCENE ===
+// One image per hero rather than one image of the party. Continuity is per
+// character on the image server -- one likeness per generation -- so a single
+// group shot would be a nice picture of strangers. Per hero, every face is right.
+app.post("/api/party-scene", async (req, res) => {
+	try {
+		const { lobbyId, moment, mood, names } = req.body ?? {};
+		if (!lobbyId || !moment) return res.status(400).json({ error: "Missing lobbyId or moment" });
+		if (devMode) return res.status(REJECTED_REQUEST_STATUS).json({ message: "Scene art is disabled in developer mode." });
+
+		const lobby = store.index[lobbyId];
+		if (!lobby) return res.status(404).json({ error: "Lobby not found" });
+
+		// Only characters whose likeness the server actually holds. Anyone else
+		// would come out as a stranger, which is worse than being left out.
+		const drawable = Object.entries(lobby.players ?? {})
+			.filter(([, p]) => p?.imageCharacterId)
+			.filter(([, p]) => !Array.isArray(names) || names.length === 0 || names.includes(p.name));
+
+		if (!drawable.length) {
+			return res.status(409).json({
+				error: "No character has a stored likeness yet. Generate portraits first, then the party can be drawn.",
+			});
+		}
+
+		log(`🎬 Party scene for lobby ${lobbyId}: "${moment}" (${drawable.length} character(s))`);
+
+		const images = [];
+		const failures = [];
+		// Sequential on purpose: the image server processes one at a time, so
+		// firing these in parallel only queues them and makes failures harder to
+		// attribute.
+		for (const [, player] of drawable) {
+			try {
+				const { b64 } = await generateCharacterScene({
+					lobbyId,
+					characterId: player.imageCharacterId,
+					moment,
+					mood,
+					name: player.name,
+				});
+
+				const safeName = String(player.name).replace(/[^a-zA-Z0-9]/g, "_");
+				const filename = `${lobbyId}-${safeName}-scene-${Date.now()}.png`;
+				fs.writeFileSync(path.join(IMAGES_DIR, filename), Buffer.from(b64, "base64"));
+				images.push({ name: player.name, url: `/character-images/${filename}` });
+			} catch (err) {
+				log(`⚠️ Party scene failed for ${player.name}: ${err.message}`);
+				failures.push({ name: player.name, error: err.message });
+			}
+		}
+
+		if (!images.length) {
+			return res.status(502).json({ error: "Every character failed to draw.", failures });
+		}
+
+		busIo.to(room(lobbyId)).emit("party:scene", { moment, mood: mood ?? null, images });
+		res.json({ ok: true, images, failures });
+	} catch (err) {
+		console.error("Party scene failed:", err);
+		res.status(500).json({ error: err.message || "Party scene failed" });
 	}
 });
 

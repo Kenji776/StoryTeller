@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildPortraitPrompt, finalisePrompt, mergePromptUpdate, isPromptReady, NO_TEXT_GUARD } from "./portraitPrompt.js";
+import { buildPortraitPrompt, finalisePrompt, mergePromptUpdate, isPromptReady, NO_TEXT_GUARD, buildAppearance } from "./portraitPrompt.js";
 
 /**
  * @description A fully populated sheet, as `buildCurrentSheet` produces one.
@@ -223,4 +223,37 @@ test("a prompt describing an actual character is ready", () => {
 
 test("a prompt the player wrote themselves is ready", () => {
 	assert.equal(isPromptReady("A tall elf in silver armour, standing on a cliff."), true);
+});
+
+// ── Appearance, for image-server character continuity ────────────────────────
+
+test("buildAppearance describes the character without the rendering style", () => {
+	const sheet = { name: "Kaeda", race: "Half-Elf", class: "Ranger", gender: "woman" };
+
+	const appearance = buildAppearance(sheet);
+
+	assert.match(appearance, /Half-Elf Ranger/);
+	// The style is how it is drawn, not what is true of them. The image server
+	// applies its own via the `style` preset, and baking a second one into the
+	// stored appearance would fight it on every future scene.
+	assert.doesNotMatch(appearance, /Painterly|cinematic lighting|muted background/i);
+});
+
+test("the portrait prompt is the appearance plus the rendering style", () => {
+	const sheet = { name: "Kaeda", race: "Half-Elf", class: "Ranger" };
+	assert.ok(buildPortraitPrompt(sheet).startsWith(buildAppearance(sheet)));
+});
+
+test("buildAppearance survives an empty sheet", () => {
+	assert.match(buildAppearance({}), /adventurer/);
+	assert.match(buildAppearance(), /adventurer/);
+});
+
+test("buildAppearance carries permanent traits but never a pose", () => {
+	const appearance = buildAppearance({
+		race: "Dwarf", class: "Paladin", description: "a braided copper beard and a scarred cheek",
+	});
+
+	assert.match(appearance, /copper beard/);
+	assert.doesNotMatch(appearance, /standing|kneeling|holding aloft|background of/i);
 });
