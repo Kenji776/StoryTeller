@@ -125,6 +125,9 @@ const ACTIONS = [
 	"I try to recall any lore about this place.",
 ];
 
+// Actions known to be possible, used when retrying after a refusal.
+const SAFE_ACTIONS = ACTIONS.filter((a) => !/machine gun/i.test(a));
+
 // ── Player harness ───────────────────────────────────────────────────────────
 
 /**
@@ -174,6 +177,16 @@ function makePlayer(spec, index) {
 	// timer. With TTS off the server still waits for it, so emulate it or the game stalls.
 	socket.on("narration:start", () => {
 		if (p.lobbyId) socket.emit("narration:done", { lobbyId: p.lobbyId });
+	});
+
+	// A rejected action does not advance the turn, so a player who does nothing after
+	// being refused stalls the whole table. A real one rewrites; so does this.
+	socket.on("action:rejected", ({ reason, strikes, maxStrikes, retry }) => {
+		log(p.short, `<- REJECTED (${strikes ?? "?"}/${maxStrikes ?? "?"}): ${reason}`);
+		if (retry === false || !p.lobbyId) return;
+		const fallback = SAFE_ACTIONS[(p.acted + (strikes || 0)) % SAFE_ACTIONS.length];
+		log(p.short, `-> retrying with "${fallback}"`);
+		setTimeout(() => p.socket.emit("action:submit", { lobbyId: p.lobbyId, text: fallback }), 800);
 	});
 
 	// When the DM demands a check, action:submit returns early and the lobby waits.

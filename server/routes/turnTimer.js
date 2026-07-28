@@ -267,8 +267,19 @@ export function createTimerSystem(deps) {
 		const { current } = store.turnInfo(lobbyId);
 		if (!current) return;
 
-		const remainingMs = Number(s.turnDeadlineAt) - Date.now();
-		if (!Number.isFinite(remainingMs)) return startTurnTimer(lobbyId, 0);
+		// No deadline recorded means the turn clock never started — the turn is still
+		// inside its reading delay. Start a full one rather than treating a missing
+		// value as an elapsed one.
+		//
+		// Tested explicitly because the obvious guard is wrong: turnDeadlineAt is set
+		// to null here, and `Number(null)` is 0, not NaN. `0 - Date.now()` is hugely
+		// negative *and finite*, so an isFinite check sails past it and the turn is
+		// expired on the spot. Any action rejected during the reading delay ended that
+		// player's turn instantly.
+		const deadline = Number(s.turnDeadlineAt);
+		if (!s.turnDeadlineAt || !Number.isFinite(deadline)) return startTurnTimer(lobbyId, 0);
+
+		const remainingMs = deadline - Date.now();
 
 		// Already overdue: treat it as the expiry that never got to fire.
 		if (remainingMs <= 0) return handleTimerExpiry(lobbyId, current);
