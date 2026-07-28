@@ -300,3 +300,49 @@ set of fields, so a descriptor flag that is not in that projection is silently
 dropped — which is exactly what happened when this was first wired: Ollama
 arrived without `isLocal` and defaulted to `byok`, making a free self-hosted model
 look like a paid account. A test now pins it.
+
+## The operator's control surface
+
+`server/routes/providerAdmin.js`, mounted at `/api/admin/providers`.
+
+| Method | Path | Does |
+|---|---|---|
+| `GET` | `/` | The operator view of every capability |
+| `PUT` | `/:capability/:providerId/key` | Store a key |
+| `DELETE` | `/:capability/:providerId/key` | Forget a key |
+| `PUT` | `/:capability/:providerId/policy` | Save one provider's policy |
+| `POST` | `/:capability/:providerId/test` | Call the real endpoint and record the outcome |
+
+Three properties are the point of the file:
+
+**Gated on a password admin session and nothing else.** The admin console also
+issues lobby-scoped host tokens, and a host is not an operator — they run one
+game, not the instance. `isHostToken` is not merely rejected here, it is never
+consulted, so there is no branch that could later be relaxed into accepting one.
+A test asserts the check is never called.
+
+**A key travels in one direction.** It arrives in a request body and never
+appears in a response; every handler answers with the vault's metadata view. A
+test asserts no response — including a *failure* response, where a provider may
+have echoed the key back in its own error text — contains key material. The test
+endpoint reads the credential from the vault rather than the request, so it
+cannot be used to probe arbitrary keys through the server.
+
+**A local provider's address is resolved before it is stored.** `setPolicy` runs
+`validatePrivateServiceUrl` for a `local` policy and refuses anything that does
+not land on a private network. This is the write path the guard was extracted
+for. It runs only for `local`, because on any other policy the address is
+discarded by the policy model anyway and refusing a save over a field about to be
+dropped would be a confusing failure.
+
+### Testing a provider needs three different shapes
+
+The registries disagree about how to prove a credential works: chat adapters take
+`{config, fetchImpl}` and list models, image adapters take the same and probe,
+and the **TTS adapters predate the credential layer entirely** — they take a
+bundle of loose environment values (`{ELEVEN_API_KEY}` or `{LOCAL_TTS_URL}`) and
+call it `isAvailable` rather than `probe`.
+
+The adaptation lives in one visible table in `providerAdmin.js` rather than being
+smeared across callers. It is a wart, and the fix is to give the TTS adapters the
+same shape as the other two.

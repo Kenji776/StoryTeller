@@ -29,6 +29,8 @@ import { configure as configureAssets, ensureMusic, ensureMenuMusic, ensureSfx, 
 import { parseDMJson } from "./helpers/parseDMJson.js";
 import { registerAdminAuth } from "./routes/adminAuth.js";
 import { registerAdminEvents } from "./routes/adminEvents.js";
+import { createProviderAdminRoutes } from "./routes/providerAdmin.js";
+import { createCredentialSystem } from "./services/credentials/index.js";
 import { registerTTSRoutes } from "./routes/ttsService.js";
 import { streamNarrationToClients } from "./services/tts/narrate.js";
 import { resolveTTSProvider, normalizeProviderId, probeAvailability } from "./services/tts/registry.js";
@@ -232,6 +234,33 @@ const ttsActiveFor = (lobbyId) => !devMode && Boolean(resolveTTS(lobbyId, null))
 
 // Admin auth (registers routes on app, returns shared state)
 const adminAuth = registerAdminAuth(app, { store, charPublicKey, log });
+
+/**
+ * Who pays for each third-party call, and where those credentials live.
+ *
+ * Assembled here rather than at module load so a locked vault is a startup
+ * failure with a readable message, not an import-time crash. Keys still sitting
+ * in the environment are imported on construction — see docs/modules/credentials.md.
+ *
+ * Nothing in the game loop reads this yet; the routes below are the first caller.
+ */
+const credentials = createCredentialSystem({
+	dataDir: path.join(__dirname, "data"),
+	secret: process.env.STORYTELLER_SECRET
+		|| (process.env.STORYTELLER_SECRET_FILE && fs.existsSync(process.env.STORYTELLER_SECRET_FILE)
+			? fs.readFileSync(process.env.STORYTELLER_SECRET_FILE, "utf8").trim()
+			: null),
+	log,
+});
+
+// Operator-only. Gated on a password admin session and never on a host token —
+// a host runs one game, not the instance. See routes/providerAdmin.js.
+createProviderAdminRoutes({
+	credentials,
+	isAdminAuthenticated: adminAuth.isAdminAuthenticated,
+	fetchImpl: fetch,
+	log,
+}).register(app);
 
 // Serve admin + client static files (AFTER admin auth middleware is registered)
 app.use("/admin", express.static(path.join(__dirname, "..", "client", "admin")));
