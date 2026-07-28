@@ -30,6 +30,7 @@ import { parseDMJson } from "./helpers/parseDMJson.js";
 import { registerAdminAuth } from "./routes/adminAuth.js";
 import { registerAdminEvents } from "./routes/adminEvents.js";
 import { createProviderAdminRoutes } from "./routes/providerAdmin.js";
+import { createAiSetup } from "./routes/aiSetup.js";
 import { createCredentialSystem } from "./services/credentials/index.js";
 import { registerTTSRoutes } from "./routes/ttsService.js";
 import { streamNarrationToClients } from "./services/tts/narrate.js";
@@ -293,6 +294,20 @@ const { getLLMResponse, generateImage } = createLLMGateway({
 	},
 });
 
+/**
+ * What a lobby host uses to get their game playable: what this server offers,
+ * whether their lobby can start, and where they supply their own key. Host-gated;
+ * see routes/aiSetup.js.
+ */
+const aiSetup = createAiSetup({
+	credentials,
+	isHost: (lobbyId, sid) => store.isHost(lobbyId, sid),
+	emitToLobby: (lobbyId, event, payload) => busIo.to(room(lobbyId)).emit(event, payload),
+	fetchImpl: fetch,
+	log,
+});
+aiSetup.register(app);
+
 // Operator-only. Gated on a password admin session and never on a host token —
 // a host runs one game, not the instance. See routes/providerAdmin.js.
 createProviderAdminRoutes({
@@ -496,6 +511,7 @@ io.on("connection", (socket) => {
 	// ── Delegate to sub-modules ──
 	sessionSystem.registerSessionEvents(socket);
 	registerChatEvents(socket, { io, store, room, log, sendState });
+	aiSetup.registerSocket(socket);
 	registerAdminEvents(socket, {
 		io, store, room, adminRoom, log,
 		adminSessions: adminAuth.adminSessions,
@@ -925,6 +941,15 @@ io.on("connection", (socket) => {
 		try {
 			if (!store.isHost(lobbyId, socket.id)) return socket.emit("toast", { type: "error", message: "Only host can start" });
 			if (!store.allReady(lobbyId)) return socket.emit("toast", { type: "error", message: "Not all players ready" });
+
+			// The settings window disables Start for the same reason, but this is the
+			// gate that counts: starting a game whose Dungeon Master cannot answer
+			// produces an adventure whose opening narration is an error string.
+			const aiReady = aiSetup.readiness(lobbyId);
+			if (!aiReady.ready) {
+				socket.emit("ai:state", { ...aiReady, held: credentials.sessionKeys.describe(lobbyId) });
+				return socket.emit("toast", { type: "error", message: aiReady.blocking[0].message });
+			}
 
 			log(`🚀 Game starting for lobby ${lobbyId}`);
 			console.log('Game starting event dispatched to lobby: ' + lobbyId);

@@ -272,6 +272,29 @@ export function createSessionKeys({
 		},
 
 		/**
+		 * Reads a credential without spending any of its budget.
+		 *
+		 * @description For work that is not playing the game — listing a provider's
+		 *   models while the host configures things, testing a connection. Expiry is
+		 *   still honoured, because an expired key must not be used for anything, but
+		 *   the call counter is untouched: charging a host's self-imposed turn budget
+		 *   for opening a dropdown would be indefensible.
+		 * @param {string} lobbyId - The lobby.
+		 * @param {string} capability - The capability.
+		 * @returns {{ok: true, config: object}|{ok: false, reason: string}} The
+		 *   credential, or why it cannot be read.
+		 */
+		peek(lobbyId, capability) {
+			const entry = secrets.get(lobbyId)?.[capability];
+			if (!entry) return { ok: false, reason: "absent" };
+			if (entry.expiresAt !== null && now() >= entry.expiresAt) {
+				drop(lobbyId, capability, "expired");
+				return { ok: false, reason: "expired" };
+			}
+			return { ok: true, config: { ...entry.config } };
+		},
+
+		/**
 		 * @description Describes what a lobby holds, in a form safe to send to a
 		 *   browser. Capabilities whose secret has been dropped are still reported,
 		 *   with `configured: false`, so the host's UI can say *why* a game paused

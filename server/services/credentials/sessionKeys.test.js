@@ -452,3 +452,38 @@ test("take for a capability that was never supplied reports absence", () => {
 	supply(keys, { capability: "chat" });
 	assert.deepEqual(keys.take(LOBBY, "image"), { ok: false, reason: "absent" });
 });
+
+// ── Reading without spending ─────────────────────────────────────────────────
+
+test("peek returns the credential without consuming any budget", () => {
+	const { keys } = makeStore();
+	supply(keys, { maxCalls: 1 });
+
+	const peeked = keys.peek(LOBBY, "chat");
+
+	assert.equal(peeked.ok, true);
+	assert.equal(peeked.config.apiKey, HOST_KEY);
+	assert.equal(keys.describe(LOBBY).chat.used, 0);
+	assert.equal(keys.take(LOBBY, "chat").ok, true, "peeking must leave the budget intact");
+});
+
+test("peek still refuses an expired credential, and drops it", () => {
+	const { keys, clock } = makeStore();
+	supply(keys, { expiresAt: T0 + HOUR });
+	clock.advance(HOUR + 1);
+
+	assert.deepEqual(keys.peek(LOBBY, "chat"), { ok: false, reason: "expired" });
+	assert.equal(keys.describe(LOBBY).chat.configured, false);
+});
+
+test("peek reports absence for a lobby holding nothing", () => {
+	assert.deepEqual(makeStore().keys.peek(LOBBY, "chat"), { ok: false, reason: "absent" });
+});
+
+test("peek hands out a copy, so a caller cannot mutate what is stored", () => {
+	const { keys } = makeStore();
+	supply(keys);
+
+	keys.peek(LOBBY, "chat").config.apiKey = "mutated";
+	assert.equal(keys.peek(LOBBY, "chat").config.apiKey, HOST_KEY);
+});
