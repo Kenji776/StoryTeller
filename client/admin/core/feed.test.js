@@ -250,3 +250,44 @@ test("an action with no player still renders the words", () => {
 test("action is an offered filter, so it can be read on its own", () => {
 	assert.ok(FEED_TYPES.some((t) => t.id === "action"), FEED_TYPES.map((t) => t.id).join(","));
 });
+
+// ── Illustrations ────────────────────────────────────────────────────────────
+
+test("a pending illustration reports what is being drawn and how many", () => {
+	const entry = toFeedEntry("illustration:pending", { id: "i1", caption: "over the slain troll", expected: 3 });
+	const [kind, text] = [entry.type, entry.message];
+
+	assert.equal(kind, "image");
+	assert.match(text, /over the slain troll/);
+	assert.match(text, /3/);
+});
+
+test("a finished illustration names who was drawn", () => {
+	const entry = toFeedEntry("illustration:ready", {
+		id: "i1",
+		caption: "over the slain troll",
+		images: [{ name: "Brannor Ironfoot", url: "/character-images/a.png" }, { name: "Kaeda Ashfall", url: "/character-images/b.png" }],
+	});
+	const [kind, text] = [entry.type, entry.message];
+
+	assert.equal(kind, "image");
+	assert.match(text, /Brannor Ironfoot/);
+	assert.match(text, /Kaeda Ashfall/);
+});
+
+test("a scene illustration with no named characters still reads properly", () => {
+	const text = toFeedEntry("illustration:ready", {
+		id: "i1", caption: "a ruined watchtower at dusk", images: [{ name: null, url: "/character-images/c.png" }],
+	}).message;
+
+	assert.match(text, /ruined watchtower/);
+	assert.doesNotMatch(text, /null/);
+});
+
+test("a failed illustration says so rather than vanishing", () => {
+	const entry = toFeedEntry("illustration:failed", { id: "i1", error: "the image server did not answer" });
+	const [kind, text] = [entry.type, entry.message];
+
+	assert.equal(kind, "image");
+	assert.match(text, /did not answer/i);
+});

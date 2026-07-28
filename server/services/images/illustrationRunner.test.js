@@ -412,3 +412,30 @@ test("a credential too short for the length rule is caught by its prefix", async
 	await runner.consider(LOBBY, REPLY);
 	assert.ok(!JSON.stringify(emitted).includes("sk-abc123def456"));
 });
+
+// ── A scene is not a portrait ────────────────────────────────────────────────
+
+test("a scene loosens the likeness, so the pose and setting come through", async () => {
+	// At the default strength the reference portrait wins and every "scene" comes
+	// back as a studio headshot against grey — which is exactly what the first
+	// live run produced.
+	let strength;
+	const { runner } = makeRunner({
+		scene: async (req) => { strength = req.identityStrength; return { b64: PNG }; },
+	});
+
+	await runner.consider(LOBBY, REPLY);
+
+	assert.ok(strength < 1, `a scene was drawn at identity strength ${strength}`);
+	assert.ok(strength >= 0.8, "loosening past the documented floor loses the face entirely");
+});
+
+test("the opening scene is loosened the same way", async () => {
+	let strength;
+	const { runner } = makeRunner({
+		scene: async (req) => { strength = req.identityStrength; return { b64: PNG }; },
+	});
+
+	await runner.openingScene(LOBBY);
+	assert.ok(strength < 1);
+});

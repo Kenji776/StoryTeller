@@ -23,9 +23,21 @@ import { parseIllustration, illustrationGate } from "./illustration.js";
  * happening — for the same reason every other scene is: the stored appearance is
  * prepended by the server, and restating any of it here makes faces drift.
  */
-const OPENING_MOMENT = "at the very start of their adventure, gear shouldered, setting out";
+const OPENING_MOMENT = "setting out on the road at first light, pack shouldered, open country ahead, "
+	+ "full body, wide shot";
 const OPENING_MOOD = "expectant";
 const OPENING_CAPTION = "The adventure begins";
+
+/**
+ * How hard the stored likeness pulls when drawing a scene.
+ *
+ * The default of 1.0 is right for a portrait, where the face is the subject. For
+ * a scene it is wrong, and visibly so: the first live run produced three studio
+ * portraits against a grey background for a moment that read "setting out on
+ * their adventure" — the reference image simply overwhelmed the scene. The API's
+ * own guidance is to lower it toward 0.8 when the pose comes out stiff.
+ */
+const SCENE_IDENTITY_STRENGTH = 0.85;
 
 /** Portrait, matching what the character adapter draws by default. */
 const SCENE_SIZE = Object.freeze({ width: 896, height: 1152 });
@@ -113,6 +125,7 @@ export function createIllustrationRunner({
 			mood: directive.mood,
 			name: player.name,
 			size: SCENE_SIZE,
+			identityStrength: SCENE_IDENTITY_STRENGTH,
 		});
 		const url = await saveImage(`${lobbyId}-${String(player.name).replace(/[^a-zA-Z0-9]/g, "_")}-${now()}`, image.b64);
 		return { name: player.name, url };

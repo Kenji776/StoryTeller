@@ -34,6 +34,7 @@ export const FEED_TYPES = Object.freeze([
 	{ id: "inv", label: "Inventory" },
 	{ id: "music", label: "Music" },
 	{ id: "sfx", label: "Sound FX" },
+	{ id: "image", label: "Illustrations" },
 	{ id: "sys", label: "System" },
 ]);
 
@@ -137,6 +138,25 @@ const FORMATTERS = Object.freeze({
 		const rendered = list(names, "");
 		return rendered ? ["sfx", `SFX: ${rendered}`] : null;
 	},
+
+
+	// Illustrations arrive in two beats — a placeholder, then the picture — because
+	// drawing takes seconds. Both are shown, so a spectator sees the wait rather
+	// than a picture appearing from nowhere.
+	"illustration:pending": (p) => {
+		const count = Number(p.expected) || 1;
+		return ["image", `Illustrating${p.caption ? ` "${p.caption}"` : ""}… (${count} image${count === 1 ? "" : "s"})`];
+	},
+
+	"illustration:ready": (p) => {
+		const images = Array.isArray(p.images) ? p.images : [];
+		const who = images.map((i) => i?.name).filter(Boolean);
+		const subject = who.length ? who.join(", ") : (p.caption || "a scene");
+		const caption = p.caption && who.length ? ` — "${p.caption}"` : "";
+		return ["image", `Illustrated ${subject}${caption} (${images.length} image${images.length === 1 ? "" : "s"})`];
+	},
+
+	"illustration:failed": (p) => ["image", `Illustration failed: ${p.error || "unknown reason"}`],
 
 	"roll:required": (p) => ["roll", `${p.player} must roll d${p.sides} (${list(p.stats, "no stat")})`],
 
