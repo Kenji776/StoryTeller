@@ -640,15 +640,32 @@ async function handleGenerateCharImage() {
 	const btn = els.generateCharImageBtn;
 	const origText = btn.textContent;
 	btn.disabled = true;
-	btn.textContent = "Generating...";
+	btn.textContent = "Generating…";
 
-	// Show spinner inside the portrait box
-	const placeholder = document.getElementById("charImagePlaceholder");
-	const placeholderOrigHTML = placeholder ? placeholder.innerHTML : null;
-	if (placeholder) {
-		placeholder.style.display = "flex";
-		placeholder.innerHTML = `<div class="spinner"></div><span style="font-size:0.75em;margin-top:8px;color:#888">Painting your portrait...</span>`;
-	}
+	// An overlay over the whole portrait box, not markup written into the
+	// placeholder. Once a portrait exists the placeholder is display:none, so the
+	// old spinner went into an invisible element and re-generating looked like a
+	// dead button for the twenty-odd seconds the model takes.
+	const busy = document.getElementById("charImageBusy");
+	const elapsedEl = document.getElementById("charImageBusyElapsed");
+	if (busy) busy.classList.remove("hidden");
+
+	const startedAt = Date.now();
+	const ticker = elapsedEl
+		? setInterval(() => {
+			elapsedEl.textContent = `${Math.round((Date.now() - startedAt) / 1000)}s — this takes around 20–40 seconds`;
+		}, 1000)
+		: null;
+
+	/**
+	 * @description Clears the busy state however the attempt ended.
+	 * @returns {void}
+	 */
+	const stopBusy = () => {
+		if (ticker) clearInterval(ticker);
+		if (busy) busy.classList.add("hidden");
+		if (elapsedEl) elapsedEl.textContent = "this takes around 20–40 seconds";
+	};
 
 	try {
 		const sheet = buildCurrentSheet();
@@ -667,20 +684,23 @@ async function handleGenerateCharImage() {
 		});
 
 		if (res.status === 204) {
-			// Dev mode — silently skip, restore placeholder
-			if (placeholder && placeholderOrigHTML !== null) placeholder.innerHTML = placeholderOrigHTML;
+			// Developer mode declines image generation. Say so rather than appearing
+			// to do nothing, which is indistinguishable from a broken button.
+			alert("Image generation is disabled in developer mode.");
 			return;
 		}
 		const data = await res.json();
 		if (!res.ok) throw new Error(data.error || "Image generation failed");
 
-		showCharacterImage(data.url);
+		// Cache-bust: a re-generation overwrites the same filename, so the browser
+		// would otherwise keep showing the previous portrait and the button would
+		// once again look as though it had done nothing.
+		showCharacterImage(`${data.url}?t=${Date.now()}`);
 	} catch (err) {
 		console.error("Character image error:", err);
-		// Restore placeholder on failure so the box isn't stuck on the spinner
-		if (placeholder && placeholderOrigHTML !== null) placeholder.innerHTML = placeholderOrigHTML;
 		alert(`Failed to generate image: ${err.message}`);
 	} finally {
+		stopBusy();
 		btn.disabled = false;
 		btn.textContent = origText;
 	}

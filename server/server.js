@@ -53,6 +53,7 @@ import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
 import { resolveEnemyAttacks, describeAttacks } from "./services/enemyTurns.js";
+import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
 
@@ -1068,7 +1069,29 @@ io.on("connection", (socket) => {
 				players: s.players,
 			});
 
+			// Whether a fight ever happens was the narrator's whim, and it declined: one
+			// 120-turn game set combat_over on all 36 of its DM turns and never once
+			// carried an enemies array, so the resolver above had nobody to roll for.
+			// Brutality and difficulty govern tone only, with nothing mechanical
+			// attached. The server paces encounters instead and lets the model narrate
+			// them.
+			const enemiesPresent = Object.values(s.enemies ?? {}).some(
+				(e) => e && e.status !== "dead" && e.status !== "fled" && (Number(e.hp) || 0) > 0,
+			);
+			s.quietTurns = enemiesPresent ? 0 : (Number(s.quietTurns) || 0) + 1;
+
+			const forceEncounter = shouldForceEncounter({
+				quietTurns: s.quietTurns,
+				difficulty: s.difficulty,
+				enemiesPresent,
+			});
+
 			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload);
+			if (forceEncounter) {
+				msgs.push({ role: "system", content: encounterDirective(s.difficulty) });
+				console.log(`⚔️  Encounter forced after ${s.quietTurns} quiet turn(s)`);
+				s.quietTurns = 0;
+			}
 			if (enemyTurn.attacks.length) {
 				msgs.push({ role: "system", content: describeAttacks(enemyTurn.attacks) });
 				console.log(`⚔️  Enemy round: ${enemyTurn.attacks.filter((a) => a.hit).length}/${enemyTurn.attacks.length} hit`);
