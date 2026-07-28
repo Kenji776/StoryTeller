@@ -50,7 +50,13 @@ calls `persist(lobbyId)`, which writes the entire lobby object to disk.
 `persist` serialises the whole object, anything stored there lands in a
 world-readable JSON file. AI credentials are therefore held in a separate
 in-memory store keyed by lobby id and are never written to disk — see
-[modules/llm.md](modules/llm.md) and [ADR 0001](decisions/0001-player-supplied-ai-credentials.md).
+[modules/credentials.md](modules/credentials.md) and
+[ADR 0001](decisions/0001-player-supplied-ai-credentials.md).
+
+Credential state lives in three places with three lifetimes, and it is worth
+knowing which holds what: the operator's own keys are encrypted on disk
+(`credentials.enc`), who may spend them is plain JSON (`provider-policy.json`),
+and a host's supplied key is memory-only for the life of their connection.
 
 Non-secret AI settings (`llmProvider`, `llmModel`) do live in lobby state and are
 published to clients through `publicState`, as do the narration settings

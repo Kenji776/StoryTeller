@@ -57,7 +57,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/credentials.md](modules/credentials.md) — who pays for a third-party call
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0013 — operator credentials in an encrypted vault](decisions/0013-operator-credentials-in-an-encrypted-vault.md))
+  (newest: [0014 — a host credential is consented to, bounded, and outlived by its ledger](decisions/0014-a-host-credential-is-consented-bounded-and-outlived-by-its-ledger.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._
