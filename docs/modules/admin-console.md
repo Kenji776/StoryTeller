@@ -121,7 +121,7 @@ Complete. Every section in `nav.js` has a renderer, and a test enforces that.
 
 The old single-page panel (`client/admin/admin.js`) is deleted; its behaviour is
 distributed across `sections/`, and the decision record is
-[ADR 0006](../decisions/0006-admin-console-as-a-routed-shell.md).
+[ADR 0012](../decisions/0012-admin-console-as-a-routed-shell.md).
 
 Rendering remains unverified by automated tests — see `docs/testing.md`.
 
