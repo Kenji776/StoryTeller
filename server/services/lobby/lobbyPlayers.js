@@ -291,8 +291,23 @@ export const playerMethods = {
 		// because those are different states. A player midway through the builder also has
 		// no character, and must still hold the start up, or the host begins the game out
 		// from under them.
-		const conns = Object.values(s.sockets).filter((c) => !c.observer);
-		return conns.length > 0 && conns.every((c) => c.ready && c.playerName);
+		// Readiness belongs to a *character*, not to a socket. One person can hold several
+		// connections — the game window and the chat window are separate sockets — and the
+		// chat one never readies up. Requiring every socket to be ready therefore meant
+		// that opening chat before the start blocked the start, for real players as much
+		// as for watchers, and `game:start` checks this, so nothing could begin.
+		const ready = new Map();
+		for (const rec of Object.values(s.sockets)) {
+			if (rec.observer) continue;
+			// A non-observer with no name at all is somebody still in the builder. They
+			// must hold the start up, or the host begins without them.
+			if (!rec.playerName) return false;
+			// A name that is not a character in this lobby is a chat display handle — a
+			// watcher's, typically. It neither blocks the start nor satisfies it.
+			if (!s.players?.[rec.playerName]) continue;
+			ready.set(rec.playerName, (ready.get(rec.playerName) === true) || rec.ready === true);
+		}
+		return ready.size > 0 && [...ready.values()].every(Boolean);
 	},
 	/**
 	 * Whether this socket joined to watch rather than to play.

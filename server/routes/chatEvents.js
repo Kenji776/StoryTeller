@@ -52,7 +52,13 @@ export function registerChatEvents(socket, deps) {
 		// `players`, yielding a truthy actor with an undefined sheet — and
 		// `action:submit` guards only on `if (!actor)`. A watcher who opened the chat
 		// window could otherwise reach the turn pipeline holding nothing.
-		if (!store.isObserver(lobbyId, socket.id)) {
+		//
+		// It is also only adopted when it names a character that actually exists here.
+		// The chat window is a *separate socket* from the game window, so an observer's
+		// handle arrives on a connection nobody flagged as observing — the flag alone
+		// cannot catch it. Requiring the name to be a real character does.
+		const isPlayerName = !!store.index[lobbyId].players?.[name];
+		if (isPlayerName && !store.isObserver(lobbyId, socket.id)) {
 			store.index[lobbyId].sockets[socket.id].playerName = name;
 		}
 		socket.join(room(lobbyId));

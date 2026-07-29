@@ -374,3 +374,49 @@ test("asking about an unknown socket or lobby is false, not a throw", () => {
 	assert.equal(store.isObserver("nolobby", "sid1"), false);
 	assert.equal(store.observerCount("nolobby"), 0);
 });
+
+// ── Readiness is about characters, not sockets ───────────────────────────────
+
+test("a second socket for the same character does not have to ready up too", () => {
+	// The chat window is a separate connection that calls `chat:join` with the player's
+	// name. Requiring *every socket* to be ready meant opening chat before the start
+	// blocked the start — for real players as much as for watchers.
+	const store = makeTable();
+	store.addConnection("lob1", "sid1-chat");
+	store.index.lob1.sockets["sid1-chat"].playerName = "Ayla";
+	assert.equal(store.allReady("lob1"), true);
+});
+
+test("a socket naming somebody who is not a character is ignored", () => {
+	// An observer's chat window arrives as a socket with a display handle and no
+	// character. It is not a player, so it neither blocks the start nor satisfies it.
+	const store = makeTable();
+	store.addConnection("lob1", "watcher-chat");
+	store.index.lob1.sockets["watcher-chat"].playerName = "Anon#8638";
+	assert.equal(store.allReady("lob1"), true);
+});
+
+test("a lobby of only display handles is never ready", () => {
+	const store = makeStore();
+	store.addConnection("lob1", "chat-only");
+	store.index.lob1.sockets["chat-only"].playerName = "Anon#1";
+	assert.equal(store.allReady("lob1"), false);
+});
+
+test("a character is ready when any of their sockets is", () => {
+	const store = makeTable();
+	store.upsertPlayer("lob1", "sid2", "Bron", { class: "Rogue", stats: { hp: 9, max_hp: 9 } });
+	store.addConnection("lob1", "sid2-chat");
+	store.index.lob1.sockets["sid2-chat"].playerName = "Bron";
+	assert.equal(store.allReady("lob1"), false, "Bron has not readied on any socket");
+	store.setReady("lob1", "sid2", true);
+	assert.equal(store.allReady("lob1"), true, "readying on one socket is enough");
+});
+
+test("a player still building their character blocks the start, as before", () => {
+	// Unchanged behaviour, re-pinned: a nameless non-observer socket is somebody in the
+	// builder, and the host must not start without them.
+	const store = makeTable();
+	store.addConnection("lob1", "sid2");
+	assert.equal(store.allReady("lob1"), false);
+});

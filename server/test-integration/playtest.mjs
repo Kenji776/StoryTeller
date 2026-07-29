@@ -86,6 +86,33 @@ function brief(v, max = 220) {
 // Frames that arrive in floods and would drown the transcript.
 const NOISY = new Set(["narration:audio", "narration:alignment", "lobbies:update"]);
 
+/**
+ * Words a narrator gets through in a second. Synthesised speech lands near 150 a
+ * minute; `--read` scales it for a table that wants more or less breathing room.
+ */
+const WORDS_PER_SECOND = 2.5 / Number(arg("read", 1));
+
+/** Never answer instantly, and never leave the server waiting on its 3-minute fallback. */
+const MIN_READ_MS = 2_000;
+const MAX_READ_MS = 90_000;
+
+/**
+ * How long a passage would take to read aloud.
+ *
+ * @description The personas have no audio to wait on, so they estimate. Answering
+ *   `narration:done` immediately — which is what they used to do — tells the server the
+ *   passage is read before a word of it has been spoken, and the table runs away from a
+ *   human who is still listening.
+ * @param {string} [text] - The narration, tags already stripped.
+ * @returns {number} Milliseconds to wait, clamped so a missing or enormous passage still
+ *   behaves.
+ */
+function readingDelayMs(text) {
+	const words = String(text ?? "").split(/\s+/).filter(Boolean).length;
+	if (!words) return MIN_READ_MS;
+	return Math.min(MAX_READ_MS, Math.max(MIN_READ_MS, (words / WORDS_PER_SECOND) * 1000));
+}
+
 // ── Characters ───────────────────────────────────────────────────────────────
 
 /**
@@ -255,7 +282,11 @@ function makePlayer(spec, index) {
 		if (event === "turn:update" && payload) p.currentTurn = payload.current ?? null;
 		if (event === "narration" && typeof payload?.content === "string" && payload.content.trim()) {
 			// Strip the DM's markup: a persona should read prose, not tags.
-			p.story.push(payload.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+			const plain = payload.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+			p.story.push(plain);
+			// Kept for the reading-speed delay above, which fires on the *next*
+			// narration:start for this passage.
+			p.lastNarration = plain;
 			if (p.story.length > 40) p.story.shift();
 		}
 		if (NOISY.has(event)) return;
@@ -305,8 +336,17 @@ function makePlayer(spec, index) {
 
 	// The browser client signals playback finished so the server can start the turn
 	// timer. With TTS off the server still waits for it, so emulate it or the game stalls.
+	//
+	// It has to be emulated at *reading speed*, not instantly. Answering the moment
+	// narration begins tells the server the passage has been read before a word of it
+	// has been spoken, so the turn timer opens immediately and the personas act while a
+	// watching human is still listening to the previous beat — the bots run away from
+	// the story. A real client answers when its audio ends; this one answers when the
+	// text would plausibly have been read aloud.
 	socket.on("narration:start", () => {
-		if (p.lobbyId) socket.emit("narration:done", { lobbyId: p.lobbyId });
+		if (!p.lobbyId) return;
+		const ms = readingDelayMs(p.lastNarration);
+		setTimeout(() => { if (p.lobbyId) socket.emit("narration:done", { lobbyId: p.lobbyId }); }, ms);
 	});
 
 	// A rejected action does not advance the turn, so a player who does nothing after

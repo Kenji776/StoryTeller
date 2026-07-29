@@ -56,10 +56,23 @@ function rig({ observer = false } = {}) {
 }
 
 test("a player joining chat is identified by the name they send", () => {
-	// The existing behaviour, pinned so the fix below does not quietly break it.
+	// The name is adopted only when it belongs to a character in this lobby. The chat
+	// window is a separate socket from the game window, so the observer flag is not on
+	// it — matching against the real cast is what tells a player's handle from a
+	// watcher's.
 	const { socket, store, lobbyId } = rig();
+	store.upsertPlayer(lobbyId, "game-socket", "Ayla", { class: "Fighter", stats: { hp: 10, max_hp: 10 } });
 	socket.fire("chat:join", { lobbyId, name: "Ayla" });
 	assert.equal(store.index[lobbyId].sockets.watcher.playerName, "Ayla");
+});
+
+test("a chat handle that is nobody's character is not adopted as one", () => {
+	// The live defect: an observer's chat window arrived as an unflagged socket carrying
+	// "Anon#8638", which `allReady` then demanded be ready — so nothing could start.
+	const { socket, store, lobbyId } = rig();
+	socket.fire("chat:join", { lobbyId, name: "Anon#8638" });
+	assert.equal(store.index[lobbyId].sockets.watcher.playerName, null);
+	assert.equal(store.playerBySid(lobbyId, "watcher"), null);
 });
 
 test("an observer joining chat is not given a character name", () => {

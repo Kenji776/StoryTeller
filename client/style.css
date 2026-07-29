@@ -1864,7 +1864,11 @@ body.observing .action-input-area,
 body.observing #toggleReady,
 body.observing #startGame,
 body.observing #saveSheet,
-body.observing #lobbyCharacterColumn {
+body.observing #lobbyCharacterColumn,
+body.observing #importCharBtn,
+body.observing #exportCharBtn,
+body.observing #randomizeChar,
+body.observing #exportCharGameBtn {
 	display: none !important;
 }
 .observer-banner {
