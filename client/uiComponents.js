@@ -97,6 +97,15 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false, e
 	const container = document.getElementById(containerId);
 	if (!container) return console.warn(`drawInventoryComponent: #${containerId} not found`);
 
+	// Equip and Use act on a running game — they emit socket events against a lobby —
+	// so they belong to the in-play panel and not to the character builder, where
+	// there is nothing to act on and the buttons only invite a click that does
+	// nothing. Derived from the container rather than from `canAdd`, which means
+	// "offer an Add button" and which two of the builder's own call sites omit
+	// anyway. Anything that is not the game panel gets no action buttons, which is
+	// the safe default for a container added later.
+	const inPlay = containerId === "gameInventoryContainer";
+
 	const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
 	const template = await getTemplate("/components/inventory.html");
 
@@ -121,7 +130,7 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false, e
 		const row = document.createElement("tr");
 
 		let equipBtn = "";
-		if (slot) {
+		if (slot && inPlay) {
 			const slotLabel = slot === "weapon" ? "⚔️" : slot === "armor" ? "🛡️" : "💍";
 			const isEquipped = equipped[slot] && equipped[slot].toLowerCase() === item.name.toLowerCase();
 			if (isEquipped) {
@@ -132,9 +141,9 @@ async function drawInventoryComponent(containerId, items = [], canAdd = false, e
 		}
 
 		// A consumable is spent, not worn, so it gets a Use button instead of an
-		// Equip one. Only in play: the character builder has no game to act on.
+		// Equip one.
 		let useBtn = "";
-		if (!canAdd && window.isConsumable && window.isConsumable(item)) {
+		if (inPlay && window.isConsumable && window.isConsumable(item)) {
 			useBtn = `<button class="equip-btn chip" data-item="${item.name.replace(/"/g, "&quot;")}" data-action="use" data-sound="Magical Shimmer" data-sound-hover="Magical Shimmer" title="Use ${item.name}">🧪 Use</button>`;
 		}
 

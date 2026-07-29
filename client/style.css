@@ -141,6 +141,28 @@ button.secondary:hover {
 	display: none;
 }
 
+/* The portrait's "painting…" overlay. Its layout lives here rather than inline
+   because an inline `display:flex` outranks every selector, `.hidden` included —
+   so the spinner covered the portrait box from page load and never came off,
+   which read as the app generating an image nobody had asked for. The
+   id-plus-class override is the same shape `#loadingOverlay.hidden` uses below. */
+#charImageBusy {
+	position: absolute;
+	inset: 0;
+	background: rgba(10, 10, 25, 0.82);
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 200px;
+}
+
+#charImageBusy.hidden {
+	display: none;
+}
+
 /* === Audio Widget (Music + SFX) === */
 .audio-widget {
 	display: flex;

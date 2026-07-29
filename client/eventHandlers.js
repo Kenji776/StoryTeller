@@ -206,15 +206,10 @@ function handleSaveCharacterSheet() {
 	els.toggleReady.classList.add("pulse-enable");
 	setTimeout(() => els.toggleReady.classList.remove("pulse-enable"), 600);
 
-	// Auto-generate portrait on first save if none exists yet — but only once the
-	// player has chosen something. The selects default to real values, so an untouched
-	// sheet would otherwise have a portrait drawn of a generic Human Fighter.
-	const hasImage = els.charImagePreview && !els.charImagePreview.classList.contains("hidden");
-	if (!hasImage && characterTouched) {
-		// Automatic, so a missing name or an unfilled description skips quietly rather
-		// than interrupting with an alert the player did not ask for.
-		handleGenerateCharImage({ auto: true }).catch((e) => console.warn("Auto image generation failed:", e));
-	}
+	// A portrait is drawn only when the player asks for one, by pressing the button.
+	// Saving used to generate on the player's behalf, which meant a page they had not
+	// touched could spend twenty to forty seconds and an image charge drawing a
+	// character nobody had chosen. Guessing when they want one is not worth the money.
 }
 
 // === Chat Toggle ===
@@ -234,10 +229,8 @@ function handleRandomizeCharacter() {
 
 		// `randomizeCharacter` assigns to `.value` directly, and a programmatic
 		// assignment fires neither `change` nor `input` — the only events the prompt
-		// box listens to. So the description kept describing whatever was there before,
-		// and the save below then generated a portrait from it: a picture of the
-		// previous character, or of the untouched defaults.
-		characterTouched = true;
+		// box listens to. Without this the description would still describe whatever
+		// was there before the roll.
 		refreshPortraitPrompt();
 
 		handleSaveCharacterSheet();
@@ -595,18 +588,6 @@ function showCharacterImage(url) {
 let lastGeneratedPrompt = "";
 
 /**
- * Whether the player has actually made a character choice yet.
- *
- * The race and class selects arrive pre-filled, so an untouched form already reads
- * as "A Human Fighter" — enough for `isPromptReady`, which can only see the prompt
- * text and cannot tell a default from a decision. Saving then spent twenty to forty
- * seconds and an image charge drawing somebody nobody had chosen.
- *
- * Set by the same events that rebuild the prompt, and by Randomize.
- */
-let characterTouched = false;
-
-/**
  * @description Rewrites the generated part of the prompt box from the current
  *   character choices, leaving anything the player added after it alone. Called on
  *   every field change, so the box is current by the time anyone opens it.
@@ -668,20 +649,18 @@ function initPortraitPrompt() {
 
 // === Generate Character Image ===
 /**
- * @description Generates the portrait from whatever is in the prompt box.
- * @param {object} [opts] - Options.
- * @param {boolean} [opts.auto] - True when triggered automatically rather than by a
- *   click, in which case an unmet precondition is skipped silently instead of
- *   interrupting the player with an alert.
+ * @description Generates the portrait from whatever is in the prompt box. Only ever
+ *   reached by the player pressing the button — nothing draws on their behalf — so an
+ *   unmet precondition is always worth saying out loud rather than failing quietly.
  * @returns {Promise<void>}
  */
-async function handleGenerateCharImage({ auto = false } = {}) {
+async function handleGenerateCharImage() {
 	/**
-	 * @description Reports a precondition failure, unless this was automatic.
+	 * @description Reports a precondition failure.
 	 * @param {string} message - What is missing.
 	 * @returns {void}
 	 */
-	const stop = (message) => { if (!auto) alert(message); };
+	const stop = (message) => alert(message);
 
 	const name = (els.name?.value || "").trim();
 	if (!name) return stop("Enter a character name before generating an image.");
@@ -1019,11 +998,8 @@ safeAddEvent(els.generateCharImageBtn, "click", handleGenerateCharImage);
 document.addEventListener("portraitPrompt:ready", initPortraitPrompt);
 for (const id of ["raceSelect", "charClass", "gender", "age", "height", "weight", "alignment",
 	"background", "desc", "weaponSelect", "armorSelect", "trinketSelect", "level", "name"]) {
-	// `name` earns its place here for the touch flag rather than the prompt — the
-	// appearance never mentions it — but typing a name is unambiguously a choice.
-	const onEdit = () => { characterTouched = true; refreshPortraitPrompt(); };
-	safeAddEvent(document.getElementById(id), "change", onEdit);
-	safeAddEvent(document.getElementById(id), "input", onEdit);
+	safeAddEvent(document.getElementById(id), "change", refreshPortraitPrompt);
+	safeAddEvent(document.getElementById(id), "input", refreshPortraitPrompt);
 }
 safeAddEvent(els.exportCharBtn, "click", handleExportCharacter);
 safeAddEvent(els.exportCharGameBtn, "click", handleExportCharacter);

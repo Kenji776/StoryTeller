@@ -126,7 +126,10 @@
                   <span style="font-size:0.8em;">Portrait will appear here</span>
                 </div>
                 <img id="charImagePreview" src="" alt="Character portrait" class="hidden" style="max-width:100%;border-radius:8px;border:2px solid #555;" />
-                <div id="charImageBusy" class="hidden" style="position:absolute;inset:0;background:rgba(10,10,25,0.82);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;min-height:200px;">
+                <!-- Styled in style.css, not inline. An inline `display:flex` beats
+                     any selector, so `.hidden` could never turn it off and the
+                     spinner sat over the portrait box from page load onward. -->
+                <div id="charImageBusy" class="hidden">
                   <div class="spinner"></div>
                   <span style="font-size:0.8em;color:#bbb;">Painting your portrait…</span>
                   <span id="charImageBusyElapsed" style="font-size:0.7em;color:#777;">this takes around 20&ndash;40 seconds</span>
