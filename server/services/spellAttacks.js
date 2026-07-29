@@ -21,6 +21,7 @@ import { difficultyModifiers } from "../../client/difficulty.js";
 import { castingAbility } from "./spellbook.js";
 import { proficiencyBonus } from "./playerAttacks.js";
 import { crValue } from "./enemyTurns.js";
+import { normaliseForMatch as normalise, containsPhrase } from "../helpers/utils.js";
 
 /** Armour class assumed for a creature the model described without one. */
 const DEFAULT_ENEMY_AC = 12;
@@ -197,6 +198,73 @@ export function resolveSpell({ caster, spell, target, difficulty, rollD20 = d20,
 	};
 }
 
+/** Ways a caster refers to themselves rather than to a companion. */
+const SELF_WORDS = /\b(myself|my self|me)\b/i;
+
+/**
+ * Picks which ally a healing spell lands on.
+ *
+ * @description A named companion wins, then an explicit "myself", then the most wounded
+ *   living member — the mirror of `chooseTarget`'s most-wounded rule, which finishes what
+ *   the party started; this shores up whoever is closest to dying.
+ *
+ *   The dead are excluded from the fallback: healing does not raise them, so picking a
+ *   corpse would spend the spell on nothing and read as the engine misfiring. A player
+ *   who names one explicitly still gets what they asked for, and the narrator can say why
+ *   it did nothing.
+ * @param {*} action - The action text.
+ * @param {object} players - The lobby's players, keyed by name.
+ * @param {string} casterName - Who is casting.
+ * @returns {object|null} The ally to heal, or null when there is nobody.
+ */
+export function chooseAlly(action, players, casterName) {
+	const roster = Object.values(players ?? {}).filter((p) => p && typeof p.name === "string");
+	if (!roster.length) return null;
+
+	const caster = roster.find((p) => p.name === casterName) ?? null;
+
+	if (action) {
+		// Longest name first, so "Al" cannot win over "Alaric" when both appear.
+		const byName = [...roster].sort((a, b) => b.name.length - a.name.length);
+		const named = byName.find((p) => containsPhrase(action, p.name));
+		if (named) return named;
+
+		if (SELF_WORDS.test(String(action)) && caster) return caster;
+	}
+
+	const living = roster.filter((p) => !p.dead && (Number(p.stats?.hp) || 0) > 0);
+	if (!living.length) return caster;
+
+	return living.reduce((worst, p) => {
+		const missing = (Number(p.stats?.max_hp) || 0) - (Number(p.stats?.hp) || 0);
+		const worstMissing = (Number(worst.stats?.max_hp) || 0) - (Number(worst.stats?.hp) || 0);
+		return missing > worstMissing ? p : worst;
+	}, living[0]);
+}
+
+/**
+ * Drops the model's own healing for a character the server has already healed.
+ *
+ * @description `stripResolvedDamage` is the same guard for damage, and only filters
+ *   *negative* deltas — so a model-invented heal sailed straight through and a character
+ *   was healed twice for one spell. Damage in the same reply is a different event, a trap
+ *   or a falling rock, and still applies.
+ * @param {*} updates - The model's `hp` updates.
+ * @param {string|null} healed - The character the server healed, if any.
+ * @returns {Array<object>} The updates that should still be applied.
+ */
+export function stripResolvedHealing(updates, healed) {
+	if (!Array.isArray(updates)) return [];
+	if (!healed) return updates;
+
+	const key = normalise(healed);
+	return updates.filter((u) => {
+		const delta = Number(u?.delta);
+		if (!Number.isFinite(delta) || delta <= 0) return true;
+		return normalise(u?.player) !== key;
+	});
+}
+
 /**
  * @description Renders the damage and its type as one phrase, so a spell with no stated
  *   type does not leave a doubled space mid-sentence. The DM writes prose from this
@@ -227,7 +295,13 @@ export function describeSpell(cast, target) {
 	];
 
 	if (cast.resolution === "heal") {
-		lines.push(`- ${cast.caster} casts ${cast.spellName}: restores ${cast.healed} hit points.`);
+		const who = cast.targetName && cast.targetName !== cast.caster ? cast.targetName : "themselves";
+		lines.push(`- ${cast.caster} casts ${cast.spellName} on ${who}: restores ${cast.healed} hit points.`);
+		const healedTo = Number(target?.hp);
+		if (Number.isFinite(healedTo)) {
+			lines.push(`  ${cast.targetName ?? cast.caster} is now on ${healedTo}`
+				+ `${Number.isFinite(Number(target?.max_hp)) ? ` of ${Number(target.max_hp)}` : ""} hit points.`);
+		}
 	} else if (cast.resolution === "save") {
 		const verb = cast.saved ? "SAVES" : "FAILS the save";
 		const ability = cast.saveAbility ? `${String(cast.saveAbility).toUpperCase()} saving throw` : "saving throw";

@@ -131,7 +131,7 @@ Everything mechanical happens **before** the model is called, for the reason
 | `attack` | `d20 + proficiency + casting modifier` against the target's real `ac`. Natural 20 doubles the dice; natural 1 always misses. |
 | `save` | The **target** rolls `d20 + a challenge-rating bonus` against the caster's DC. `onSave: "half"` takes half, rounded down; `"none"` takes nothing. |
 | `auto` | Lands — Magic Missile has no roll to make. |
-| `heal` | Rolls `healing`, plus the casting modifier where `addCastingMod` says so, minimum 1. |
+| `heal` | Rolls `healing`, plus the casting modifier where `addCastingMod` says so, minimum 1. Applied through `broadcastHPUpdates`, which clamps to `max_hp`. |
 | `utility` | Returns null — no right answer to compute, so the narrator owns it. |
 
 **Save DC is `8 + proficiency + casting modifier`**, null for a non-caster.
@@ -160,6 +160,16 @@ bolt" — "fire" + "bolt" reads as firing a crossbow bolt — so a wizard castin
 also took a quarterstaff swing, two damage rolls on one turn. Text alone cannot separate
 those, and Flame Strike would collide with `strikes?` the same way; the gate having
 matched a spell the character actually knows is stronger evidence.
+
+**Who a heal lands on** is `chooseAlly`: a named companion, then an explicit "myself",
+then the most wounded living member — the mirror of `chooseTarget`'s most-wounded rule.
+The dead are excluded from the fallback, since healing does not raise them and spending
+the spell on a corpse reads as the engine misfiring.
+
+**Healing needs its own guard.** `stripResolvedDamage` filters only *negative* deltas, so
+a model-invented heal sailed past it and a character was healed twice for one spell.
+`stripResolvedHealing` drops a positive delta for the character the server just healed,
+and leaves damage in the same reply alone — a trap is a different event.
 
 **Both resolvers' targets are protected** from the model's `enemies` block via
 `serverResolved`. The spell's was missing at first, so a narration could rewrite the hit
@@ -193,9 +203,6 @@ cast Light, and a bare "Touch" must not beat "Chill Touch".
 
 ## Known gaps
 
-- **Healing is rolled but not applied.** `resolveSpell` returns `healed`, and the action
-  handler does not yet route it through `broadcastHPUpdates` or choose an ally to receive
-  it, so Cure Wounds still relies on the narrator.
 - **A utility spell still falls to the flat ladder.** That is deliberate — there is no
   right answer to compute — but the ladder grades it 15/8 with no reference to anything.
 - **Area spells hit one target.** `Burning Hands` and `Thunderwave` name a cone and a

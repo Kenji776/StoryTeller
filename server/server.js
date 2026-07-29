@@ -60,7 +60,7 @@ import { xpForKills } from "./services/experience.js";
 import { stripResolvedDamage } from "./services/enemyTurns.js";
 import { takeEnemyRound } from "./services/enemyRound.js";
 import { isAttackAction, chooseTarget, resolveAttack, describeAttack } from "./services/playerAttacks.js";
-import { resolveSpell, describeSpell } from "./services/spellAttacks.js";
+import { resolveSpell, describeSpell, chooseAlly, stripResolvedHealing } from "./services/spellAttacks.js";
 import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js";
 import { resolveConsumable } from "./services/consumables.js";
 import { rollLoot } from "./services/loot.js";
@@ -1374,11 +1374,12 @@ io.on("connection", (socket) => {
 			const castSpell = gate.verdict?.usesSpell
 				? knownSpells(s.players[actor.name]).find((sp) => sp.name === gate.verdict.usesSpell)
 				: null;
-			// A healing spell has no enemy to pick, and `resolveSpell` declines utility
-			// outright — the narrator legitimately owns those.
-			const spellTarget = castSpell && castSpell.resolution !== "heal"
-				? chooseTarget(text, s.enemies)
-				: null;
+			// A healing spell picks an ally instead of an enemy; `resolveSpell` declines
+			// utility outright, which the narrator legitimately owns.
+			const spellTarget = !castSpell ? null
+				: castSpell.resolution === "heal"
+					? chooseAlly(text, s.players, actor.name)
+					: chooseTarget(text, s.enemies);
 			const cast = castSpell
 				? resolveSpell({
 					caster: s.players[actor.name], spell: castSpell, target: spellTarget,
@@ -1390,6 +1391,15 @@ io.on("connection", (socket) => {
 				const outcome = cast.damage > 0 && spellTarget
 					? store.applyEnemyDamage(lobbyId, spellTarget.name, cast.damage)
 					: null;
+
+				// Healing goes out through the ordinary broadcaster, exactly as a potion does —
+				// it clamps to max_hp and tells the room. Rolling it and leaving the narrator to
+				// apply it is the failure consumables already had, where potions were inert.
+				if (cast.resolution === "heal" && cast.healed > 0 && spellTarget) {
+					broadcastHPUpdates(busIo, store, lobbyId, [
+						{ player: spellTarget.name, delta: cast.healed, reason: cast.spellName },
+					]);
+				}
 
 				busIo.to(room(lobbyId)).emit("dice:result", {
 					lobbyId,
@@ -1532,7 +1542,13 @@ io.on("connection", (socket) => {
 				msgs.push({ role: "system", content: describeAttack(attack, s.enemies?.[attack.targetName]) });
 			}
 			if (cast) {
-				msgs.push({ role: "system", content: describeSpell(cast, s.enemies?.[cast.targetName]) });
+				// Read after the damage or healing landed, so the block states the hit points the
+				// subject actually has rather than the ones they had before.
+				const healed = cast.resolution === "heal" ? s.players?.[cast.targetName] : null;
+				const subject = healed
+					? { name: cast.targetName, hp: healed.stats?.hp, max_hp: healed.stats?.max_hp }
+					: s.enemies?.[cast.targetName];
+				msgs.push({ role: "system", content: describeSpell(cast, subject) });
 			}
 			if (enemyTurn.attacks.length) {
 				msgs.push({ role: "system", content: enemyTurn.block });
@@ -1616,7 +1632,13 @@ io.on("connection", (socket) => {
 				// Damage for a round the server already resolved is dropped: told not to
 				// add its own hp updates for those attacks, the model does it anyway, and
 				// the character was being wounded twice for one blow.
-				broadcastHPUpdates(busIo, store, lobbyId, stripResolvedDamage(u.hp, enemyTurn.attacks.length > 0));
+				// Two guards, because they filter opposite signs. `stripResolvedDamage` drops the
+				// model's copy of damage the server rolled; a model-invented *heal* is positive and
+				// sailed straight past it, so a character healed by a spell was healed twice.
+				broadcastHPUpdates(busIo, store, lobbyId, stripResolvedHealing(
+					stripResolvedDamage(u.hp, enemyTurn.attacks.length > 0),
+					cast?.resolution === "heal" ? cast.targetName : null,
+				));
 				await checkAndEndIfAllDead(lobbyId);
 
 				if (store.index[lobbyId]?.phase === "wiped") {

@@ -11,7 +11,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeName, normaliseForMatch } from "./utils.js";
+import { normalizeName, normaliseForMatch, containsPhrase } from "./utils.js";
 
 // ── normaliseForMatch ────────────────────────────────────────────────────────
 
@@ -64,4 +64,38 @@ test("normalizeName keeps case and punctuation, unlike normaliseForMatch", () =>
 	// comparison. Asserted so a later reader does not collapse them.
 	assert.equal(normalizeName("Fire_Bolt"), "Fire Bolt");
 	assert.equal(normaliseForMatch("Fire_Bolt"), "fire bolt");
+});
+
+// ── containsPhrase ───────────────────────────────────────────────────────────
+
+test("a phrase is found as whole words", () => {
+	assert.equal(containsPhrase("I cast fire bolt at the goblin", "Fire Bolt"), true);
+	assert.equal(containsPhrase("I cast cure wounds on Brannor", "Brannor"), true);
+});
+
+test("a phrase inside a longer word is not a match", () => {
+	// The two live false positives this exists to stop.
+	assert.equal(containsPhrase("I delight in the chaos", "Light"), false);
+	assert.equal(containsPhrase("I always cast cure wounds", "Al"), false);
+});
+
+test("case, punctuation and spacing do not defeat a match", () => {
+	assert.equal(containsPhrase("i cast MAGIC-MISSILE!", "Magic Missile"), true);
+	assert.equal(containsPhrase("I cast  fire   bolt", "fire bolt"), true);
+});
+
+test("an empty or missing side is never a match", () => {
+	for (const [text, phrase] of [["", "Al"], ["I cast", ""], [null, "Al"], ["I cast", null], [undefined, undefined]]) {
+		assert.equal(containsPhrase(text, phrase), false, `${JSON.stringify([text, phrase])}`);
+	}
+});
+
+test("a phrase of pure punctuation cannot match everything", () => {
+	// It normalises to "", and an empty needle must not be treated as always present.
+	assert.equal(containsPhrase("I cast fire bolt", "---"), false);
+});
+
+test("non-string input is tolerated rather than thrown on", () => {
+	assert.equal(containsPhrase(42, 42), true, "both normalise to \"42\"");
+	assert.equal(containsPhrase({}, []), false);
 });

@@ -34,3 +34,28 @@ export function normaliseForMatch(value) {
 		.replace(/\s+/g, " ")
 		.trim();
 }
+
+/**
+ * Whether a phrase appears in a text as whole words.
+ *
+ * @description Substring matching is not good enough for names: "I delight in the chaos"
+ *   must not cast Light, and "I always cast cure wounds" must not target a companion
+ *   called Al. Both sides are normalised through {@link normaliseForMatch} first, so
+ *   "magic-missile" finds "Magic Missile".
+ *
+ *   One implementation because there are three callers — spell names, ally names, and
+ *   ability names — and hand-escaping a regex correctly in each is exactly the kind of
+ *   thing that is wrong in one place and nowhere else.
+ * @param {*} text - The haystack.
+ * @param {*} phrase - The name or phrase to find.
+ * @returns {boolean} True when the phrase appears as whole words.
+ */
+export function containsPhrase(text, phrase) {
+	const key = normaliseForMatch(phrase);
+	const haystack = normaliseForMatch(text);
+	if (!key || !haystack) return false;
+	// The normalised form is alphanumerics and spaces only, so nothing here can be a
+	// regex metacharacter — but escaping anyway costs nothing and survives that changing.
+	const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`\\b${escaped}\\b`).test(haystack);
+}

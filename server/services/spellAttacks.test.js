@@ -14,7 +14,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { spellSaveDC, spellAttackBonus, resolveSpell, describeSpell } from "./spellAttacks.js";
+import {
+	spellSaveDC, spellAttackBonus, resolveSpell, describeSpell, chooseAlly, stripResolvedHealing,
+} from "./spellAttacks.js";
 
 /**
  * @description A caster sheet carrying only what resolution reads.
@@ -384,4 +386,99 @@ test("a target left on one hit point is described in the singular", () => {
 	const block = describeSpell(cast, { ...goblin(), hp: 1 });
 	assert.match(block, /on 1 hit point\./);
 	assert.doesNotMatch(block, /1 hit points/);
+});
+
+// ── Healing an ally ──────────────────────────────────────────────────────────
+
+/** A party, keyed as the lobby stores it. */
+const PARTY = {
+	Elara: { name: "Elara", stats: { hp: 12, max_hp: 18 }, dead: false },
+	Brannor: { name: "Brannor", stats: { hp: 4, max_hp: 28 }, dead: false },
+	Sylvie: { name: "Sylvie", stats: { hp: 20, max_hp: 20 }, dead: false },
+	Corpse: { name: "Corpse", stats: { hp: 0, max_hp: 20 }, dead: true },
+};
+
+test("a named ally is healed", () => {
+	assert.equal(chooseAlly("I cast cure wounds on Brannor.", PARTY, "Elara")?.name, "Brannor");
+	assert.equal(chooseAlly("I cast healing word on Sylvie.", PARTY, "Elara")?.name, "Sylvie");
+});
+
+test("a caster can heal themselves by name or by pronoun", () => {
+	for (const text of ["I cast cure wounds on myself.", "I heal me.", "I cast cure wounds on Elara."]) {
+		assert.equal(chooseAlly(text, PARTY, "Elara")?.name, "Elara", text);
+	}
+});
+
+test("with nobody named, the most wounded living ally is healed", () => {
+	// The mirror of chooseTarget's most-wounded rule: finishing what the party started
+	// there, and shoring up whoever is closest to dying here.
+	assert.equal(chooseAlly("I cast cure wounds.", PARTY, "Elara")?.name, "Brannor");
+});
+
+test("the dead are not healed by the fallback", () => {
+	// Healing does not raise the dead in 5e, and picking a corpse would waste the spell
+	// silently.
+	const onlyDead = { Elara: PARTY.Elara, Corpse: PARTY.Corpse };
+	assert.equal(chooseAlly("I cast cure wounds.", onlyDead, "Elara")?.name, "Elara");
+});
+
+test("a lone caster heals themselves", () => {
+	assert.equal(chooseAlly("I cast cure wounds.", { Elara: PARTY.Elara }, "Elara")?.name, "Elara");
+});
+
+test("choosing an ally tolerates junk", () => {
+	assert.equal(chooseAlly(null, PARTY, "Elara")?.name, "Brannor");
+	assert.equal(chooseAlly("I cast cure wounds.", null, "Elara"), null);
+	assert.equal(chooseAlly("I cast cure wounds.", {}, "Elara"), null);
+});
+
+test("a name is matched on word boundaries, not inside another word", () => {
+	const party = { Al: { name: "Al", stats: { hp: 5, max_hp: 10 } }, Bo: { name: "Bo", stats: { hp: 9, max_hp: 10 } } };
+	// "always" contains "al"; it must not select Al.
+	assert.equal(chooseAlly("I always cast cure wounds on Bo.", party, "Bo")?.name, "Bo");
+});
+
+test("the block names who was healed and where it left them", () => {
+	const cast = resolveSpell({
+		caster: wizard(), spell: CURE_WOUNDS, target: { name: "Brannor" }, rollDamage: () => 5,
+	});
+	const block = describeSpell(cast, { name: "Brannor", hp: 12, max_hp: 28 });
+	assert.match(block, /Brannor/);
+	assert.match(block, /8/, "5 rolled plus the casting modifier");
+	assert.match(block, /12/, "the hit points they are on afterwards");
+});
+
+// ── The model must not heal the same wound twice ─────────────────────────────
+
+test("a positive hp update for the character the server just healed is dropped", () => {
+	// stripResolvedDamage drops only *negative* deltas, so a model-invented heal sailed
+	// through and the character was healed twice for one spell.
+	const kept = stripResolvedHealing([{ player: "Brannor", delta: 8, reason: "Cure Wounds" }], "Brannor");
+	assert.deepEqual(kept, []);
+});
+
+test("damage to the healed character still applies", () => {
+	// A trap in the same narration is a different event and must not be swallowed.
+	const updates = [{ player: "Brannor", delta: -6, reason: "falling rock" }];
+	assert.deepEqual(stripResolvedHealing(updates, "Brannor"), updates);
+});
+
+test("healing for anyone else still applies", () => {
+	const updates = [{ player: "Sylvie", delta: 5 }];
+	assert.deepEqual(stripResolvedHealing(updates, "Brannor"), updates);
+});
+
+test("with nobody healed, every update passes through", () => {
+	const updates = [{ player: "Brannor", delta: 8 }, { player: "Sylvie", delta: -3 }];
+	assert.deepEqual(stripResolvedHealing(updates, null), updates);
+});
+
+test("the healing filter tolerates junk", () => {
+	assert.deepEqual(stripResolvedHealing(null, "Brannor"), []);
+	assert.deepEqual(stripResolvedHealing(undefined, "Brannor"), []);
+	assert.deepEqual(stripResolvedHealing([null, {}], "Brannor"), [null, {}]);
+});
+
+test("the name match ignores case and spacing, as the broadcasters do", () => {
+	assert.deepEqual(stripResolvedHealing([{ player: "  brannor ", delta: 8 }], "Brannor"), []);
 });
