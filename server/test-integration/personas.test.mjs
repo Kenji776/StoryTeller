@@ -103,3 +103,19 @@ test("a non-caster's brief says nothing about spells at all", () => {
 	const prompt = systemPrompt({ name: "Brannor Ironfoot", spec: { race: "Dwarf", cls: "Fighter" } }, view);
 	assert.doesNotMatch(prompt, /spell/i);
 });
+
+test("a drilled character is told that a wasted turn costs a free enemy round", () => {
+	// The lesson three wiped parties paid for. `takeEnemyRound` fires on every action,
+	// so examining a tablet mid-fight is mechanically identical to being attacked for
+	// free — and the default cast did exactly that, repeatedly.
+	const prompt = systemPrompt({ name: "Dorn Hammerfall", spec: { race: "Dwarf", cls: "Fighter" } },
+		viewFromState(stateWithCaster({ spells: [] }), "Ovid Marrow"), { drilled: true });
+	assert.match(prompt, /free round/i);
+	assert.match(prompt, /focus/i);
+});
+
+test("an undrilled character is not given the drill", () => {
+	// The default cast exists to produce a story, and the drill would flatten it.
+	const prompt = systemPrompt(PLAYER, viewFromState(stateWithCaster(), "Ovid Marrow"));
+	assert.doesNotMatch(prompt, /free round/i);
+});

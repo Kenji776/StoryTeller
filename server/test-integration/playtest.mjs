@@ -139,9 +139,11 @@ function readingDelayMs(text) {
  * @param {string} spec.cls - Class.
  * @param {string} spec.race - Race.
  * @param {object} spec.stats - Ability scores; merged over sane defaults.
+ * @param {object} [spec.weapon] - Weapon override. Defaults to a shortsword.
+ * @param {object} [spec.armor] - Armour override. Defaults to leather.
  * @returns {object} A server-acceptable sheet.
  */
-function makeSheet({ name, cls, race, stats, abilities = [], spells = [] }) {
+function makeSheet({ name, cls, race, stats, abilities = [], spells = [], weapon, armor }) {
 	return {
 		name,
 		class: cls,
@@ -168,8 +170,12 @@ function makeSheet({ name, cls, race, stats, abilities = [], spells = [] }) {
 			{ name: "Rations", count: 3, description: "Dry but filling.", attributes: {} },
 			{ name: "Healing Potion", count: 2, description: "Restores health when drunk.", attributes: { healing: "2d4" } },
 		],
-		weapon: { name: "Shortsword", damage: "1d6", damageType: "slashing", range: "melee" },
-		armor: { name: "Leather Armor", ac: 11, type: "light", note: "" },
+		// Equipment was hardcoded here for every character regardless of class, which
+		// quietly made the whole cast worse than the rules allow: the fighter went to
+		// war in AC 11 leather when chain mail is on their own starting list, and
+		// everyone swung a 1d6 shortsword. A roster can now say what it carries.
+		weapon: weapon ?? { name: "Shortsword", damage: "1d6", damageType: "slashing", range: "melee" },
+		armor: armor ?? { name: "Leather Armor", ac: 11, type: "light", note: "" },
 	};
 }
 
@@ -199,6 +205,66 @@ const CAST = [
 		stats: { wis: 17, con: 13, int: 8, str: 12 },
 		abilities: [],
 		spells: ["Sacred Flame", "Guiding Bolt", "Cure Wounds"],
+	},
+];
+
+const CHAIN_MAIL = { name: "Chain Mail", ac: 16, type: "heavy", note: "" };
+const GREATSWORD = { name: "Greatsword", damage: "2d6", damageType: "slashing", range: "melee" };
+
+/**
+ * A party built to the level-1 rules as they actually are, rather than to how D&D
+ * usually works. Selected with `--roster minmax`.
+ *
+ * @description Three facts in this engine make single-stat builds strictly optimal for
+ * the heavy-armour classes, with no trade-off to weigh at all:
+ *
+ *   1. **Level-1 hit points are a flat 10.** `recalcHP` only adds a die per level *above*
+ *      one, so constitution buys literally nothing at level 1.
+ *   2. **Chain mail is heavy**, and `DEX_ALLOWANCE.heavy` is `null` — dexterity is
+ *      discarded entirely rather than capped. AC 16 is the best on any starting list and
+ *      Cleric, Fighter and Paladin all have it.
+ *   3. **Enemies pick targets round-robin** across everyone standing (`enemyTurns.js`).
+ *      There is no aggro and no front line, so armour class is personal and nobody can be
+ *      shielded by anybody. A wizard in AC 11 mage robes takes the same number of swings
+ *      as the fighter and is hit on 8+ instead of 13+.
+ *
+ * So the whole 10-point budget goes into the one stat that does anything — the cost table
+ * is linear at one point per step, making 18 exactly affordable — and constitution and
+ * dexterity stay at 8 with no cost paid anywhere. That is not a clever reading of the
+ * rules; it is the only non-wasteful build the rules permit.
+ *
+ * Two fighters for damage, two clerics for the burst and the healing. A cleric's
+ * Guiding Bolt is 4d6 at +6 to hit, and Cure Wounds restores 1d8+4 — most of a level-1
+ * bar — while Sacred Flame keeps working for free after the slots are gone.
+ */
+const MINMAX_CAST = [
+	{
+		name: "Dorn Hammerfall", cls: "Fighter", race: "Dwarf",
+		stats: { hp: 10, max_hp: 10, str: 18, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+		abilities: [{ name: "Second Wind", description: "Regain hit points as a bonus action.", details: {} }],
+		weapon: GREATSWORD, armor: CHAIN_MAIL,
+	},
+	{
+		name: "Kestra Vane", cls: "Fighter", race: "Human",
+		stats: { hp: 10, max_hp: 10, str: 18, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+		abilities: [{ name: "Second Wind", description: "Regain hit points as a bonus action.", details: {} }],
+		weapon: GREATSWORD, armor: CHAIN_MAIL,
+	},
+	{
+		name: "Sister Almath", cls: "Cleric", race: "Human",
+		stats: { hp: 10, max_hp: 10, wis: 18, dex: 8, con: 8, int: 8, str: 8, cha: 8 },
+		abilities: [],
+		spells: ["Guiding Bolt", "Sacred Flame", "Cure Wounds"],
+		weapon: { name: "Warhammer", damage: "1d8", damageType: "bludgeoning", range: "melee" },
+		armor: CHAIN_MAIL,
+	},
+	{
+		name: "Brother Oduin", cls: "Cleric", race: "Dwarf",
+		stats: { hp: 10, max_hp: 10, wis: 18, dex: 8, con: 8, int: 8, str: 8, cha: 8 },
+		abilities: [],
+		spells: ["Cure Wounds", "Sacred Flame", "Guiding Bolt"],
+		weapon: { name: "Warhammer", damage: "1d8", damageType: "bludgeoning", range: "melee" },
+		armor: CHAIN_MAIL,
 	},
 ];
 
@@ -466,7 +532,9 @@ function waitForNarration(socket, ms) {
 async function run() {
 	log("RUN", `target ${URL} | max ${MAX_ACTIONS} actions | transcript ${LOG_PATH}`);
 
-	const players = CAST.map(makePlayer);
+	// `--roster minmax` swaps in the party built to the level-1 rules; see MINMAX_CAST.
+	const roster = arg("roster", "default") === "minmax" ? MINMAX_CAST : CAST;
+	const players = roster.map(makePlayer);
 	const [host] = players;
 
 	await Promise.all(players.map((p) => waitFor(p.socket, "connect", 15000)));
@@ -653,6 +721,7 @@ async function run() {
 				state: actor.state,
 				chat: actor.chat,
 				apiKey: process.env.OPENAI_API_KEY,
+				drilled: arg("roster", "default") === "minmax",
 				log,
 			});
 		} else {

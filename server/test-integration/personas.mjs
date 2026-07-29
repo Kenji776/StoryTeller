@@ -55,7 +55,62 @@ export const PERSONAS = {
 			+ "when others would stop.",
 		priorities: "Investigate everything. Spend Magic Missile on real threats. Follow the mystery.",
 	},
+
+	// ── The drilled party (`--roster minmax`) ────────────────────────────────
+	//
+	// The default cast above is written for *story*, and it plays accordingly: across
+	// three full games its members spent combat turns examining tablets, urging each
+	// other on and readying themselves to act. `takeEnemyRound` fires on every
+	// `action:submit` regardless of what the action was, so each of those turns bought
+	// the enemy a free round and bought the party nothing. All three parties were wiped.
+	//
+	// These four are written for *play*. The temperament is thin on purpose — the point
+	// is to isolate how much of the wiping was character build and tactics rather than
+	// encounter balance, so their instructions are drills, not personality.
+	"Dorn Hammerfall": {
+		temperament: "Terse, professional, and utterly without curiosity during a fight.",
+		priorities: "Attack with the greatsword every single turn. Hit whatever Kestra is hitting. "
+			+ "Never examine, ready, prepare, or encourage — those cost a turn and achieve nothing.",
+	},
+	"Kestra Vane": {
+		temperament: "A veteran who calls targets and expects them to be hit.",
+		priorities: "Attack with the greatsword every single turn, and name the target out loud so "
+			+ "the others can join you on it. Concentrate on one enemy until it is dead.",
+	},
+	"Sister Almath": {
+		temperament: "Cold, efficient, and entirely unsentimental about miracles.",
+		priorities: "Open with Guiding Bolt while slots remain, then Sacred Flame forever — it is free. "
+			+ "Cast Cure Wounds only when an ally is at 4 hit points or fewer. Hit the target Kestra named.",
+	},
+	"Brother Oduin": {
+		temperament: "Watchful, patient, and focused on keeping everyone upright.",
+		priorities: "Watch the party's hit points. Cure Wounds the moment anyone is at 4 or fewer — one "
+			+ "more hit kills them. Otherwise Sacred Flame the target Kestra named. Never waste a turn.",
+	},
 };
+
+/**
+ * The drill every member of the `--roster minmax` party receives.
+ *
+ * @description Three lessons paid for by three wiped parties, none of which is about
+ *   roleplay and all of which are about this engine's arithmetic:
+ *
+ *   - **A turn spent on anything but damage is a free enemy round.** `takeEnemyRound`
+ *     runs on every action, not just combat ones.
+ *   - **Focused fire is defence.** Enemies are dealt out round-robin across everyone
+ *     still standing, so killing one enemy permanently removes a share of the incoming
+ *     attacks. Spreading damage across three wounded enemies removes none of it.
+ *   - **The phrasing has to name the thing.** "I ready myself to heal" resolves as
+ *     nothing at all; only a named spell or weapon reaches a resolver.
+ */
+export const TACTICAL_DRILL = [
+	"You are in a fight for your life and you fight to win.",
+	"Every turn you do not deal damage or heal, the enemy gets a free round against you — so never "
+		+ "spend a combat turn examining, scouting, readying, preparing, encouraging, or talking.",
+	"The party focuses one enemy at a time until it drops. A dead enemy stops attacking; a wounded "
+		+ "one does not.",
+	"Name your weapon or your spell exactly, and name your target.",
+].join(" ");
 
 /** What a persona is told when the sheet has not arrived yet. */
 const UNKNOWN = { abilities: [], inventory: [], hp: null, maxHp: null, conditions: [], uses: "unknown", spells: [], spellSlots: null, allies: [], enemies: [] };
@@ -114,7 +169,7 @@ export function viewFromState(state, name) {
  * @param {object} view - The result of `viewFromState`.
  * @returns {string} The system prompt.
  */
-export function systemPrompt(player, view) {
+export function systemPrompt(player, view, { drilled = false } = {}) {
 	const persona = PERSONAS[player.name] ?? { temperament: "Practical and brave.", priorities: "Act sensibly." };
 
 	return [
@@ -131,6 +186,8 @@ export function systemPrompt(player, view) {
 		view.conditions.length ? `Affecting you: ${view.conditions.join(", ")}` : "",
 		view.allies.length ? `Your companions: ${view.allies.join("; ")}` : "",
 		view.enemies.length ? `Enemies present: ${view.enemies.join("; ")}` : "",
+		"",
+		drilled ? TACTICAL_DRILL : "",
 		"",
 		"It is your turn. Say what you do, in ONE first-person sentence starting with \"I\".",
 		"React to what just happened — do not repeat what you did last turn.",
@@ -198,7 +255,7 @@ export function chatBrief(chat, selfName) {
  * @returns {Promise<string>} A single first-person sentence. Never rejects: a
  *   persona failure must not end the run, so it degrades to a neutral action.
  */
-export async function decideAction({ player, story, state, chat, apiKey, log, fetchImpl = fetch }) {
+export async function decideAction({ player, story, state, chat, apiKey, log, drilled = false, fetchImpl = fetch }) {
 	const view = viewFromState(state, player.name);
 	const recent = (story ?? []).slice(-MEMORY_BEATS).join("\n\n") || "The adventure is just beginning.";
 	const table = chatBrief(chat, player.name);
@@ -212,7 +269,7 @@ export async function decideAction({ player, story, state, chat, apiKey, log, fe
 				max_tokens: 80,
 				temperature: 0.9,   // personas should not converge on identical phrasing
 				messages: [
-					{ role: "system", content: systemPrompt(player, view) },
+					{ role: "system", content: systemPrompt(player, view, { drilled }) },
 					{ role: "user", content: `What has happened recently:\n\n${recent}${table}\n\nWhat do you do?` },
 				],
 			}),
