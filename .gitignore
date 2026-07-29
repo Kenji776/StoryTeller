@@ -102,3 +102,9 @@ Dockerfile
 claude.md
 docker-compose.yml.bak
 server/data/galleries/
+# Operator tool credentials. `wiki.conf` holds a live WIKI_TOKEN; the tracked
+# counterpart is `wiki.conf.example`. Ignored before it could be committed, not
+# after (GIT-5) — it had sat untracked and unignored, so any `git add -A` would
+# have swept it into history.
+tools/*.conf
+!tools/*.conf.example
