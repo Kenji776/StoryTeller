@@ -48,6 +48,11 @@ import { PlayerSessions } from "./services/playerSessions.js";
 import { createSessionSystem } from "./routes/sessionEvents.js";
 import { createIncidentLog, SEVERITY } from "./services/incidents.js";
 import { isLLMFailure } from "./services/llmFailure.js";
+// The tactical map. Every export here is inert unless the lobby set `tacticalCombat`,
+// so importing it changes nothing for a lobby that did not ask for it.
+import { isTactical, ensureArena, syncTokens, clearArena, applyMove, reachCheck, TACTICAL_SETTING } from "./services/tactical/session.js";
+import { narratorBlock, refusalBlock } from "./services/tactical/briefing.js";
+import { cellLabel } from "./services/tactical/grid.js";
 import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
 // Shared with the browser, which populates the editable prompt box from the same
 // builder. Two implementations would drift, and the text the player edits has to be
@@ -730,7 +735,7 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, abilitySlotsBase, illustrationMode, llmProvider, llmModel }) => {
+	socket.on("lobby:settings", ({ lobbyId, timerEnabled, timerMinutes, maxMissedTurns, ttsProvider, narratorVoiceId, narratorVoiceName, campaignTone, campaignTheme, brutalityLevel, difficulty, lootGenerosity, campaignSetting, startingLevel, abilitySlotsBase, illustrationMode, llmProvider, llmModel, tacticalCombat }) => {
 		if (!store.isHost(lobbyId, socket.id)) return;
 		store.setTimerSettings(lobbyId, timerEnabled, timerMinutes, maxMissedTurns);
 		// Provider first: switching engines swaps in that engine's remembered voice,
@@ -746,6 +751,16 @@ io.on("connection", (socket) => {
 		if (abilitySlotsBase !== undefined) store.setAbilitySlotsBase(lobbyId, abilitySlotsBase);
 		if (illustrationMode !== undefined) store.setIllustrationMode(lobbyId, illustrationMode);
 		if (llmProvider || llmModel) store.setLLMSettings(lobbyId, llmProvider, llmModel);
+		// Written as a strict boolean, because `isTactical` demands a literal true and a browser
+		// will happily send the string "off".
+		if (tacticalCombat !== undefined) {
+			const on = tacticalCombat === true || tacticalCombat === "true";
+			store.index[lobbyId][TACTICAL_SETTING] = on;
+			// Turning it off mid-campaign leaves no orphan map behind to be persisted forever.
+			if (!on) delete store.index[lobbyId].map;
+			store.persist(lobbyId);
+			log(`🗺️ Tactical combat ${on ? "on" : "off"} for lobby ${lobbyId}`);
+		}
 		sendState(lobbyId);
 		broadcastLobbies();
 		log(`⚙️ Settings updated for lobby ${lobbyId}: timer=${timerEnabled}, tone=${campaignTone?.id ?? "-"}, difficulty=${difficulty ?? "-"}, loot=${lootGenerosity ?? "-"}, setting=${campaignSetting ?? "-"}`);
@@ -1297,7 +1312,7 @@ io.on("connection", (socket) => {
 	});
 
 	// ===== ACTION SUBMISSION (core gameplay loop) =====
-	socket.on("action:submit", async ({ lobbyId, text }) => {
+	socket.on("action:submit", async ({ lobbyId, text, move = null }) => {
 		try {
 			const s = store.index[lobbyId];
 			if (!s) {
@@ -1373,6 +1388,34 @@ io.on("connection", (socket) => {
 			// then dice, then the DM's reply, with the action that caused it missing.
 			busIo.to(room(lobbyId)).emit("player:action", { player: actor.name, text });
 
+			// ── Tactical map, if this lobby asked for one ─────────────────────────────
+			// Every call below returns immediately when `tacticalCombat` is off, and none of
+			// them writes a field in that case, so this whole block is inert for a lobby that
+			// did not opt in. That is the property the feature's safety rests on (ADR 0026),
+			// and session.test.js asserts it rather than trusting this comment.
+			const moved = [];
+			if (isTactical(s)) {
+				ensureArena(s);
+				// Called every turn, because the narrator adds and kills enemies as it writes.
+				// It never moves anybody who is already standing somewhere.
+				syncTokens(s);
+
+				const before = s.map?.tokens?.[actor.name]?.cell;
+				if (move && before) {
+					const walked = applyMove(s, actor.name, move);
+					if (walked.ok) {
+						moved.push({ name: actor.name, from: before, to: walked.cell, costFeet: walked.costFeet });
+						log(`🥾 ${actor.name} moved to ${cellLabel(walked.cell)} — ${walked.costFeet} feet`);
+					} else {
+						// Refused, never clamped: a trimmed move puts a character somewhere
+						// nobody chose. They keep their turn and are told why.
+						socket.emit("toast", { type: "warning", message: walked.reason });
+					}
+				}
+				store.persist(lobbyId);
+				busIo.to(room(lobbyId)).emit("map:update", s.map ?? null);
+			}
+
 			// The player's blow, rolled against the target's real armour class before the
 			// DM writes — the other half of the exchange `resolveEnemyAttacks` already
 			// owns. Until now an attack was graded against a flat DC of 15, so an enemy's
@@ -1387,7 +1430,19 @@ io.on("connection", (socket) => {
 			const attackTarget = isAttackAction(text) && !gate.verdict?.usesSpell
 				? chooseTarget(text, s.enemies)
 				: null;
-			const attack = attackTarget
+
+			// With a map in play, reach stops being the narrator's opinion. A swing at something
+			// across the room fails here as a settled fact, and the player is told the distance
+			// rather than reading prose that quietly grants them a hit.
+			const swingReach = attackTarget && isTactical(s)
+				? reachCheck(s, actor.name, attackTarget.name)
+				: null;
+			if (swingReach && !swingReach.ok) {
+				socket.emit("toast", { type: "warning", message: swingReach.reason });
+				log(`🚫 ${actor.name} cannot reach ${attackTarget.name}: ${swingReach.reason}`);
+			}
+
+			const attack = attackTarget && (!swingReach || swingReach.ok)
 				? resolveAttack({ attacker: s.players[actor.name], target: attackTarget, difficulty: s.difficulty })
 				: null;
 
@@ -1437,7 +1492,17 @@ io.on("connection", (socket) => {
 				: castSpell.resolution === "heal"
 					? chooseAlly(text, s.players, actor.name)
 					: chooseTarget(text, s.enemies);
-			const cast = castSpell
+			// Range, on the same footing as reach. The spell catalogue speaks in words — `touch`,
+			// `ranged` — and `session.RANGE_FEET` is the single place they become distances.
+			const spellReach = castSpell && spellTarget && isTactical(s)
+				? reachCheck(s, actor.name, spellTarget.name, { range: castSpell.range })
+				: null;
+			if (spellReach && !spellReach.ok) {
+				socket.emit("toast", { type: "warning", message: spellReach.reason });
+				log(`🚫 ${actor.name} cannot reach ${spellTarget.name} with ${castSpell.name}: ${spellReach.reason}`);
+			}
+
+			const cast = castSpell && (!spellReach || spellReach.ok)
 				? resolveSpell({
 					caster: s.players[actor.name], spell: castSpell, target: spellTarget,
 					difficulty: s.difficulty,
@@ -1608,6 +1673,24 @@ io.on("connection", (socket) => {
 				console.log(`⚔️  Encounter forced after ${s.quietTurns} quiet turn(s) for a party of ${partySize}`);
 				s.quietTurns = 0;
 			}
+			// Where everybody is, as settled fact. Pushed here beside the other resolved blocks
+			// rather than woven into `composeMessages`, which is what keeps the toggle honest:
+			// with the feature off there is no block to add, so the prompt is byte-for-byte the
+			// one this lobby would have received before the map existed.
+			const battlefield = isTactical(s) ? narratorBlock(s, { moved }) : null;
+			if (battlefield) msgs.push({ role: "system", content: battlefield });
+
+			// A refusal is as much a resolved fact as a hit, and it has to be handed over the same
+			// way. Leaving it out let the narrator see the intent, find no resolution beside it,
+			// and write "the blade cleaves clean through" for a swing the server had denied at 35
+			// feet — after which syncTokens removed the creature the DM had just killed.
+			const denial = (swingReach && !swingReach.ok && attackTarget)
+				? refusalBlock(actor.name, attackTarget.name, swingReach.reason)
+				: (spellReach && !spellReach.ok && spellTarget)
+					? refusalBlock(actor.name, spellTarget.name, spellReach.reason)
+					: null;
+			if (denial) msgs.push({ role: "system", content: denial });
+
 			if (attack) {
 				// Read after `applyEnemyDamage`, so the block states the hit points the
 				// target actually has rather than the ones it had before the blow.
@@ -1760,13 +1843,32 @@ io.on("connection", (socket) => {
 						serverResolved: [attack?.targetName, cast?.targetName].filter(Boolean),
 						difficulty: s.difficulty,
 					});
+					// The narrator has just introduced or removed creatures, so the map catches up
+					// here rather than waiting for somebody's next turn. Without this the arena
+					// appears one turn late — the round in which a fight actually starts would be
+					// narrated with no battlefield block at all, which is the round it matters most.
+					if (isTactical(s)) {
+						ensureArena(s);
+						syncTokens(s);
+						busIo.to(room(lobbyId)).emit("map:update", s.map ?? null);
+					}
+
 					const living = Object.values(store.index[lobbyId]?.players || {})
 						.filter((p) => !p.dead)
 						.map((p) => p.name);
 					const earned = xpForKills(killed, living);
 					if (earned.length) broadcastXPUpdates(busIo, store, lobbyId, earned);
 				}
-				if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
+				if (dmObj.combat_over) {
+					store.purgeDeadEnemies(lobbyId);
+					// A map exists only while there is a fight on it. Leaving one behind would put
+					// a battlefield block in the prompt for a conversation in a tavern, and hand
+					// the next encounter a room laid out for the last one.
+					if (isTactical(s)) {
+						clearArena(s);
+						busIo.to(room(lobbyId)).emit("map:update", null);
+					}
+				}
 
 				// Only for a class-table ability now. Anything the gate recognised as a spell
 				// has already been ruled on above — including a cantrip, which is free — so

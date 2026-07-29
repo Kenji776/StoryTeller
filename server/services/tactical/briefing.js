@@ -216,3 +216,31 @@ export function moveMenu(lobby, playerName) {
 
 	return lines.join("\n");
 }
+
+/**
+ * Tells the narrator that an attempt was impossible, and that it did not happen.
+ *
+ * @description Found live, and it is precisely the failure the map exists to prevent. The server
+ *   refused a swing at a creature 35 feet away, correctly — and then told the narrator nothing, so
+ *   the narrator saw the intent, saw no resolution block beside it, and wrote *"the blade cleaves
+ *   clean through"*. `syncTokens` then removed the creature the DM had just killed.
+ *
+ *   A refusal is a settled fact in exactly the way a hit is, and it has to be handed over in the
+ *   same way. Saying only that the attempt failed is not enough: a model given that much will
+ *   narrate a graze, which is how it granted the kill to begin with. The instruction has to forbid
+ *   the outcome explicitly.
+ * @param {string} actorName - Who tried.
+ * @param {string} targetName - Who they tried it on.
+ * @param {string} reason - The server's own explanation, as given to the player.
+ * @returns {string} A block for the prompt. Safe with anything missing, because it is assembled on
+ *   a path that has already gone wrong once.
+ */
+export function refusalBlock(actorName, targetName, reason) {
+	const who = actorName || "The character";
+	const whom = targetName || "their target";
+	const because = String(reason || "").trim().replace(/\.+$/, "");
+	const explained = because ? `: ${because}` : "";
+	return `IMPOSSIBLE ACTION — settled fact. ${who} could not reach ${whom}${explained}. `
+		+ `No attack was made and no damage was dealt. Describe the attempt failing for that reason. `
+		+ `Do not describe a hit, a graze, or ${whom} being wounded or killed.`;
+}

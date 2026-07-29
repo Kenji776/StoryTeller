@@ -342,3 +342,42 @@ test("a reach check against somebody not on the map is refused", () => {
 test("a reach check with no map at all is refused rather than throwing", () => {
 	assert.equal(reachCheck(lobby(), "Dorn Hammerfall", "Ghoul 1").ok, false);
 });
+
+// ── The off path, end to end ────────────────────────────────────────────────
+
+test("a full turn's worth of tactical calls leaves an opted-out lobby untouched", () => {
+	// The guard the whole feature ships behind, and the one regression that would be both
+	// quietest and worst: a lobby that never asked for a map getting one, or getting a
+	// battlefield paragraph in its prompt.
+	//
+	// This walks every call `server.js` makes on a turn, in order, against a lobby with the
+	// setting off — and asserts the record is byte-identical afterwards. The prompt side is
+	// structural rather than asserted here: the block is pushed as its own system message beside
+	// the other resolved blocks, so with nothing to push the prompt is the one that lobby would
+	// have received before this feature existed.
+	const state = lobby({ [TACTICAL_SETTING]: false });
+	const before = JSON.stringify(state);
+
+	ensureArena(state);
+	syncTokens(state);
+	applyMove(state, "Dorn Hammerfall", "C2");
+	reachCheck(state, "Dorn Hammerfall", "Ghoul 1");
+	reachCheck(state, "Sister Almath", "Ghoul 2", { range: "ranged" });
+	clearArena(state);
+
+	assert.equal(JSON.stringify(state), before);
+	assert.equal("map" in state, false, "no map key, not even a null one");
+});
+
+test("a lobby that never mentions the setting is treated as opted out", () => {
+	// Every lobby already on disk is in this position: the field does not exist.
+	const state = lobby();
+	delete state[TACTICAL_SETTING];
+	const before = JSON.stringify(state);
+
+	ensureArena(state);
+	syncTokens(state);
+	clearArena(state);
+
+	assert.equal(JSON.stringify(state), before);
+});

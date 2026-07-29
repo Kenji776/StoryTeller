@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { narratorBlock, moveMenu } from "./briefing.js";
+import { narratorBlock, moveMenu, refusalBlock } from "./briefing.js";
 import { TACTICAL_SETTING, ensureArena } from "./session.js";
 import { canReach } from "./movement.js";
 import { cellLabel, parseCellLabel } from "./grid.js";
@@ -217,4 +217,39 @@ test("both briefings stay short enough to send every turn", () => {
 	// one-off. Twenty-five lines is roughly the budget a beat can spare.
 	assert.ok(narratorBlock(staged()).split("\n").length <= 25);
 	assert.ok(moveMenu(staged(), "Dorn Hammerfall").split("\n").length <= 15);
+});
+
+// ── Telling the narrator an attempt was impossible ──────────────────────────
+
+test("a refused attempt is described to the narrator, not omitted", () => {
+	// Found live, and it is the failure this whole feature exists to prevent. The server refused
+	// a swing at something 35 feet away; nothing told the narrator, so it saw the intent, saw no
+	// resolution block, and wrote "the blade cleaves clean through" — then syncTokens removed the
+	// creature the DM had just killed. A refusal is a settled fact exactly as a hit is.
+	const block = refusalBlock("Dorn Hammerfall", "Hobgoblin Raider 1", "35 feet away, beyond 5 feet");
+	assert.match(block, /Dorn Hammerfall/);
+	assert.match(block, /Hobgoblin Raider 1/);
+	assert.match(block, /35 feet away, beyond 5 feet/);
+});
+
+test("the refusal forbids the narrator describing a hit", () => {
+	// The instruction has to be explicit. Stating only that the attempt failed leaves the model
+	// free to narrate a graze, which is how it granted the kill in the first place.
+	const block = refusalBlock("Dorn Hammerfall", "Hobgoblin Raider 1", "too far");
+	assert.match(block, /did not|was not|no attack/i);
+	assert.match(block, /do not/i);
+});
+
+test("a refusal reads as a sentence, whatever the reason says", () => {
+	for (const reason of ["too far", "There is no clear line of sight to X.", ""]) {
+		const block = refusalBlock("A", "B", reason);
+		assert.doesNotMatch(block, /undefined|null|\.\./);
+		assert.doesNotMatch(block, /  +/);
+	}
+});
+
+test("a refusal with nobody named still says something safe", () => {
+	const block = refusalBlock(null, null, null);
+	assert.ok(block.length > 0);
+	assert.doesNotMatch(block, /undefined|null/);
 });

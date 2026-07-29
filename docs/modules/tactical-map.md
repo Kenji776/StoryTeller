@@ -72,9 +72,9 @@ stops the narration layer from quietly acquiring rules.
 
 ## What the server computes
 
-The geometry layer and the generator — distance, line of sight, cover, reach, pathing, and
-laying out the room itself — are [tactical-geometry.md](tactical-geometry.md). Phases 1 and 2:
-built, tested, and imported by nothing.
+The geometry layer, the generator, the session that owns a lobby's map and the briefings each
+audience reads are all [tactical-geometry.md](tactical-geometry.md). Phases 1, 2 and the server
+half of 4 are built and wired into the turn pipeline behind the toggle.
 
 ## The turn, with the map on
 
@@ -179,8 +179,9 @@ Each phase ends green, committed, and useful on its own.
 3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
    The first point at which the idea can be *looked at*, which is when this project's
    defects have historically surfaced.
-4. **Movement and enforcement.** The pipeline stage, reach and range as settled facts, the green
-   reachable tint and click-to-move, behind the toggle.
+4. **Movement and enforcement.** Server side ✅ done — `session.js` and `briefing.js` are wired
+   into `action:submit`, reach and range refuse as settled facts, and `tactical-probe.mjs` covers
+   it live. The green reachable tint and click-to-move are the remaining half.
 5. **Proximity targeting and enemy intent.** Enemies move and choose by distance, on the intent
    vocabulary of [ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). Where
    the feature earns itself.
@@ -190,5 +191,5 @@ Deliberately out of scope for now, and each one is a rabbit hole: opportunity at
 flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
 beyond a `size` field, and doors.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1 and 2 built,
-phases 3–6 still design only._
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and the server half
+of 4 are built and wired; the client half, and phases 5 and 6, are still design only._

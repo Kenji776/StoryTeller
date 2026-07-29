@@ -215,6 +215,11 @@ export class LobbyStore {
 			startingLevel:   s.startingLevel   ?? 1,
 			abilitySlotsBase: s.abilitySlotsBase ?? 1,
 			illustrationMode: s.illustrationMode ?? "off",
+			// Both are absent-by-default rather than defaulted to something: a client that has
+			// never heard of the tactical map sees the same state it always did, and one that has
+			// can tell "off" from "no fight in progress".
+			tacticalCombat: s.tacticalCombat === true,
+			map: s.map ?? null,
 			llmProvider: s.llmProvider || null,
 			llmModel:    s.llmModel    || null,
 			chat: s.chat?.slice(-50) || [],

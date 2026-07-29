@@ -179,5 +179,18 @@ Rendering the briefings caught three things no assertion had:
   cluttered hall crosses a pillar, having cover *is* the ordinary condition, so only the exposed get
   a phrase — and each creature carries a distance to its nearest opponent instead, which varies.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and 4a complete,
-195 tests._
+### A refusal is a fact too
+
+`refusalBlock` exists because of a live run. The server correctly denied a swing at a creature 40
+feet away — and told the narrator nothing, so it saw the intent, found no resolution block beside
+it, and wrote *"the blade cleaves clean through"*. `syncTokens` then removed the creature the DM
+had just killed.
+
+Omitting a refusal is not neutral. The narrator fills the gap, and a map whose refusals are
+invisible is decorative. Saying only that the attempt failed is also not enough — a model given
+that much narrates a graze — so the block forbids the outcome by name. With it in place the same
+turn produced *"he realizes the hobgoblin never closed all the way in; he's still hanging back
+near the far wall, a good forty feet distant"*, and the creature survived.
+
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and 4 complete,
+199 tests plus a live probe._
