@@ -38,6 +38,21 @@ export function movementBudgetFeet(map, tokenName) {
 }
 
 /**
+ * @description Reports whether a caller supplied a movement budget.
+ * @param {*} budgetFeet - The candidate.
+ * @returns {boolean} True for any non-negative number, `Infinity` included.
+ * @throws Nothing.
+ *
+ *   Written out rather than inlined as `Number.isFinite`, which is what it used to be and which
+ *   is wrong here: `Number.isFinite(Infinity)` is false, so an explicit unlimited budget was read
+ *   as "none given" and quietly replaced with the token's own speed. `session.applyMove` asks
+ *   what an out-of-range move *would* have cost so its refusal can say so, and got nothing back.
+ */
+function budgetGiven(budgetFeet) {
+	return typeof budgetFeet === "number" && !Number.isNaN(budgetFeet) && budgetFeet >= 0;
+}
+
+/**
  * @description Reports whether a diagonal step would squeeze between two blocked corners.
  *   Slipping through the join between two walls is the oldest grid cheat there is, and
  *   forbidding it costs nothing while stopping a character crossing a barrier that looks
@@ -164,7 +179,7 @@ function search(map, tokenName, budgetFeet) {
  *   on the map, or for a map too malformed to read.
  */
 export function reachableCells(map, tokenName, { budgetFeet } = {}) {
-	const budget = Number.isFinite(budgetFeet) ? budgetFeet : movementBudgetFeet(map, tokenName);
+	const budget = budgetGiven(budgetFeet) ? budgetFeet : movementBudgetFeet(map, tokenName);
 	const { best, restable } = search(map, tokenName, budget);
 
 	const results = new Map();
@@ -211,7 +226,7 @@ export function pathTo(map, tokenName, destination, { budgetFeet } = {}) {
 	if (!start || !cellLabel(target) || !inBounds(map, target)) return null;
 	if (sameCell(start, target)) return { cells: [], costFeet: 0 };
 
-	const budget = Number.isFinite(budgetFeet) ? budgetFeet : movementBudgetFeet(map, tokenName);
+	const budget = budgetGiven(budgetFeet) ? budgetFeet : movementBudgetFeet(map, tokenName);
 	const { best, cameFrom, restable } = search(map, tokenName, budget);
 
 	const targetLabel = cellLabel(target);

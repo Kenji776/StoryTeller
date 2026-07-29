@@ -2,13 +2,13 @@
 
 The spatial rulebook: how far, can it be seen, does it shelter, can I get there.
 
-Phases 1 and 2 of the tactical map ([ADR 0026](../decisions/0026-tactical-combat-happens-on-a-grid.md)).
+Phases 1, 2 and 4a of the tactical map ([ADR 0026](../decisions/0026-tactical-combat-happens-on-a-grid.md)).
 The feature it serves is [tactical-map.md](tactical-map.md). **Nothing imports this yet** —
 that is deliberate, and `grep -rn "tactical/" server/ client/` outside the directory itself
 returning nothing is the check.
 
-Three modules under `server/services/tactical/`, one directory so the whole feature can be
-deleted rather than unpicked:
+Six modules under `server/services/tactical/`, one directory so the whole feature can be deleted
+rather than unpicked:
 
 | module | one sentence |
 |---|---|
@@ -17,6 +17,7 @@ deleted rather than unpicked:
 | `movement.js` | where a token can get to, and by what route |
 | `random.js` | a random source you can ask for the same answers twice |
 | `arena.js` | laying out a room to fight in |
+| `session.js` | a lobby's map: when it exists, who is on it, what it allows |
 
 ## The computed facts
 
@@ -122,5 +123,29 @@ never becomes a maze. Rooms went from 2 features to 8–11.
 Rendering the arenas as ASCII is what showed it. No assertion would have: "is this room fun"
 is not a property, and the honest check was to draw six of them and look.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1 and 2 complete,
-132 tests._
+## The session layer
+
+`session.js` is the single door everything behind the toggle goes through, so the turn pipeline
+gets one conditional rather than a dozen. **With `tacticalCombat` off it writes no field at all** —
+not a map that is generated and then ignored, which is a different thing and not a safe one.
+
+Its two mechanical promises both refuse rather than approximate:
+
+- `applyMove` rejects an over-long move instead of trimming it, because a clamped move puts a
+  character where nobody chose. The refusal says what the move *would* have cost.
+- `reachCheck` makes reach, line of sight and cover into settled facts handed to the resolver,
+  and returns cover as a number an attack roll can use directly.
+
+Two translations live here and nowhere else. Speed comes from race — 25 feet for the
+traditionally shorter races, 30 otherwise — because no sheet in any stored lobby has a speed
+field. And `RANGE_FEET` turns the spell catalogue's range *words* into distances, since
+`spells.json` says `touch` and `ranged` rather than numbers. An unrecognised word falls back to
+reach rather than to something generous: a spell whose range nobody has heard of must not quietly
+become a sniper rifle.
+
+The arena is seeded from the lobby id plus the names of the opposition, which buys two properties
+without storing a counter — a reload lays out the same room, and a new encounter against different
+enemies lays out a different one.
+
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and 4a complete,
+173 tests._

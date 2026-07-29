@@ -312,3 +312,14 @@ test("a region is a set of labels, so membership is a cheap question", () => {
 	assert.ok(region.has("A1"));
 	assert.ok(region.has("C3"));
 });
+
+test("an unlimited budget really means unlimited", () => {
+	// Regression. `Number.isFinite(Infinity)` is false, so the budget guard treated an explicit
+	// `Infinity` as "no budget given" and quietly substituted the token's own speed. The caller
+	// that tripped over it was `session.applyMove`, asking what an out-of-range move *would*
+	// have cost so the refusal could say — and getting null, so it could not.
+	const path = pathTo(emptyRoom(10, 10), "Hero", [9, 9], { budgetFeet: Infinity });
+	assert.ok(path, "an unlimited walk across an empty room must exist");
+	assert.equal(path.costFeet, 45);
+	assert.equal(reachableCells(emptyRoom(10, 10), "Hero", { budgetFeet: Infinity }).size, 100);
+});
