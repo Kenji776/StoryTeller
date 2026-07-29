@@ -52,10 +52,13 @@ const PROFICIENCY_BY_CR = [
 
 /**
  * @description Reads a challenge rating, which arrives as "1/4", "1", or a number.
+ *
+ *   Exported so `spellAttacks.js` grades a creature's saving throws on the same reading
+ *   of the same field. A second parser would drift, and the divergence would be silent.
  * @param {*} cr - The rating.
  * @returns {number} The rating as a number; 0 when unreadable.
  */
-function crValue(cr) {
+export function crValue(cr) {
 	if (typeof cr === "number" && Number.isFinite(cr)) return Math.max(0, cr);
 	const text = String(cr ?? "").trim();
 	const fraction = text.match(/^(\d+)\s*\/\s*(\d+)$/);

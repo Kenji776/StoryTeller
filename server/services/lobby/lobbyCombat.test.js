@@ -829,3 +829,43 @@ test("removing somebody who is not in the order changes nothing", () => {
 	assert.equal(store.index.L.turnIndex, 1);
 	assert.equal(store.index.L.round, 4);
 });
+
+// ── Casting rolls use the caster's own ability ───────────────────────────────
+
+test("a wizard casting rolls against intelligence", () => {
+	const { store, lobbyId } = makeRollStore({ int: 16 });
+	store.index[lobbyId].players.Ayla.class = "Wizard";
+	assert.equal(store.autoRollIfNeeded(lobbyId, "s1", "I cast a spell at the door.").detail.stat, "int");
+});
+
+test("a cleric casting rolls against wisdom, not intelligence", () => {
+	// The defect: `statKey = "int"` was hardcoded for every caster, so a cleric with
+	// WIS 18 and INT 8 cast at their worst stat on every single turn.
+	const { store, lobbyId } = makeRollStore({ int: 8, wis: 18 });
+	store.index[lobbyId].players.Ayla.class = "Cleric";
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I cast a spell at the door.");
+	assert.equal(payload.detail.stat, "wis");
+	assert.equal(payload.detail.bonus, 4, "the +4 from WIS 18, not the -1 from INT 8");
+});
+
+test("a sorcerer and a warlock cast on charisma", () => {
+	for (const className of ["Sorcerer", "Warlock", "Bard"]) {
+		const { store, lobbyId } = makeRollStore({ cha: 16 });
+		store.index[lobbyId].players.Ayla.class = className;
+		assert.equal(
+			store.autoRollIfNeeded(lobbyId, "s1", "I cast a spell.").detail.stat,
+			"cha",
+			`${className} should cast on charisma`,
+		);
+	}
+});
+
+test("a non-caster attempting arcana still gets a roll rather than nothing", () => {
+	// A Fighter has no casting stat. Falling through to null would have skipped the
+	// roll entirely and silently changed what happens on that turn.
+	const { store, lobbyId } = makeRollStore();
+	store.index[lobbyId].players.Ayla.class = "Fighter";
+	const payload = store.autoRollIfNeeded(lobbyId, "s1", "I try to recall arcana about the rune.");
+	assert.ok(payload, "a non-caster should still roll");
+	assert.equal(payload.detail.stat, "int", "book knowledge is intelligence");
+});

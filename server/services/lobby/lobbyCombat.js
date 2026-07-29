@@ -6,6 +6,7 @@
 import { roll, d20, mod } from "../../helpers/dice.js";
 // "Is this an attack?" now has one answer, shared with the resolver that rolls it.
 import { isAttackAction } from "../playerAttacks.js";
+import { castingAbility } from "../spellbook.js";
 import { difficultyModifiers } from "../../../client/difficulty.js";
 
 /**
@@ -248,7 +249,15 @@ export const combatMethods = {
 			statKey = "wis";
 		} else if (/(cast|spell|arcana)/.test(lower)) {
 			kind = "spell";
-			statKey = "int";
+			// The class's own casting stat, not intelligence. This was `"int"` for every
+			// caster, so a Cleric with WIS 18 and INT 8 cast at their worst stat on every
+			// turn — the same defect `attackStat` fixed above for weapons.
+			//
+			// A non-caster falls back to intelligence rather than to nothing: this branch
+			// also catches "I try to recall arcana", which is book knowledge and which a
+			// Fighter may legitimately attempt. Returning null here would silently skip
+			// the roll altogether.
+			statKey = castingAbility(sheet.class) ?? "int";
 		}
 
 		if (!kind) return null;

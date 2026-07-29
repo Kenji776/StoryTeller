@@ -60,11 +60,12 @@ import { xpForKills } from "./services/experience.js";
 import { stripResolvedDamage } from "./services/enemyTurns.js";
 import { takeEnemyRound } from "./services/enemyRound.js";
 import { isAttackAction, chooseTarget, resolveAttack, describeAttack } from "./services/playerAttacks.js";
+import { resolveSpell, describeSpell } from "./services/spellAttacks.js";
 import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js";
 import { resolveConsumable } from "./services/consumables.js";
 import { rollLoot } from "./services/loot.js";
 import { detectLootMoment } from "./services/lootMoment.js";
-import { validateCatalogue, isCaster, castingAbility, maxSpellLevel, spellsAvailableTo, STARTING_SPELL_PICKS } from "./services/spellbook.js";
+import { validateCatalogue, isCaster, castingAbility, maxSpellLevel, spellsAvailableTo, knownSpells, STARTING_SPELL_PICKS } from "./services/spellbook.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -1354,10 +1355,91 @@ io.on("connection", (socket) => {
 				}
 			}
 
-			// The generic roll path still covers stealth, perception and spellcasting. An
-			// attack the resolver handled must not also be graded on the flat ladder, or
-			// the DM receives two contradictory verdicts on one swing.
-			const rollPayload = attack ? null : store.autoRollIfNeeded(lobbyId, socket.id, text);
+			// The spell the gate recognised, rolled against the target's real armour class
+			// or against a saving throw — the same treatment a weapon swing already gets.
+			// Until now a spell fell to the flat 15/8 ladder below, so an enemy's `ac`
+			// decided nothing and the damage was whatever the narration felt like. ADR 0021.
+			//
+			// `gate.verdict` carries which spell, because `hardChecks` already had to
+			// identify it to allow the action at all. Matching the name a second time here
+			// would be a second implementation of the same question.
+			const castSpell = gate.verdict?.usesSpell
+				? knownSpells(s.players[actor.name]).find((sp) => sp.name === gate.verdict.usesSpell)
+				: null;
+			// A healing spell has no enemy to pick, and `resolveSpell` declines utility
+			// outright — the narrator legitimately owns those.
+			const spellTarget = castSpell && castSpell.resolution !== "heal"
+				? chooseTarget(text, s.enemies)
+				: null;
+			const cast = castSpell
+				? resolveSpell({
+					caster: s.players[actor.name], spell: castSpell, target: spellTarget,
+					difficulty: s.difficulty,
+				})
+				: null;
+
+			if (cast) {
+				const outcome = cast.damage > 0 && spellTarget
+					? store.applyEnemyDamage(lobbyId, spellTarget.name, cast.damage)
+					: null;
+
+				busIo.to(room(lobbyId)).emit("dice:result", {
+					lobbyId,
+					player: actor.name,
+					kind: cast.resolution === "save"
+						? `${cast.spellName} — DC ${cast.dc} ${cast.saveAbility || ""} save`.trim()
+						: cast.resolution === "heal"
+							? `${cast.spellName} — healing`
+							: `${cast.spellName} vs ${cast.targetName} (AC ${cast.ac})`,
+					value: cast.resolution === "save" ? cast.saveTotal : (cast.total ?? cast.healed),
+					detail: {
+						base: cast.base ?? cast.saveRoll ?? null,
+						bonus: cast.bonus ?? cast.saveBonus ?? 0,
+						stat: castingAbility(s.players[actor.name]?.class),
+						// A save is the target's roll, so their success is the caster's failure.
+						outcome: cast.critical ? "critical"
+							: cast.resolution === "save" ? (cast.saved ? "fail" : "success")
+								: cast.hit ? "success" : "fail",
+					},
+					source: "server",
+				});
+
+				log(`✨ ${actor.name} casts ${cast.spellName}`
+					+ (cast.resolution === "heal"
+						? ` — heals ${cast.healed}`
+						: ` → ${cast.targetName}: ${cast.resolution === "save"
+							? `save ${cast.saveTotal} vs DC ${cast.dc} — ${cast.saved ? "saved" : "failed"}`
+							: `${cast.total} vs AC ${cast.ac} — ${cast.hit ? "hit" : "miss"}`}`
+							+ `, ${cast.damage} ${cast.damageType || "damage"}`));
+
+				// A kill pays here rather than through `updateEnemies`, which never sees this
+				// death — exactly as the weapon path does.
+				if (outcome?.died) {
+					const living = Object.values(s.players || {}).filter((p) => !p.dead).map((p) => p.name);
+					const earned = xpForKills([{ name: spellTarget.name, cr: spellTarget.cr }], living);
+					if (earned.length) broadcastXPUpdates(busIo, store, lobbyId, earned);
+				}
+
+				// The activation is spent here, not on the model reporting `spellUsed`. The
+				// server knows a levelled spell was cast; asking the narrator to remember is
+				// the class of bookkeeping every ADR since 0008 has been removing.
+				if (gate.verdict.spendsSlot) {
+					const player = store.index[lobbyId]?.players?.[actor.name];
+					const maxSlots = slotCapacity(player, store.index[lobbyId]?.abilitySlotsBase);
+					if (player && (player.spellSlotsUsed || 0) < maxSlots) {
+						player.spellSlotsUsed = (player.spellSlotsUsed || 0) + 1;
+						store.persist(lobbyId);
+						log(`🔮 Slot spent by ${actor.name} for ${cast.spellName}`
+							+ ` (${player.spellSlotsUsed}/${Number.isFinite(maxSlots) ? maxSlots : "∞"})`);
+					}
+				}
+			}
+
+			// The generic roll path still covers stealth, perception, and casting the
+			// resolver declined — a utility spell, or one with nothing to aim at. An attack
+			// or spell it *did* handle must not also be graded on the flat ladder, or the DM
+			// receives two contradictory verdicts on one action.
+			const rollPayload = (attack || cast) ? null : store.autoRollIfNeeded(lobbyId, socket.id, text);
 			if (rollPayload) busIo.to(room(lobbyId)).emit("dice:result", rollPayload);
 
 			// The enemies' turn, resolved before the DM writes rather than left to it.
@@ -1431,6 +1513,9 @@ io.on("connection", (socket) => {
 				// Read after `applyEnemyDamage`, so the block states the hit points the
 				// target actually has rather than the ones it had before the blow.
 				msgs.push({ role: "system", content: describeAttack(attack, s.enemies?.[attack.targetName]) });
+			}
+			if (cast) {
+				msgs.push({ role: "system", content: describeSpell(cast, s.enemies?.[cast.targetName]) });
 			}
 			if (enemyTurn.attacks.length) {
 				msgs.push({ role: "system", content: enemyTurn.block });
@@ -1568,7 +1653,10 @@ io.on("connection", (socket) => {
 				}
 				if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 
-				if (dmObj.spellUsed === true) {
+				// Only for a class-table ability now. A spell from the catalogue spends its
+				// activation at the point the server resolved it, above — charging again here
+				// would take two uses for one cast.
+				if (dmObj.spellUsed === true && !cast) {
 					const player = store.index[lobbyId]?.players?.[actor.name];
 					if (player) {
 						// The host-configured pool, not player.level. These disagreed: a level-1

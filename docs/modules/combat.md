@@ -22,7 +22,10 @@ flowchart TD
     A["action:submit"] --> B{"isAttackAction?"}
     B -- yes --> C["chooseTarget · resolveAttack"]
     C --> D["applyEnemyDamage · XP on a kill"]
-    B -- no --> E["autoRollIfNeeded — stealth, perception, spells"]
+    B -- no --> S{"gate said usesSpell?"}
+    S -- yes --> T["chooseTarget · resolveSpell"]
+    T --> D
+    S -- no --> E["autoRollIfNeeded — stealth, perception, utility"]
     D --> F["resolveEnemyAttacks"]
     E --> F
     F --> G["compose prompt + resolved blocks"]
@@ -184,11 +187,12 @@ combat path that forgets to pass it plays balanced rather than crashing.
 - **The out-of-character and rest paths take no enemy round.** Only acting and timing
   out do. That is probably right, but it is not a considered decision.
 - **No advantage, cover, reach, opportunity attacks or resistances.**
-- **Spells and abilities are not resolved mechanically** — they still go through
-  `autoRollIfNeeded`'s flat ladder and the narrator's judgement. Casters now *have*
-  spells, with typed damage and save data ([ADR 0021](../decisions/0021-a-caster-knows-a-chosen-spell-list.md),
-  [modules/spells.md](spells.md)), but nothing rolls them yet and `autoRollIfNeeded`
-  still hardcodes `statKey = "int"` for every class.
+- **Class-table abilities are still not resolved mechanically** — a level-2+ ability from
+  `classProgression.json` goes through `autoRollIfNeeded`'s flat ladder and the
+  narrator's judgement. *Spells* no longer do: they are rolled against the target's real
+  armour class or a save DC by `services/spellAttacks.js` — see
+  [modules/spells.md](spells.md) and
+  [ADR 0021](../decisions/0021-a-caster-knows-a-chosen-spell-list.md).
 
 ## Probes
 
@@ -231,4 +235,4 @@ so it re-renders on both. The enemy list it draws comes from `state:update` only
 which the action handler emits on both the success and the parse-failure path — so an
 enemy killed on a turn whose narration failed to parse still disappears.
 
-_Last verified: 2026-07-29 against branch `Refactor` (eb72a9f)._
+_Last verified: 2026-07-28 against branch `Refactor` (8bd10b2)._
