@@ -70,24 +70,9 @@ stops the narration layer from quietly acquiring rules.
 
 ## What the server computes
 
-All pure functions over a map and two cells — no I/O, no clock, no randomness. This is the
-whole tactical rulebook, and it is unit-testable in isolation.
-
-- `distanceFeet(a, b)` — Chebyshev on cells × `feetPerCell`. Diagonals cost the same as
-  orthogonals, which is 5e's own simplification and avoids the every-other-diagonal rule
-  that nobody remembers correctly.
-- `hasLineOfSight(map, a, b)` — supercover line walk; blocked by any `blocked`-sight cell.
-- `coverBetween(map, attacker, target)` — the best cover the target enjoys against that
-  attacker: `none | half | full`. Half is +2 AC, full cannot be targeted directly.
-- `reachableCells(map, token)` — flood fill bounded by the movement budget, respecting
-  blocked cells, doubled costs, and cells occupied by other tokens.
-- `pathTo(map, token, cell)` — the route, so movement can be animated and so "you cannot get
-  there" can say why.
-- `cellsInTemplate(map, origin, shape)` — cone, sphere, cube, line. This is what finally lets
-  Burning Hands hit what it says it hits.
-
-Movement speed is a new sheet field, `speedFeet`, defaulting to 30 with 25 for the
-traditionally shorter races. Budget in cells is `speedFeet / feetPerCell`.
+The geometry layer — distance, line of sight, cover, reach and pathing — is
+[tactical-geometry.md](tactical-geometry.md). It is phase 1: built, tested, and imported by
+nothing.
 
 ## The turn, with the map on
 
@@ -180,7 +165,7 @@ the toggle is off would change narration in every existing game, and it would do
 
 Each phase ends green, committed, and useful on its own.
 
-1. **Geometry.** The pure functions above, with tests. Wired to nothing.
+1. **Geometry.** ✅ Done — [tactical-geometry.md](tactical-geometry.md), 83 tests, wired to nothing.
 2. **Generation.** Seeded arenas, archetypes, the connectivity invariant, persistence.
 3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
    The first point at which the idea can be *looked at*, which is when this project's
@@ -195,5 +180,5 @@ Deliberately out of scope for now, and each one is a rabbit hole: opportunity at
 flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
 beyond a `size` field, and doors.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` (3332e68) — design only,
-nothing implemented._
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phase 1 built, phases 2–6
+still design only._
