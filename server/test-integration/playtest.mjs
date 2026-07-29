@@ -667,9 +667,17 @@ async function run() {
 		if (reply) log("RUN", `DM: ${brief(reply, 900)}`);
 		else log("RUN", "!! no narration came back for that action");
 
-		// Paced so a human watching the admin panel can actually read a beat before
-		// the next one lands.
-		await sleep(PACE_MS);
+		// Wait out the *spoken* length of the beat, not a fixed gap.
+		//
+		// `narration:audio:end` fires when the server has finished **sending** the audio,
+		// which takes a few seconds for a passage that takes the better part of a minute
+		// to say. The turn advances on that, so with a flat pace the next turn's audio
+		// landed on top of the last one still playing, and a watcher got several voices
+		// at once. Ordering on the wire was correct throughout — it was only ever a
+		// pacing fault, which is why the transcript looked fine.
+		const spoken = readingDelayMs(reply);
+		if (reply) log("RUN", `(letting the narration play — ${Math.round(spoken / 1000)}s)`);
+		await sleep(Math.max(PACE_MS, spoken));
 	}
 
 	// ── Report ──
