@@ -644,6 +644,10 @@ async function run() {
 	const deadline = t0 + WALL_CLOCK_MS;
 	let reconnectTested = false;
 	let lastActedTurn = null;
+	// A provider outage does not consume a turn, so the same actor stays on the clock and
+	// somebody has to resubmit. Bounded, so a genuine deadlock still ends the run.
+	const MAX_STALL_RETRIES = 4;
+	let stallRetries = 0;
 
 	if (NO_ACT) {
 		log("RUN", "observe-only: nobody will act, waiting for the turn timer to skip them");
@@ -665,9 +669,24 @@ async function run() {
 			await sleep(400);
 		}
 		if (!current || current === lastActedTurn) {
-			log("RUN", "!! turn never advanced within 120s — the loop has stalled");
+			// A stall is usually not a stall. When the DM call fails — Anthropic returning a
+			// 529 is the common one — the server deliberately does *not* consume the turn: it
+			// toasts "try your action again" and unlocks, so a human does not lose a turn to
+			// somebody else's outage. Nobody retries on a persona's behalf, so the same actor
+			// stays on the clock and this loop used to give up and end the run. One provider
+			// hiccup cost a 70-action game after two turns.
+			//
+			// So retry the same actor a few times before concluding anything is wrong.
+			if (current && stallRetries < MAX_STALL_RETRIES) {
+				stallRetries++;
+				log("RUN", `no turn change in 120s — retrying ${current} (${stallRetries}/${MAX_STALL_RETRIES})`);
+				lastActedTurn = null;
+				continue;
+			}
+			log("RUN", `!! turn never advanced, and ${MAX_STALL_RETRIES} retries did not shift it — the loop has stalled`);
 			break;
 		}
+		stallRetries = 0;
 
 		const actor = players.find((p) => p.name === current);
 		if (!actor) { log("RUN", `current player "${current}" is not one of ours`); break; }
