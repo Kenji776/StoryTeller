@@ -2,13 +2,14 @@
 
 The spatial rulebook: how far, can it be seen, does it shelter, can I get there.
 
-Phases 1, 2 and 4a of the tactical map ([ADR 0026](../decisions/0026-tactical-combat-happens-on-a-grid.md)).
-The feature it serves is [tactical-map.md](tactical-map.md). **Nothing imports this yet** —
-that is deliberate, and `grep -rn "tactical/" server/ client/` outside the directory itself
-returning nothing is the check.
+Phases 1 and 2 of the tactical map ([ADR 0026](../decisions/0026-tactical-combat-happens-on-a-grid.md)).
+The feature it serves is [tactical-map.md](tactical-map.md). Nothing here knows about combat, a
+lobby, or a socket — every function is pure over a map and some cells, which is why phases 1 and 2
+landed fully tested with no wiring at all.
 
-Seven modules under `server/services/tactical/`, one directory so the whole feature can be deleted
-rather than unpicked:
+Five modules under `server/services/tactical/`. The whole feature lives in that one directory so it
+can be deleted rather than unpicked; the three that talk to a lobby are
+[tactical-combat.md](tactical-combat.md).
 
 | module | one sentence |
 |---|---|
@@ -17,15 +18,11 @@ rather than unpicked:
 | `movement.js` | where a token can get to, and by what route |
 | `random.js` | a random source you can ask for the same answers twice |
 | `arena.js` | laying out a room to fight in |
-| `session.js` | a lobby's map: when it exists, who is on it, what it allows |
-| `briefing.js` | what each audience is told about it |
 
 ## The computed facts
 
 All pure functions over a map and two cells — no I/O, no clock, no randomness. This is the
 whole tactical rulebook, and it is unit-testable in isolation.
-
-**Phase 1 is built** — `grid.js`, `sight.js` and `movement.js`, 83 tests, imported by nothing.
 
 - `distanceFeet` / `distanceCells` — Chebyshev, so a diagonal costs what an orthogonal does.
   5e's own simplification, and it avoids the every-other-diagonal rule nobody applies
@@ -129,68 +126,9 @@ never becomes a maze. Rooms went from 2 features to 8–11.
 Rendering the arenas as ASCII is what showed it. No assertion would have: "is this room fun"
 is not a property, and the honest check was to draw six of them and look.
 
-## The session layer
+## How a lobby uses all this
 
-`session.js` is the single door everything behind the toggle goes through, so the turn pipeline
-gets one conditional rather than a dozen. **With `tacticalCombat` off it writes no field at all** —
-not a map that is generated and then ignored, which is a different thing and not a safe one.
+The session that owns a map, the briefings each audience reads, and what the monsters do with it
+are [tactical-combat.md](tactical-combat.md).
 
-Its two mechanical promises both refuse rather than approximate:
-
-- `applyMove` rejects an over-long move instead of trimming it, because a clamped move puts a
-  character where nobody chose. The refusal says what the move *would* have cost.
-- `reachCheck` makes reach, line of sight and cover into settled facts handed to the resolver,
-  and returns cover as a number an attack roll can use directly.
-
-Two translations live here and nowhere else. Speed comes from race — 25 feet for the
-traditionally shorter races, 30 otherwise — because no sheet in any stored lobby has a speed
-field. And `RANGE_FEET` turns the spell catalogue's range *words* into distances, since
-`spells.json` says `touch` and `ranged` rather than numbers. An unrecognised word falls back to
-reach rather than to something generous: a spell whose range nobody has heard of must not quietly
-become a sniper rifle.
-
-The arena is seeded from the lobby id plus the names of the opposition, which buys two properties
-without storing a counter — a reload lays out the same room, and a new encounter against different
-enemies lays out a different one.
-
-## The two briefings
-
-`briefing.js` produces the strings each audience reads, so they are behaviour rather than
-presentation and their grammar is asserted. `narratorBlock` opens with the sentence the whole
-feature rests on — *these positions are settled fact, do not move anyone* — and gives each creature
-a cell plus something narratable. `moveMenu` gives a player answers rather than questions, and names
-the cells it offers, which is what makes an agent's reply extractable: it repeats an option instead
-of inventing a coordinate. A property test checks every cell the menu offers is genuinely reachable.
-
-### What reading them changed
-
-Rendering the briefings caught three things no assertion had:
-
-- **The two disagreed about the same square.** The block called Dorn "under cover" while his own
-  menu said "no cover". Both read `coverBetween`, which reports `full` for *no line of sight* as
-  well as for real full cover — one answer, correct for the resolver since neither yields a shot,
-  and wrong for prose. Both now ask `hasLineOfSight` first and separately.
-- **A pillar denying sight made cover pointless.** Eight pillars in a nine-by-seven crypt meant
-  almost nothing could see anything, so ranged attacks failed outright instead of getting harder,
-  and the measured crypt had nineteen full-cover cells against three of half. `sight` gained a third
-  value, `obstructs`: the shot exists and costs the attacker cover. That is the cheap approximation
-  of 5e tracing lines to a target's corners, and it makes cover the common case it is meant to be.
-- **"Under cover" on all six lines told the narrator nothing.** Once every long shot across a
-  cluttered hall crosses a pillar, having cover *is* the ordinary condition, so only the exposed get
-  a phrase — and each creature carries a distance to its nearest opponent instead, which varies.
-
-### A refusal is a fact too
-
-`refusalBlock` exists because of a live run. The server correctly denied a swing at a creature 40
-feet away — and told the narrator nothing, so it saw the intent, found no resolution block beside
-it, and wrote *"the blade cleaves clean through"*. `syncTokens` then removed the creature the DM
-had just killed.
-
-Omitting a refusal is not neutral. The narrator fills the gap, and a map whose refusals are
-invisible is decorative. Saying only that the attempt failed is also not enough — a model given
-that much narrates a graze — so the block forbids the outcome by name. With it in place the same
-turn produced *"he realizes the hobgoblin never closed all the way in; he's still hanging back
-near the far wall, a good forty feet distant"*, and the creature survived.
-
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and 4 complete,
-199 tests plus a live probe._
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1 and 2, 137 tests._

@@ -72,9 +72,10 @@ stops the narration layer from quietly acquiring rules.
 
 ## What the server computes
 
-The geometry layer, the generator, the session that owns a lobby's map and the briefings each
-audience reads are all [tactical-geometry.md](tactical-geometry.md). Phases 1, 2 and the server
-half of 4 are built and wired into the turn pipeline behind the toggle.
+The spatial rulebook and the generator are [tactical-geometry.md](tactical-geometry.md); the session
+that owns a lobby's map, the briefings and the monsters' tactics are
+[tactical-combat.md](tactical-combat.md). Phases 1, 2, 5 and the server half of 4 are built and
+wired into the turn pipeline behind the toggle.
 
 ## The turn, with the map on
 
@@ -174,7 +175,8 @@ the toggle is off would change narration in every existing game, and it would do
 
 Each phase ends green, committed, and useful on its own.
 
-1. **Geometry.** ✅ Done — [tactical-geometry.md](tactical-geometry.md), 83 tests, wired to nothing.
+1. **Geometry.** ✅ Done — [tactical-geometry.md](tactical-geometry.md). Pure, and knows nothing
+   about a lobby.
 2. **Generation.** ✅ Done — seeded arenas, archetypes as data, the connectivity invariant. Persistence lands with the pipeline in phase 4.
 3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
    The first point at which the idea can be *looked at*, which is when this project's
@@ -182,14 +184,15 @@ Each phase ends green, committed, and useful on its own.
 4. **Movement and enforcement.** Server side ✅ done — `session.js` and `briefing.js` are wired
    into `action:submit`, reach and range refuse as settled facts, and `tactical-probe.mjs` covers
    it live. The green reachable tint and click-to-move are the remaining half.
-5. **Proximity targeting and enemy intent.** Enemies move and choose by distance, on the intent
-   vocabulary of [ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). Where
-   the feature earns itself.
+5. **Proximity targeting and enemy intent.** ✅ Done — `enemyTactics.js`. Enemies close on the
+   nearest character and cannot strike from out of reach, on the intent vocabulary of
+   [ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). The narrator-supplied
+   order is accepted and re-validated; wiring it into the DM reply is the remaining piece.
 6. **Templates.** Cones, cubes and spheres; closes the area-spell gap.
 
 Deliberately out of scope for now, and each one is a rabbit hole: opportunity attacks,
 flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
 beyond a `size` field, and doors.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and the server half
-of 4 are built and wired; the client half, and phases 5 and 6, are still design only._
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2, 5 and the server
+half of 4 are built and wired. The client half and phase 6 are still design only._

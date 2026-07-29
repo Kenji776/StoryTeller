@@ -141,7 +141,7 @@ function isStanding(player) {
  *   made, and the total damage per character. `damage` carries only characters that
  *   were actually hit, so it can be applied directly.
  */
-export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnIndex, partySize, rollD20 = d20, rollDamage } = {}) {
+export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnIndex, partySize, rollD20 = d20, rollDamage, tactics = null } = {}) {
 	const { enemyAttackBonus, enemyDamageMultiplier } = difficultyModifiers(difficulty);
 	const rollDice = rollDamage ?? ((count, sides) => {
 		let total = 0;
@@ -185,10 +185,14 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnI
 		attackers = pending.slice(0, Math.ceil(pending.length / turnsRemaining));
 	}
 
-	if (!attackers.length || !targets.length) return { attacks: [], damage: {}, acted: [] };
+	if (!attackers.length || !targets.length) return { attacks: [], damage: {}, acted: [], moves: [], outOfReach: [] };
 
 	const attacks = [];
 	const damage = {};
+	// Both empty for a lobby without a map, so a caller that never opted in reads the same shape
+	// it always did with nothing in the new fields.
+	const moves = [];
+	const outOfReach = [];
 
 	// Offset by the acting player's turn, not started from zero.
 	//
@@ -206,6 +210,12 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnI
 	attackers.forEach((enemy) => {
 		const cr = crValue(enemy.cr);
 
+		// With a map in play a creature may walk before it swings. Done here rather than before
+		// the round because actions are shared out across the players' turns: moving everybody up
+		// front would have each enemy travel once per player turn and strike once per round.
+		const walked = tactics?.beforeStrike?.(enemy) ?? null;
+		if (walked) moves.push(walked);
+
 		// The exception to one-action-one-attack. A creature whose stat block says it
 		// strikes twice does so — within its single action, not as extra actions, so it
 		// still cannot come round again later in the same round.
@@ -213,7 +223,23 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnI
 		// Round-robin rather than everyone piling onto one character: three goblins
 		// focusing a level-1 party member is an instant kill and reads as the engine
 		// singling somebody out.
-		const target = targets[swing++ % targets.length];
+		//
+		// With a map, `tactics` replaces that with proximity — the nearest character, which is
+		// what makes stepping in front of somebody mean anything. Round-robin remains the whole
+		// of the behaviour for a lobby that never opted in, because there is nothing sensible to
+		// prefer when nobody has a position.
+		const target = tactics?.pickTarget
+			? tactics.pickTarget(enemy, targets)
+			: targets[swing++ % targets.length];
+		if (!target) continue;
+
+		// A creature that closed but fell short does not get to swing. Distance costing the
+		// monsters something is the other half of positioning mattering: before this, an enemy
+		// forty feet away hit you anyway.
+		if (tactics?.canStrike && !tactics.canStrike(enemy, target)) {
+			outOfReach.push({ enemy: enemy.name, target: target.name });
+			continue;
+		}
 
 		const bonus = mod(Number(enemy.str) || 10) + byCR(PROFICIENCY_BY_CR, cr).bonus + enemyAttackBonus;
 		const base = rollD20();
@@ -261,7 +287,7 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnI
 	// Who spent their action. The caller records it on the roster — this stays a
 	// resolver and does not write to the enemies it was handed, the same split
 	// `resolveAttack` keeps from `applyEnemyDamage`.
-	return { attacks, damage, acted: attackers.map((e) => e.name) };
+	return { attacks, damage, acted: attackers.map((e) => e.name), moves, outOfReach };
 }
 
 /**

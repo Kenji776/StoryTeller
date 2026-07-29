@@ -29,8 +29,8 @@ import { resolveEnemyAttacks, describeAttacks } from "./enemyTurns.js";
  *   happened, the HP updates ready for `broadcastHPUpdates`, and the block to hand
  *   the narrator — empty when no enemy acted.
  */
-export function takeEnemyRound(lobby, { rollD20, rollDamage } = {}) {
-	const empty = { attacks: [], hpUpdates: [], block: "" };
+export function takeEnemyRound(lobby, { rollD20, rollDamage, tactics = null } = {}) {
+	const empty = { attacks: [], hpUpdates: [], block: "", moves: [], outOfReach: [] };
 	if (!lobby || typeof lobby !== "object") return empty;
 
 	// Defaulted rather than passed through as undefined: the resolver reads a missing
@@ -47,6 +47,8 @@ export function takeEnemyRound(lobby, { rollD20, rollDamage } = {}) {
 		partySize: (lobby.initiative || []).filter((name) => !lobby.players?.[name]?.dead).length,
 		...(rollD20 ? { rollD20 } : {}),
 		...(rollDamage ? { rollDamage } : {}),
+		// Passed through rather than imported here, so this module keeps knowing nothing about maps.
+		...(tactics ? { tactics } : {}),
 	});
 
 	for (const name of turn.acted || []) {
@@ -61,5 +63,11 @@ export function takeEnemyRound(lobby, { rollD20, rollDamage } = {}) {
 		reason: "Struck in combat",
 	}));
 
-	return { attacks: turn.attacks, hpUpdates, block: describeAttacks(turn.attacks) };
+	return {
+		attacks: turn.attacks,
+		hpUpdates,
+		block: describeAttacks(turn.attacks),
+		moves: turn.moves ?? [],
+		outOfReach: turn.outOfReach ?? [],
+	};
 }
