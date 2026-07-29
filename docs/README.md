@@ -61,7 +61,9 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent
 - [modules/spells.md](modules/spells.md) — what a caster knows, and what casting costs
+- [modules/spell-resolution.md](modules/spell-resolution.md) — what a cast spell does
 - [testing.md](testing.md) — tiers, conventions, gaps
+- [runbooks/](runbooks/) — repeatable procedures (start here for restarting the server)
 - [decisions/](decisions/) — architecture decision records
   (newest: [0021 — a caster knows a chosen spell list](decisions/0021-a-caster-knows-a-chosen-spell-list.md))
 - [worklog/](worklog/) — append-only session journal
