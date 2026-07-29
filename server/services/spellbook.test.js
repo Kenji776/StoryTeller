@@ -14,6 +14,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import {
 	castingAbility,
@@ -28,6 +29,7 @@ import {
 	canLearn,
 	findSpellIn,
 	costsSlot,
+	validateCatalogue,
 } from "./spellbook.js";
 
 /**
@@ -437,4 +439,97 @@ test("validated picks are copies that cannot mutate the catalogue", () => {
 	const v = validateStartingSpells("Wizard", ["Fire Bolt"]);
 	v.spells[0].damage = "99d99";
 	assert.notEqual(validateStartingSpells("Wizard", ["Fire Bolt"]).spells[0].damage, "99d99");
+});
+
+// ── The catalogue's own shape ────────────────────────────────────────────────
+
+/**
+ * @description A minimal sound catalogue, so each case below alters exactly one thing.
+ * @param {object[]} spells - Entries to carry.
+ * @returns {object} A catalogue document.
+ */
+function catalogue(spells) {
+	return { spells };
+}
+
+test("the shipped catalogue is sound", () => {
+	// The point of the validator: it runs against the real file at boot.
+	const data = JSON.parse(
+		readFileSync(new URL("../../client/config/spells.json", import.meta.url), "utf8"),
+	);
+	assert.equal(validateCatalogue(data), null);
+});
+
+test("a catalogue that is not an object is refused", () => {
+	for (const value of [null, undefined, [], "spells", 42]) {
+		assert.ok(validateCatalogue(value), `${JSON.stringify(value)} should be refused`);
+	}
+});
+
+test("a missing or empty spells array is refused", () => {
+	assert.ok(validateCatalogue({}));
+	assert.ok(validateCatalogue({ spells: "Fire Bolt" }));
+	assert.ok(validateCatalogue(catalogue([])));
+});
+
+test("an entry missing its name, level or classes is refused", () => {
+	assert.match(validateCatalogue(catalogue([{ level: 0, classes: ["Wizard"], resolution: "utility" }])), /name/i);
+	assert.match(validateCatalogue(catalogue([{ name: "X", classes: ["Wizard"], resolution: "utility" }])), /level/i);
+	assert.match(validateCatalogue(catalogue([{ name: "X", level: 0, resolution: "utility" }])), /class/i);
+});
+
+test("an unrecognised resolution is refused", () => {
+	// A typo here would silently make a spell unresolvable rather than loudly wrong.
+	const problem = validateCatalogue(catalogue([
+		{ name: "X", level: 0, classes: ["Wizard"], resolution: "atack" },
+	]));
+	assert.match(problem, /resolution/i);
+});
+
+test("a damaging spell whose damage the dice roller cannot read is refused", () => {
+	// The invariant the whole design rests on: mechanics are expressions, not English.
+	// "8d6 fire" is the class table's style and is exactly what must never appear here.
+	for (const damage of ["8d6 fire", "1d8 + WIS force", "lots", ""]) {
+		const problem = validateCatalogue(catalogue([
+			{ name: "X", level: 1, classes: ["Wizard"], resolution: "attack", damage, damageType: "fire" },
+		]));
+		assert.ok(problem, `damage ${JSON.stringify(damage)} should be refused`);
+		assert.match(problem, /damage/i);
+	}
+});
+
+test("a readable damage expression is accepted", () => {
+	assert.equal(validateCatalogue(catalogue([
+		{ name: "X", level: 1, classes: ["Wizard"], resolution: "attack", damage: "3d4+3", damageType: "force" },
+	])), null);
+});
+
+test("a save spell must name the saving throw", () => {
+	const problem = validateCatalogue(catalogue([
+		{ name: "X", level: 1, classes: ["Wizard"], resolution: "save", damage: "3d6", damageType: "fire" },
+	]));
+	assert.match(problem, /save/i);
+});
+
+test("a healing spell must carry a readable healing expression", () => {
+	assert.ok(validateCatalogue(catalogue([
+		{ name: "X", level: 1, classes: ["Cleric"], resolution: "heal", healing: "1d8 plus wisdom" },
+	])));
+	assert.equal(validateCatalogue(catalogue([
+		{ name: "X", level: 1, classes: ["Cleric"], resolution: "heal", healing: "1d8" },
+	])), null);
+});
+
+test("a utility spell needs no damage at all", () => {
+	assert.equal(validateCatalogue(catalogue([
+		{ name: "X", level: 0, classes: ["Wizard"], resolution: "utility" },
+	])), null);
+});
+
+test("the problem names the offending spell, so a boot log is actionable", () => {
+	const problem = validateCatalogue(catalogue([
+		{ name: "Fire Bolt", level: 0, classes: ["Wizard"], resolution: "utility" },
+		{ name: "Broken Spell", level: 1, classes: ["Wizard"], resolution: "attack", damage: "loads" },
+	]));
+	assert.match(problem, /Broken Spell/);
 });

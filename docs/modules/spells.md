@@ -43,6 +43,19 @@ It sits under `client/config/` rather than `server/config/` because players must
 their own spell list; `loot-tables.json` is the opposite case and is deliberately
 server-side.
 
+`validateCatalogue` runs at boot alongside every other config file, so a malformed
+catalogue names itself in the log rather than throwing a bare `SyntaxError` out of the
+module's import:
+
+```
+✅ spells.json (40 spells)
+```
+
+The schema lives in `spellbook.js` rather than in `server.js`'s registry, so it can be
+unit tested. Its load-bearing check is that every `damage` and `healing` figure is an
+expression `rollExpression()` accepts — `"8d6 fire"` is refused by name. Nothing else
+would notice the difference until a spell silently dealt nothing.
+
 | `resolution` | Meaning |
 |---|---|
 | `attack` | A spell attack roll against the target's armour class. |

@@ -24,6 +24,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 import { normaliseForMatch as normalise } from "../helpers/utils.js";
+import { rollExpression } from "../helpers/dice.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -78,6 +79,58 @@ const MAX_SPELL_LEVEL = 9;
  */
 function copyAll(spells) {
 	return spells.map((spell) => structuredClone(spell));
+}
+
+/** The resolutions a spell may declare. Anything else is a typo, not a new rule. */
+const RESOLUTIONS = new Set(["attack", "save", "auto", "heal", "utility"]);
+
+/** Resolutions that must carry damage the dice roller can read. */
+const DAMAGING = new Set(["attack", "save", "auto"]);
+
+/**
+ * Validates the shape of the catalogue file.
+ *
+ * @description Called at boot alongside every other config file, so a malformed
+ *   catalogue reports itself by name rather than throwing a bare `SyntaxError` out of
+ *   this module's import. It lives here rather than in `server.js` because the module
+ *   that owns the format should own its schema, and because that makes it testable.
+ *
+ *   The load-bearing check is the damage expression. The whole design rests on mechanics
+ *   being expressions rather than English — the class table's `"8d6 fire"` style is
+ *   precisely what must never appear here — and nothing else would notice the difference
+ *   until a spell silently dealt nothing.
+ * @param {*} data - Parsed `spells.json`.
+ * @returns {string|null} A description of the first problem found, naming the offending
+ *   spell, or null when the catalogue is sound.
+ */
+export function validateCatalogue(data) {
+	if (!data || typeof data !== "object" || Array.isArray(data)) return "Expected an object";
+	if (!Array.isArray(data.spells)) return "Missing 'spells' array";
+	if (!data.spells.length) return "'spells' array is empty";
+
+	for (const spell of data.spells) {
+		if (!spell || typeof spell !== "object") return "An entry is not an object";
+
+		const where = typeof spell.name === "string" && spell.name.trim() ? `"${spell.name}"` : null;
+		if (!where) return "An entry is missing its name";
+		if (!Number.isFinite(Number(spell.level))) return `${where} is missing a numeric level`;
+		if (!Array.isArray(spell.classes) || !spell.classes.length) return `${where} lists no classes`;
+		if (!RESOLUTIONS.has(spell.resolution)) {
+			return `${where} has an unrecognised resolution "${spell.resolution}"`;
+		}
+
+		if (DAMAGING.has(spell.resolution) && !rollExpression(spell.damage)) {
+			return `${where} has damage "${spell.damage}" the dice roller cannot read`;
+		}
+		if (spell.resolution === "save" && !spell.save) {
+			return `${where} forces a save but does not name which`;
+		}
+		if (spell.resolution === "heal" && !rollExpression(spell.healing)) {
+			return `${where} has healing "${spell.healing}" the dice roller cannot read`;
+		}
+	}
+
+	return null;
 }
 
 /**

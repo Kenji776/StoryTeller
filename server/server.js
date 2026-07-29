@@ -64,6 +64,7 @@ import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js
 import { resolveConsumable } from "./services/consumables.js";
 import { rollLoot } from "./services/loot.js";
 import { detectLootMoment } from "./services/lootMoment.js";
+import { validateCatalogue } from "./services/spellbook.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -2184,6 +2185,10 @@ function validateConfigFiles() {
 		{ file: "campaignFlavors.json", check: (d) => { if (typeof d !== "object") return "Expected an object"; if (!Array.isArray(d.tones) || !d.tones.length) return "Missing or empty 'tones' array"; if (!Array.isArray(d.themes) || !d.themes.length) return "Missing or empty 'themes' array"; const t = d.tones[0]; if (!t.id || !t.label || !t.prompt) return "First tone missing id, label, or prompt"; return null; } },
 		{ file: "music_moods.json", check: (d) => { if (typeof d !== "object") return "Expected an object"; if (!Array.isArray(d.moods) || !d.moods.length) return "Missing or empty 'moods' array"; const m = d.moods[0]; if (!m.id || !m.label) return "First mood missing id or label"; return null; } },
 		{ file: "classProgression.json", check: (d) => { if (typeof d !== "object" || Array.isArray(d)) return "Expected an object keyed by class name"; const classes = Object.keys(d); if (!classes.length) return "No classes defined"; const first = d[classes[0]]; const levels = Object.keys(first); if (!levels.length) return `Class "${classes[0]}" has no level entries`; const entry = first[levels[0]]; if (!Array.isArray(entry) || !entry.length) return `Class "${classes[0]}" level ${levels[0]} should be a non-empty array`; if (!entry[0].name || !entry[0].description) return `First ability in "${classes[0]}" missing name or description`; return null; } },
+		// The schema lives in the module that owns the format, so it can be unit tested;
+		// this array stays a registry. Its load-bearing check is that every damage figure
+		// is an expression the dice roller reads, never the class table's "8d6 fire" prose.
+		{ file: "spells.json", check: validateCatalogue },
 	];
 	let allOk = true;
 	for (const { file, check } of configs) {
@@ -2197,7 +2202,10 @@ function validateConfigFiles() {
 			if (problem) { log(`  ⚠️  ${file}: ${problem}`); allOk = false; }
 			else {
 				const keys = Object.keys(data);
-				const size = Array.isArray(data) ? `${data.length} entries` : data.songs ? `${Object.keys(data.moods).length} moods, ${data.songs.length} songs` : data.tones ? `${data.tones.length} tones, ${data.themes.length} themes` : file === "classProgression.json" ? `${keys.length} classes` : `${keys.length} entries`;
+				// `spells.json` wraps its list in a `spells` key alongside two documentation
+				// keys, so the generic key count reported "3 entries" for a 41-spell
+				// catalogue — a boot line that is worse than none.
+				const size = Array.isArray(data) ? `${data.length} entries` : data.songs ? `${Object.keys(data.moods).length} moods, ${data.songs.length} songs` : data.tones ? `${data.tones.length} tones, ${data.themes.length} themes` : file === "classProgression.json" ? `${keys.length} classes` : Array.isArray(data.spells) ? `${data.spells.length} spells` : `${keys.length} entries`;
 				log(`  ✅ ${file} (${size})`);
 			}
 		} catch (err) { log(`  ❌ ${file}: ${err.message}`); allOk = false; }
