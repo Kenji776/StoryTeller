@@ -80,10 +80,22 @@ function fight({ partySize, level, enemyCount, cr, enemyHp, enemyAc, enemyStr, d
 			}
 
 			// The enemies' round — fires on every player action, which is the point.
+			//
+			// `round` is not optional here even though the resolver tolerates its
+			// absence. Without it the resolver falls back to "caller does not know the
+			// round, give it the whole roster", and this file silently goes back to
+			// measuring the action-economy bug it exists to catch. It did exactly that
+			// for one commit.
 			if (!living(enemies).length) break;
 			const before = Object.fromEntries(Object.values(players).map((x) => [x.name, x.stats.hp]));
 			const seats = living(players).length;
-			const turn = resolveEnemyAttacks({ enemies, players, difficulty, turnIndex: Object.values(players).indexOf(p), partySize: seats });
+			const turn = resolveEnemyAttacks({
+				enemies, players, difficulty,
+				round: rounds,
+				turnIndex: Object.values(players).indexOf(p),
+				partySize: seats,
+			});
+			for (const name of turn.acted) enemies[name].actedInRound = rounds;
 
 			for (const a of turn.attacks) if (a.hit) worstSingleHit = Math.max(worstSingleHit, a.damage);
 			for (const [name, dmg] of Object.entries(turn.damage)) {

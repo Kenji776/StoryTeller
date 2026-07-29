@@ -4,6 +4,12 @@
  * rest-vote resolution, and TPK detection from server.js.
  */
 
+// Everything else this module needs arrives through `deps`, because it is
+// configured or stateful. These two are neither — pure functions over a lobby
+// record — so they are imported directly rather than threaded through the bundle.
+import { takeEnemyRound } from "../services/enemyRound.js";
+import { stripResolvedDamage } from "../services/enemyTurns.js";
+
 /**
  * Creates and returns the complete turn-timer subsystem for a lobby session.
  * Encapsulates all timer state and exposes helper functions for scheduling,
@@ -414,7 +420,22 @@ export function createTimerSystem(deps) {
 		try {
 			io.to(room(lobbyId)).emit("ui:lock", { actor: playerName });
 
+			// A turn that expires still faces the enemies. Without this the clock was a
+			// shield: standing still was strictly safer than acting, because only the
+			// action path ever rolled an enemy round.
+			const lobby = store.index[lobbyId];
+			const enemyTurn = takeEnemyRound(lobby);
+			if (enemyTurn.hpUpdates.length) {
+				broadcastHPUpdates(io, store, lobbyId, enemyTurn.hpUpdates);
+				await checkAndEndIfAllDead(lobbyId);
+				if (store.index[lobbyId]?.phase === "wiped") return;
+			}
+
 			const msgs = store.composeMessages(lobbyId, playerName, skipText, null);
+			if (enemyTurn.block) {
+				msgs.push({ role: "system", content: enemyTurn.block });
+				log(`⚔️  Enemy round (timer skip): ${enemyTurn.attacks.filter((a) => a.hit).length}/${enemyTurn.attacks.length} hit`);
+			}
 			const rawReply = await Promise.race([
 				getLLMResponse(msgs, llmOpts(lobbyId)),
 				new Promise((_, rej) => setTimeout(() => rej(new Error("LLM timeout")), LLM_TIMEOUT_MS)),
@@ -430,7 +451,7 @@ export function createTimerSystem(deps) {
 				if (dmObj && typeof dmObj === "object") {
 					const u = dmObj.updates || {};
 					broadcastXPUpdates(io, store, lobbyId, u.xp);
-					broadcastHPUpdates(io, store, lobbyId, u.hp);
+					broadcastHPUpdates(io, store, lobbyId, stripResolvedDamage(u.hp, enemyTurn.attacks.length > 0));
 					await checkAndEndIfAllDead(lobbyId);
 
 					// If everyone is dead, the epilogue already played — bail out

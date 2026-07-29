@@ -57,7 +57,8 @@ import { createRepairs } from "./services/adminRepairs.js";
 import { configureUpdates } from "./services/gameUpdates.js";
 import { buildCapability, slotCapacity } from "./services/characterCapability.js";
 import { xpForKills } from "./services/experience.js";
-import { resolveEnemyAttacks, describeAttacks, stripResolvedDamage } from "./services/enemyTurns.js";
+import { stripResolvedDamage } from "./services/enemyTurns.js";
+import { takeEnemyRound } from "./services/enemyRound.js";
 import { isAttackAction, chooseTarget, resolveAttack, describeAttack } from "./services/playerAttacks.js";
 import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js";
 import { resolveConsumable } from "./services/consumables.js";
@@ -1322,23 +1323,9 @@ io.on("connection", (socket) => {
 			// here and handing the results over as settled facts means the narration
 			// describes the blows that actually landed — resolving afterwards instead
 			// would let it describe a clean dodge while hit points fell.
-			const enemyTurn = resolveEnemyAttacks({
-				enemies: s.enemies,
-				players: s.players,
-				difficulty: s.difficulty,
-				// An NPC has one action per round, like a player. Without these every
-				// enemy attacked on every player's turn.
-				round: s.round || 1,
-				turnIndex: s.turnIndex,
-				partySize: (s.initiative || []).filter((n) => !s.players?.[n]?.dead).length,
-			});
-
-			// Record who spent their action, so they cannot come round again before the
-			// round does. The resolver reports it rather than writing to the roster
-			// itself, the same split `resolveAttack` keeps from `applyEnemyDamage`.
-			for (const name of enemyTurn.acted || []) {
-				if (s.enemies?.[name]) s.enemies[name].actedInRound = s.round || 1;
-			}
+			// Shared with the turn-timer path, which had no enemy round at all — so
+			// letting the clock run out was mechanically safer than taking a turn.
+			const enemyTurn = takeEnemyRound(s);
 
 			// Whether a fight ever happens was the narrator's whim, and it declined: one
 			// 120-turn game set combat_over on all 36 of its DM turns and never once
@@ -1402,7 +1389,7 @@ io.on("connection", (socket) => {
 				msgs.push({ role: "system", content: describeAttack(attack, s.enemies?.[attack.targetName]) });
 			}
 			if (enemyTurn.attacks.length) {
-				msgs.push({ role: "system", content: describeAttacks(enemyTurn.attacks) });
+				msgs.push({ role: "system", content: enemyTurn.block });
 				console.log(`⚔️  Enemy round: ${enemyTurn.attacks.filter((a) => a.hit).length}/${enemyTurn.attacks.length} hit`);
 			}
 			console.log(`🎭 Action from ${actor.name}: "${text}"`);
@@ -1464,11 +1451,7 @@ io.on("connection", (socket) => {
 			// narrated. Routed through broadcastHPUpdates like any other HP change, so
 			// death, removal from the turn order and the wipe check all behave
 			// identically whether the blow came from an enemy or from the story.
-			const enemyDamage = Object.entries(enemyTurn.damage).map(([player, amount]) => ({
-				player,
-				delta: -amount,
-				reason: "Struck in combat",
-			}));
+			const enemyDamage = enemyTurn.hpUpdates;
 			if (enemyDamage.length) {
 				broadcastHPUpdates(busIo, store, lobbyId, enemyDamage);
 				// Checked here as well as inside the block below, because that one only

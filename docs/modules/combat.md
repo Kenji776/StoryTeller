@@ -94,6 +94,13 @@ A solo character faces the whole roster on their turn, correctly, because their 
 is the round. The resolver reports `acted` and the caller records it, keeping the
 resolve/apply split.
 
+`services/enemyRound.js` wraps all of that — the round bookkeeping, the difficulty,
+the party size the share-out divides by — because **two** paths need it. It lived
+inside `action:submit` only, so a turn that expired on the clock reached the narrator
+without an enemy round and the enemies simply did not attack: standing still was
+mechanically safer than acting, which in a hard fight is the optimal play. A live
+merciless idle now costs 26 hit points where it used to cost nothing.
+
 **Multiattack is the exception.** A stat block carrying `multiattack` (or `attacks`)
 swings that many times *within its one action*, so it still cannot come round again
 later in the round. Capped at 4 — the model writes these, and 50 is a typo.
@@ -147,9 +154,19 @@ Hit chance is preferred to damage as the lever: an attack bonus saturates, while
 damage multiplier compounds. At ×2 a CR 2 ogre one-shot a level 3 character in 82% of
 simulated fights, which is what the one-blow cap prevents.
 
-Measured, 4000 fights per encounter: party win rates run 100% / 99–100% / 29–91% /
-26–78% across the four settings, solo 100% / 84% / 34% / 20%, and the one-shot rate
-is **0% at every setting**.
+Measured, 4000 fights per encounter:
+
+| | Casual | Standard | Hardcore | Merciless |
+|---|---|---|---|---|
+| Party win rate | 100% | 99–100% | 36–93% | 21–79% |
+| Solo win rate | 100% | 84% | 36% | 21% |
+| One-shot rate | 0% | 0% | 0% | 0% |
+
+These supersede the figures quoted in ADR 0020, which were measured before enemy
+actions became per-creature rather than positional. That change made the party's
+position slightly better, most visibly against a single large monster — it could
+previously act more than once a round when a party member died and the share-out
+reindexed.
 
 `describeDifficulty` renders the same table into the lines the settings window
 lists under the chips and the block pasted into the DM prompt — where it is also
@@ -164,9 +181,8 @@ combat path that forgets to pass it plays balanced rather than crashing.
   narrator remembers it.
 - **Difficulty modifiers are flat, not level-scaled.** +9 to enemy attacks matters
   more at level 1 than at level 15.
-- **The timer path resolves the whole roster**, because it does not know the round.
-  That is the safe default, but a timeout-driven enemy round can hand creatures a
-  second action within the same round.
+- **The out-of-character and rest paths take no enemy round.** Only acting and timing
+  out do. That is probably right, but it is not a considered decision.
 - **No advantage, cover, reach, opportunity attacks or resistances.**
 - **Spells and abilities are not resolved mechanically** — they still go through
   `autoRollIfNeeded`'s flat ladder and the narrator's judgement.
@@ -176,6 +192,7 @@ combat path that forgets to pass it plays balanced rather than crashing.
 | Probe | What it answers | Cost |
 |---|---|---|
 | `test-integration/balance-sim.mjs` | Can a party actually win? Win and one-shot rates per difficulty, over thousands of fights through the real resolvers. | free — no model |
+| `test-integration/idle-turn-probe.mjs` | Does letting the clock run out still cost you? Stages a fight, then does nothing. | slow — the timer clamps to a minute |
 | `test-integration/combat-probe.mjs` | Does the roll use the real AC, does the DM narrate a miss as a miss, and does it leave the server's hit points alone? | one DM call per turn |
 | `test-integration/damage-probe.mjs` | Older, and **stale** — it imports `services/llmService.js`, which no longer exists. | — |
 
@@ -211,4 +228,4 @@ so it re-renders on both. The enemy list it draws comes from `state:update` only
 which the action handler emits on both the success and the parse-failure path — so an
 enemy killed on a turn whose narration failed to parse still disappears.
 
-_Last verified: 2026-07-28 against branch `Refactor` (4a56a25)._
+_Last verified: 2026-07-29 against branch `Refactor` (eb72a9f)._
