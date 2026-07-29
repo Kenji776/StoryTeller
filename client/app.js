@@ -569,6 +569,45 @@ function renderPlayers(s) {
 	els.playersList.appendChild(wrap);
 }
 
+/**
+ * Catalogue entries keyed by `class|level`.
+ *
+ * @description The character record stores spell names only, so the mechanics behind them
+ *   have to be fetched to be shown. The sheet re-renders on every state update — several
+ *   times a turn — and the catalogue for a given class and level never changes within a
+ *   session, so it is fetched once per combination and reused.
+ */
+const spellCatalogueCache = new Map();
+
+/**
+ * @description Draws the caster's known spells, fetching the catalogue the first time a
+ *   class and level are seen. A non-caster, or a character with no picks, renders nothing.
+ * @param {string} containerId - Target container id.
+ * @param {object} p - The player's sheet from lobby state.
+ * @param {boolean} canCast - Whether to offer the Cast button.
+ * @returns {Promise<void>} Resolves once the list is drawn.
+ */
+async function renderKnownSpells(containerId, p, canCast) {
+	if (typeof describeKnownSpells !== "function" || typeof drawSpellsComponent !== "function") return;
+	const names = Array.isArray(p.spells) ? p.spells : [];
+	if (!names.length) return drawSpellsComponent(containerId, [], canCast);
+
+	const key = `${p.class || ""}|${p.level || 1}`;
+	if (!spellCatalogueCache.has(key)) {
+		const query = new URLSearchParams({ class: p.class || "", level: String(p.level || 1) });
+		try {
+			const data = await fetch(`/api/spells?${query}`).then((r) => r.json());
+			spellCatalogueCache.set(key, Array.isArray(data.spells) ? data.spells : []);
+		} catch (err) {
+			// A failed fetch must still list the names. Showing nothing is the defect this
+			// panel exists to fix, and a bare name beats a blank box.
+			console.warn("Could not load the spell catalogue:", err);
+			spellCatalogueCache.set(key, []);
+		}
+	}
+	drawSpellsComponent(containerId, describeKnownSpells(names, spellCatalogueCache.get(key)), canCast);
+}
+
 function renderSheet(s) {
 	const p = me?.name ? s.players?.[me.name] : null;
 
@@ -635,8 +674,9 @@ function renderSheet(s) {
 		if (armorNameEl)   armorNameEl.textContent   = p.armor  ? p.armor.name  : "None";
 		if (armorStatsEl)  armorStatsEl.textContent  = p.armor  ? `AC ${p.armor.ac} · ${p.armor.type}` : "—";
 
-		// === ABILITIES & INVENTORY — use component renderers so display is always current ===
+		// === ABILITIES, SPELLS & INVENTORY — component renderers, so display is always current ===
 		drawAbilitiesComponent("gameAbilitiesContainer", p.abilities || [], false, true);
+		renderKnownSpells("gameSpellsContainer", p, true);
 		const equippedMap = {
 				weapon:  p.weapon?.name  || "",
 				armor:   p.armor?.name   || "",
@@ -1697,8 +1737,9 @@ function updateGameUI(state) {
 		if (el) el.textContent = val;
 	}
 
-	// === ABILITIES & INVENTORY — use component renderers so display is always current ===
+	// === ABILITIES, SPELLS & INVENTORY — component renderers, so display is always current ===
 	drawAbilitiesComponent("gameAbilitiesContainer", meChar.abilities || [], false, true);
+	renderKnownSpells("gameSpellsContainer", meChar, true);
 	const meEquipped = {
 		weapon:  meChar.weapon?.name  || "",
 		armor:   meChar.armor?.name   || "",

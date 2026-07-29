@@ -499,6 +499,7 @@
 		<hr />
 
 		<div id="gameAbilitiesContainer"></div>
+		<div id="gameSpellsContainer"></div>
 		<div id="gameInventoryContainer"></div>
 
 		<!-- DICE ROLLER 
@@ -794,8 +795,10 @@
 	     inventory renderer below is a classic script. Same bridge as above. -->
 	<script type="module">
 		import { equipSlotFor, isConsumable } from "/itemSlots.js";
+		import { describeKnownSpells } from "/knownSpells.js";
 		window.equipSlotFor = equipSlotFor;
 		window.isConsumable = isConsumable;
+		window.describeKnownSpells = describeKnownSpells;
 	</script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>

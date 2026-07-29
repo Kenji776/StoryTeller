@@ -58,7 +58,7 @@ export const PERSONAS = {
 };
 
 /** What a persona is told when the sheet has not arrived yet. */
-const UNKNOWN = { abilities: [], inventory: [], hp: null, maxHp: null, conditions: [], uses: "unknown", allies: [], enemies: [] };
+const UNKNOWN = { abilities: [], inventory: [], hp: null, maxHp: null, conditions: [], uses: "unknown", spells: [], spellSlots: null, allies: [], enemies: [] };
 
 /**
  * @description Builds a persona's live view of itself from a `state:update` snapshot.
@@ -91,6 +91,13 @@ export function viewFromState(state, name) {
 		maxHp: sheet.stats?.max_hp ?? null,
 		conditions: Array.isArray(sheet.conditions) ? sheet.conditions.filter(Boolean) : [],
 		uses,
+		// Names only, matching the record; the persona names one and the server resolves it.
+		spells: Array.isArray(sheet.spells) ? sheet.spells.filter(Boolean) : [],
+		// The sheet stores what has been spent. An agent deciding a turn needs what is
+		// left, and a caster who has overspent still has zero rather than a negative.
+		spellSlots: (Array.isArray(sheet.spells) && sheet.spells.length)
+			? `${Math.max(0, (Number(sheet.level) || 1) - (Number(sheet.spellSlotsUsed) || 0))} of ${Number(sheet.level) || 1}`
+			: null,
 		// Knowing who else is hurt is what makes a party member behave like one.
 		allies: (state.party ?? [])
 			.filter((m) => m.name !== name)
@@ -118,6 +125,8 @@ export function systemPrompt(player, view) {
 		`Your abilities: ${view.abilities.join(", ") || "none"}`,
 		`You are carrying: ${view.inventory.join(", ") || "nothing"}`,
 		`Ability uses left: ${view.uses}`,
+		view.spells.length ? `Spells you know: ${view.spells.join(", ")}` : "",
+		view.spellSlots ? `Spell slots left: ${view.spellSlots}` : "",
 		view.hp !== null ? `Your hit points: ${view.hp} of ${view.maxHp}` : "",
 		view.conditions.length ? `Affecting you: ${view.conditions.join(", ")}` : "",
 		view.allies.length ? `Your companions: ${view.allies.join("; ")}` : "",
@@ -126,6 +135,12 @@ export function systemPrompt(player, view) {
 		"It is your turn. Say what you do, in ONE first-person sentence starting with \"I\".",
 		"React to what just happened — do not repeat what you did last turn.",
 		"Only use abilities and items listed above. With no ability uses left, do something else.",
+		// "I ready myself to heal" resolves as nothing at all. The server recognises a cast
+		// by the spell's name, so the phrasing has to be spelled out rather than implied.
+		view.spells.length
+			? "To cast, say \"I cast <name>\" and name the spell exactly — say who or what you target. "
+				+ "Saying you prepare, ready, or call on your power casts nothing. Cantrips cost no slot."
+			: "",
 		"Be specific and physical: name what you touch, who you attack, where you go.",
 		"Do not narrate the outcome — the Dungeon Master decides what happens. State only your attempt.",
 		"Reply with the sentence and nothing else. No quotation marks, no explanation.",

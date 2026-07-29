@@ -129,6 +129,27 @@ Two wiring traps:
   `refreshSpellPicker()` explicitly beside `recalcPointBudget()` and `recalcHP()`. Same
   blind spot that once left the portrait prompt describing the wrong character.
 
+## The in-game list
+
+Picking spells and then never seeing them again is how the system came to be unused in
+practice. The sheet showed `charSpellSlots` — a count — and the box above it was titled
+"Abilities & Spells" while listing only abilities, so a caster looking for their spells
+found a header that promised them and a table that did not have them.
+
+`client/knownSpells.js` joins the stored names to the catalogue and returns display rows;
+`drawSpellsComponent` renders them into `#gameSpellsContainer` with a **Cast** button that
+writes `I cast <name>` into the action box, which is the phrasing the resolver recognises.
+Two rules live in that pairing and nowhere else:
+
+- **Cantrips are never disabled.** The abilities table greys out every button at zero
+  slots. For spells that would be wrong, and wrong at the worst moment: a caster out of
+  slots can still throw cantrips, and that is exactly when they need to find them.
+- **An unknown name still gets a row.** A spell on the character that is missing from the
+  catalogue renders with an em dash rather than vanishing — disappearing is the original
+  defect, and a bare name beats a blank box.
+
+The abilities box is now titled "Abilities", since it never contained spells.
+
 ## Resolution
 
 What a cast spell *does* — attack rolls, saving throws, healing, and the block handed to
@@ -169,4 +190,4 @@ cast Light, and a bare "Touch" must not beat "Chill Touch".
 
 See [spell-resolution.md](spell-resolution.md) for the gaps in what a spell *does*.
 
-_Last verified: 2026-07-28 against branch `Refactor` (5b84773)._
+_Last verified: 2026-07-29 against branch `Refactor` (f48f162)._

@@ -203,7 +203,7 @@ async function drawAbilitiesComponent(containerId, abilities = [], canAdd = fals
 	container.innerHTML = `
 		<div class="component-box">
 			<div class="component-header">
-				<span>✨ Abilities & Spells</span>
+				<span>✨ Abilities</span>
 				${canAdd ? '<button id="abilityAddBtn">+ Add</button>' : ""}
 			</div>
 			${template}
@@ -294,6 +294,83 @@ async function drawAbilitiesComponent(containerId, abilities = [], canAdd = fals
 				drawAbilitiesComponent(containerId, sorted, true, canUse);
 			});
 	}
+}
+
+/**
+ * Draws the caster's known spells, with a button that writes the cast into the action box.
+ *
+ * @description Rows arrive already joined to the catalogue by `describeKnownSpells`, so
+ *   this holds no rules — including which spells are free. That matters for the button:
+ *   the abilities table disables everything at zero slots, which would be wrong here,
+ *   because a caster out of slots can still throw cantrips all day and that is exactly
+ *   when they most need to find them.
+ * @param {string} containerId - ID of the target <div>.
+ * @param {Array<object>} rows - Display rows from `describeKnownSpells`.
+ * @param {boolean} [canCast=false] - Whether to offer the Cast button (in-game only).
+ * @returns {void}
+ */
+function drawSpellsComponent(containerId, rows = [], canCast = false) {
+	const container = document.getElementById(containerId);
+	if (!container) return console.warn(`drawSpellsComponent: #${containerId} not found`);
+
+	// A non-caster gets no box at all rather than an empty one promising something.
+	if (!rows.length) {
+		container.innerHTML = "";
+		return;
+	}
+
+	const body = rows.map((row) => `
+		<tr>
+			<td class="col-lvl smalltext">${row.cost}</td>
+			<td class="col-name"><strong>${row.name}</strong></td>
+			<td class="col-desc smalltext">${row.effect}</td>
+			${canCast ? `<td class="col-action"><button class="cast-spell-btn secondary" style="padding:2px 8px;font-size:0.8em;" data-name="${row.name.replace(/"/g, "&quot;")}" data-free="${row.free}">Cast</button></td>` : ""}
+		</tr>`).join("");
+
+	container.innerHTML = `
+		<div class="component-box">
+			<div class="component-header"><span>📖 Spells</span></div>
+			<table class="component-table">
+				<thead><tr><th>Cost</th><th>Name</th><th>Effect</th>${canCast ? '<th class="col-action">Action</th>' : ""}</tr></thead>
+				<tbody>${body}</tbody>
+			</table>
+		</div>
+	`;
+
+	if (!canCast) return;
+
+	container.querySelectorAll(".cast-spell-btn").forEach((btn) => {
+		const free = btn.dataset.free === "true";
+		/**
+		 * @description Reads the slots left for the local player at click time, because
+		 *   state moves between render and click.
+		 * @returns {number} Slots remaining.
+		 */
+		const slotsLeft = () => {
+			const me = window.me;
+			const pd = me?.name ? window.currentState?.players?.[me.name] : null;
+			return Math.max(0, (Number(pd?.level) || 1) - (Number(pd?.spellSlotsUsed) || 0));
+		};
+
+		if (!free && slotsLeft() === 0) {
+			btn.disabled = true;
+			btn.title = "No spell slots remaining";
+		}
+		btn.addEventListener("click", () => {
+			if (!free && slotsLeft() === 0) {
+				showToast("No spell slots remaining!", "danger");
+				return;
+			}
+			// Phrased the way the server's resolver recognises a cast.
+			const text = `I cast ${btn.dataset.name}`;
+			const actionInput = document.getElementById("actionInput");
+			if (!actionInput) return;
+			actionInput.value = text;
+			actionInput.focus();
+			// Cursor at the end, so a target can be appended without repositioning.
+			actionInput.setSelectionRange(text.length, text.length);
+		});
+	});
 }
 
 async function drawAttributesComponent(containerId, attributes = {}, canAdd = false) {
