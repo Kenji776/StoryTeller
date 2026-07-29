@@ -753,3 +753,79 @@ test("an absent difficulty introduces an enemy unscaled", () => {
 
 	assert.equal(store.index.lob1.enemies.Ogre.max_hp, 40);
 });
+
+// ===== Removal and the round boundary =====
+
+/**
+ * @description A store double carrying an initiative order.
+ * @param {string[]} order - The initiative order.
+ * @param {number} turnIndex - Whose turn it is.
+ * @param {number} round - The current round.
+ * @returns {object} The double.
+ */
+function orderedStore(order, turnIndex, round = 1) {
+	const store = Object.create(combatMethods);
+	store.index = {
+		L: {
+			lobbyId: "L", initiative: [...order], turnIndex, round,
+			players: Object.fromEntries(order.map((n) => [n, { name: n }])),
+			enemies: {},
+		},
+	};
+	store.persist = () => {};
+	store.findPlayerKey = (id, n) => (store.index.L.players[n] ? n : null);
+	return store;
+}
+
+test("removing the last player in the order advances the round", () => {
+	// Their removal wraps the order back to the top, and a wrap is what a round is.
+	// Swallowed, the round counter stalls — and enemies whose action is tracked by
+	// round number never get it back.
+	const store = orderedStore(["A", "B", "C"], 2, 4);
+
+	store.removeFromTurnOrder("L", "C");
+
+	assert.equal(store.index.L.turnIndex, 0, "the order should have wrapped to the top");
+	assert.equal(store.index.L.round, 5, "the wrap did not advance the round");
+});
+
+test("removing someone mid-order does not advance the round", () => {
+	// No wrap happened, so nothing about the round has changed.
+	const store = orderedStore(["A", "B", "C"], 2, 4);
+
+	store.removeFromTurnOrder("L", "A");
+
+	assert.equal(store.index.L.round, 4);
+	assert.equal(store.index.L.turnIndex, 1, "C should still be the one acting");
+	assert.equal(store.index.L.initiative[1], "C");
+});
+
+test("removing the player whose turn it is mid-order keeps the round", () => {
+	const store = orderedStore(["A", "B", "C"], 1, 4);
+
+	store.removeFromTurnOrder("L", "B");
+
+	assert.equal(store.index.L.round, 4);
+	assert.equal(store.index.L.turnIndex, 1, "C slides into the vacated slot");
+	assert.equal(store.index.L.initiative[1], "C");
+});
+
+test("emptying the order does not leave the round running away", () => {
+	const store = orderedStore(["A"], 0, 4);
+
+	store.removeFromTurnOrder("L", "A");
+
+	assert.equal(store.index.L.initiative.length, 0);
+	assert.equal(store.index.L.turnIndex, 0);
+	assert.ok(Number.isInteger(store.index.L.round));
+});
+
+test("removing somebody who is not in the order changes nothing", () => {
+	const store = orderedStore(["A", "B"], 1, 4);
+
+	store.removeFromTurnOrder("L", "Nobody");
+
+	assert.deepEqual(store.index.L.initiative, ["A", "B"]);
+	assert.equal(store.index.L.turnIndex, 1);
+	assert.equal(store.index.L.round, 4);
+});

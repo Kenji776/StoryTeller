@@ -300,7 +300,13 @@ export const combatMethods = {
 		} else if (idx === s.turnIndex) {
 			// Removed player was the current turn — next player slides into this slot
 			if (s.turnIndex >= s.initiative.length) {
+				// They were last in the order, so the order has just wrapped, and a wrap
+				// is what a round is. Swallowing it stalls the round counter — and
+				// anything tracked per round, such as an enemy's one action, never comes
+				// back. `nextTurn` cannot notice this later: by then the index is already
+				// at the top and the wrap looks like an ordinary step.
 				s.turnIndex = 0;
+				s.round = (s.round || 1) + 1;
 			}
 		}
 		// If idx > s.turnIndex, no adjustment needed

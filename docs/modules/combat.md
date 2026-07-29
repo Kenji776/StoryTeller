@@ -79,12 +79,24 @@ than focused, because three goblins concentrating on one level-1 character is an
 instant kill that reads as the engine singling somebody out. Damage is by challenge
 rating, deliberately coarse.
 
-**The roster is shared out across the party's turns.** This runs on every
+**An NPC has one action per round, exactly as a player does.** This runs on every
 `action:submit`, so without a share-out every enemy swung on every player's turn: a
 party of three facing three goblins took nine attacks a round against their three,
-and the penalty grew with party size. Enemy *i* now acts on player turn
-*i mod partySize* — once per full round each, with every turn still drawing fire. A
-solo character faces the whole roster, correctly, because their turn is the round.
+and the penalty grew with party size.
+
+Whether a creature has acted is recorded on the creature (`actedInRound`), and the
+ones still holding an action are dealt out across the turns still to come. Tracking
+it by *position* instead — slicing the living roster by the acting player's index —
+looks equivalent and is not: kill one goblin mid-round and the array reindexes, so
+another silently loses its turn while a third takes one it already had.
+
+A solo character faces the whole roster on their turn, correctly, because their turn
+is the round. The resolver reports `acted` and the caller records it, keeping the
+resolve/apply split.
+
+**Multiattack is the exception.** A stat block carrying `multiattack` (or `attacks`)
+swings that many times *within its one action*, so it still cannot come round again
+later in the round. Capped at 4 — the model writes these, and 50 is a typo.
 
 **No single blow takes more than three-quarters of a character's maximum hit
 points.** A character at full health survives any one hit; two still kill. It caps a
@@ -150,8 +162,11 @@ combat path that forgets to pass it plays balanced rather than crashing.
 
 - **Trinket effects are not computed.** A Ring of the Veil works as well as the
   narrator remembers it.
-- **Difficulty modifiers are flat, not level-scaled.** +4 to enemy attacks matters
+- **Difficulty modifiers are flat, not level-scaled.** +9 to enemy attacks matters
   more at level 1 than at level 15.
+- **The timer path resolves the whole roster**, because it does not know the round.
+  That is the safe default, but a timeout-driven enemy round can hand creatures a
+  second action within the same round.
 - **No advantage, cover, reach, opportunity attacks or resistances.**
 - **Spells and abilities are not resolved mechanically** — they still go through
   `autoRollIfNeeded`'s flat ladder and the narrator's judgement.
@@ -164,4 +179,36 @@ combat path that forgets to pass it plays balanced rather than crashing.
 | `test-integration/combat-probe.mjs` | Does the roll use the real AC, does the DM narrate a miss as a miss, and does it leave the server's hit points alone? | one DM call per turn |
 | `test-integration/damage-probe.mjs` | Older, and **stale** — it imports `services/llmService.js`, which no longer exists. | — |
 
-_Last verified: 2026-07-28 against branch `Refactor` (09eb5fb)._
+
+## Initiative, and what happens when somebody leaves
+
+The order is **players only**. Enemies are a separate roster and take their actions
+through the share-out described above, so nothing about an enemy dying touches
+initiative.
+
+`removeFromTurnOrder` is the single path out of the order, used by death
+(`gameUpdates`), an admin kill, a disconnect, and the inactivity kick. It adjusts
+`turnIndex` so the same player stays current:
+
+| Removed | Effect |
+|---|---|
+| before the current turn | index shifts back |
+| the current turn, mid-order | the next player slides into the slot |
+| the current turn, last in order | wraps to the top **and advances the round** |
+| after the current turn | nothing |
+
+That last row is easy to miss. Removing the last player in the order wraps it, and a
+wrap *is* a round — swallowing it stalls the round counter, and anything tracked per
+round, such as an enemy's one action, never comes back. `nextTurn` cannot catch this
+afterwards, because by then the index is already at the top and the wrap looks like an
+ordinary step.
+
+### Reaching the UI
+
+Every removal path emits `turn:update`, which carries the fresh order. The initiative
+window (`client/components/initiative.html`) listens to that *and* to `state:update`,
+so it re-renders on both. The enemy list it draws comes from `state:update` only,
+which the action handler emits on both the success and the parse-failure path — so an
+enemy killed on a turn whose narration failed to parse still disappears.
+
+_Last verified: 2026-07-28 against branch `Refactor` (4a56a25)._
