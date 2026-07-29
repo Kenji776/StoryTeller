@@ -70,7 +70,7 @@ header h1 {
 		"head-l  head-r"
 		"row1-l  row1-r"
 		"row2-l  row2-r"
-		"row3-l  ."
+		"row3-l  row3-r"
 		"row4-l  .";
 	gap: 10px 16px;
 	padding: 10px;
@@ -1854,4 +1854,29 @@ textarea.locked {
 	font-size: 0.8em;
 	opacity: 0.7;
 	margin: 2px 0 0;
+}
+
+/* === Observer mode ===
+   A watcher has no character, so every control that acts on one is hidden rather than
+   disabled: a greyed-out Save Sheet on a sheet they cannot have invites the question
+   "why not?", and the honest answer is that this view is not for them. */
+body.observing .action-input-area,
+body.observing #toggleReady,
+body.observing #startGame,
+body.observing #saveSheet,
+body.observing #lobbyCharacterColumn {
+	display: none !important;
+}
+.observer-banner {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	padding: 0.5em 0.9em;
+	margin-bottom: 0.8em;
+	border: 1px solid rgba(150, 120, 60, 0.5);
+	border-left: 3px solid #eacb83;
+	border-radius: 8px;
+	background: rgba(15, 10, 25, 0.85);
+	color: #eacb83;
+	font-size: 0.9em;
 }

@@ -47,7 +47,14 @@ export function registerChatEvents(socket, deps) {
 	socket.on("chat:join", ({ lobbyId, name }) => {
 		if (!store.index[lobbyId]) return;
 		store.socketsAdd(lobbyId, socket.id);
-		store.index[lobbyId].sockets[socket.id].playerName = name;
+		// An observer's chat handle is a display name, not a character. Writing it to
+		// `playerName` would forge one: `playerBySid` resolves that name against
+		// `players`, yielding a truthy actor with an undefined sheet — and
+		// `action:submit` guards only on `if (!actor)`. A watcher who opened the chat
+		// window could otherwise reach the turn pipeline holding nothing.
+		if (!store.isObserver(lobbyId, socket.id)) {
+			store.index[lobbyId].sockets[socket.id].playerName = name;
+		}
 		socket.join(room(lobbyId));
 
 		// Send chat history

@@ -112,12 +112,40 @@ async function handleCreateLobby() {
 }
 
 // === Join Lobby ===
+/**
+ * Puts this client into the watching-only view.
+ *
+ * @description A body class rather than a per-element sweep, so a control added later is
+ *   hidden by the stylesheet instead of being missed by a list here. Nothing about this is
+ *   a security boundary — the server refuses `player:sheet` and `player:ready` from an
+ *   observer outright, and `action:submit` never resolves them to an actor. This only
+ *   stops the client offering a button that would be rejected.
+ * @returns {void}
+ */
+function enterObserverMode() {
+	window.isObserver = true;
+	document.body.classList.add("observing");
+
+	if (!document.getElementById("observerBanner")) {
+		const banner = document.createElement("div");
+		banner.id = "observerBanner";
+		banner.className = "observer-banner";
+		banner.innerHTML = "👁️ <strong>Watching</strong> — you have no character in this game. "
+			+ "You can still read the story and talk in chat.";
+		const lobbyEl = document.getElementById("lobby");
+		lobbyEl?.insertBefore(banner, lobbyEl.firstChild);
+	}
+}
+
 function handleJoinLobby(preHashedPassword = null) {
 	try {
 		const code = (els.joinCode.value || "").trim().toUpperCase();
 		if (!code) return alert("Enter a code before joining.");
-		console.log("[client] Attempting to join lobby code:", code);
-		socket.emit("lobby:join", { code, password: preHashedPassword || undefined });
+		// Watching takes no character, so it is the one join that works against a game
+		// already under way without picking a seat first.
+		const asObserver = !!document.getElementById("joinAsObserver")?.checked;
+		console.log("[client] Attempting to join lobby code:", code, asObserver ? "(observing)" : "");
+		socket.emit("lobby:join", { code, password: preHashedPassword || undefined, asObserver });
 
 		// Add timeout check in case server never responds
 		const timeout = setTimeout(() => {
@@ -134,6 +162,7 @@ function handleJoinLobby(preHashedPassword = null) {
 			lobbyId = data.lobbyId;
 			lobbyCode = data.code;
 			iAmHost = false;
+			if (data.observer) enterObserverMode();
 			show(els.lobby);
 		});
 

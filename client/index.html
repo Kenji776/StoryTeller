@@ -63,6 +63,11 @@
             <span>🔒 Password protect</span>
           </label>
 
+          <label style="grid-area:row3-r;display:flex;align-items:center;gap:0.5em;cursor:pointer;" title="Watch without taking a character. You can still read and use the chat.">
+            <input type="checkbox" id="joinAsObserver" data-sound="Page Turn" />
+            <span>👁️ Join as observer</span>
+          </label>
+
           <input type="password" id="lobbyPassword" placeholder="Set password…" style="grid-area:row4-l;display:none;" />
         </div>
 
@@ -113,7 +118,7 @@
         <!-- Two-column grid: left = character sheet, right = player list -->
         <div class="grid two">
           <!-- LEFT COLUMN -->
-          <div>
+          <div id="lobbyCharacterColumn">
             <h3>Your Character</h3>
             <div class="form">
               <!-- Character portrait. The busy overlay sits *over* the whole box

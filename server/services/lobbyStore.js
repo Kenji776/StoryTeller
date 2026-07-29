@@ -162,7 +162,12 @@ export class LobbyStore {
 	publicState(lobbyId) {
 		const s = this.index[lobbyId];
 		if (!s) return null;
-		const connected = Object.entries(s.sockets).map(([, rec]) => ({ name: rec.playerName, ready: rec.ready }));
+		// Observers carry the flag so the lobby can say how many are watching without the
+		// client having to infer it from a null name — which is also what a player still
+		// building their character looks like.
+		const connected = Object.entries(s.sockets)
+			.map(([, rec]) => ({ name: rec.playerName, ready: rec.ready, observer: rec.observer === true }));
+		const observers = connected.filter((c) => c.observer).length;
 
 		const party = Object.entries(s.players)
 			.filter(([, p]) => !p.disconnected)
@@ -183,6 +188,7 @@ export class LobbyStore {
 			phase: s.phase,
 			players: s.players,
 			connected,
+			observers,
 			hostPlayer: this.hostPlayerName(lobbyId) || null,
 			storyContext: s.storyContext,
 			ancientHistory: s.ancientHistory || "",

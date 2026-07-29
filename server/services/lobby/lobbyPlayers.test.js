@@ -284,3 +284,93 @@ test("choices for a non-caster or a missing character are empty", () => {
 	assert.deepEqual(store.spellChoices("lob1", "Nobody"), []);
 	assert.deepEqual(store.spellChoices("nolobby", "Elara"), []);
 });
+
+// ── Observers ────────────────────────────────────────────────────────────────
+
+/**
+ * @description A store with a host who has saved a character, plus room for more sockets.
+ * @returns {object} The store double.
+ */
+function makeTable() {
+	const store = makeStore();
+	store.upsertPlayer("lob1", "sid1", "Ayla", { class: "Fighter", stats: { hp: 10, max_hp: 10 } });
+	store.setReady("lob1", "sid1", true);
+	return store;
+}
+
+test("a socket is not an observer unless it says so", () => {
+	const store = makeTable();
+	assert.equal(store.isObserver("lob1", "sid1"), false);
+});
+
+test("a connection can be opened as an observer", () => {
+	const store = makeTable();
+	store.addConnection("lob1", "sid2", { observer: true });
+	assert.equal(store.isObserver("lob1", "sid2"), true);
+});
+
+test("an observer does not hold up the start of the game", () => {
+	// The defect this exists to prevent: `allReady` required *every* socket to have a
+	// character and be ready, so one watcher would have blocked the start forever.
+	const store = makeTable();
+	assert.equal(store.allReady("lob1"), true, "one ready player should be enough on their own");
+	store.addConnection("lob1", "sid2", { observer: true });
+	assert.equal(store.allReady("lob1"), true, "an observer must not block it");
+});
+
+test("a player still building their character does hold up the start", () => {
+	// The distinction that matters, and the reason an explicit flag beats "has no
+	// character": someone mid-build has no character *yet* and must still block, or the
+	// host starts the game out from under them.
+	const store = makeTable();
+	store.addConnection("lob1", "sid2");
+	assert.equal(store.allReady("lob1"), false);
+});
+
+test("a lobby of nothing but observers is never ready", () => {
+	// Somebody has to actually play.
+	const store = makeStore();
+	store.addConnection("lob1", "sid2", { observer: true });
+	store.addConnection("lob1", "sid3", { observer: true });
+	assert.equal(store.allReady("lob1"), false);
+});
+
+test("an unready player still blocks even beside an observer", () => {
+	const store = makeTable();
+	store.upsertPlayer("lob1", "sid2", "Bron", { class: "Rogue", stats: { hp: 9, max_hp: 9 } });
+	store.addConnection("lob1", "sid3", { observer: true });
+	assert.equal(store.allReady("lob1"), false, "Bron has not readied");
+	store.setReady("lob1", "sid2", true);
+	assert.equal(store.allReady("lob1"), true);
+});
+
+test("observers are counted so the table can be told who is watching", () => {
+	const store = makeTable();
+	assert.equal(store.observerCount("lob1"), 0);
+	store.addConnection("lob1", "sid2", { observer: true });
+	store.addConnection("lob1", "sid3", { observer: true });
+	store.addConnection("lob1", "sid4");
+	assert.equal(store.observerCount("lob1"), 2);
+});
+
+test("an observer holds no character, so playerBySid finds nothing", () => {
+	// Everything that resolves a socket to an actor goes through here, which is what
+	// keeps an observer out of turns, rolls and the inactivity kick.
+	const store = makeTable();
+	store.addConnection("lob1", "sid2", { observer: true });
+	assert.equal(store.playerBySid("lob1", "sid2"), null);
+});
+
+test("observer state survives a reconnect of the same socket id", () => {
+	const store = makeTable();
+	store.addConnection("lob1", "sid2", { observer: true });
+	store.addConnection("lob1", "sid2");
+	assert.equal(store.isObserver("lob1", "sid2"), true, "an existing record is not silently demoted");
+});
+
+test("asking about an unknown socket or lobby is false, not a throw", () => {
+	const store = makeTable();
+	assert.equal(store.isObserver("lob1", "nosuch"), false);
+	assert.equal(store.isObserver("nolobby", "sid1"), false);
+	assert.equal(store.observerCount("nolobby"), 0);
+});

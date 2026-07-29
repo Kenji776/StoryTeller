@@ -41,8 +41,14 @@ export const playerMethods = {
 	 * @param {string} sid - The socket ID to associate.
 	 * @returns {void}
 	 */
-	addConnection(lobbyId, sid) {
+	addConnection(lobbyId, sid, { observer = false } = {}) {
 		this.socketsAdd(lobbyId, sid);
+		// Only ever promotes: a socket that opened as an observer and reconnects without
+		// saying so again must not be silently demoted into a player slot.
+		if (observer) {
+			const rec = this.index[lobbyId]?.sockets?.[sid];
+			if (rec) rec.observer = true;
+		}
 		this.persist(lobbyId);
 	},
 	/**
@@ -278,8 +284,36 @@ export const playerMethods = {
 	allReady(lobbyId) {
 		const s = this.index[lobbyId];
 		if (!s) return false;
-		const conns = Object.values(s.sockets);
+		// Observers are excluded on both sides of this: they never block the start, and
+		// they never satisfy it either — somebody has to actually play.
+		//
+		// The exclusion is the explicit `observer` flag rather than "has no character",
+		// because those are different states. A player midway through the builder also has
+		// no character, and must still hold the start up, or the host begins the game out
+		// from under them.
+		const conns = Object.values(s.sockets).filter((c) => !c.observer);
 		return conns.length > 0 && conns.every((c) => c.ready && c.playerName);
+	},
+	/**
+	 * Whether this socket joined to watch rather than to play.
+	 *
+	 * @description An observer holds no character, takes no turn, and is invisible to
+	 *   initiative, the turn timer and the inactivity kick — all of which resolve a socket
+	 *   through `playerBySid`, which returns null without a `playerName`.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @param {string} sid - The socket ID.
+	 * @returns {boolean} True when the socket is watching.
+	 */
+	isObserver(lobbyId, sid) {
+		return this.index[lobbyId]?.sockets?.[sid]?.observer === true;
+	},
+	/**
+	 * How many sockets are watching rather than playing.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @returns {number} The count, zero for an unknown lobby.
+	 */
+	observerCount(lobbyId) {
+		return Object.values(this.index[lobbyId]?.sockets ?? {}).filter((c) => c.observer === true).length;
 	},
 	/**
 	 * Look up a player's name and sheet using their socket ID.

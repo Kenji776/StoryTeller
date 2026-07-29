@@ -660,7 +660,7 @@ io.on("connection", (socket) => {
 		socket.emit("lobbies:update", { lobbies: getPublicLobbies() });
 	});
 
-	socket.on("lobby:join", ({ code, password }) => {
+	socket.on("lobby:join", ({ code, password, asObserver }) => {
 		try {
 			log(`🚪 Join request by ${socket.id} for code ${code}`);
 			const lobbyId = store.findLobbyByCode(code);
@@ -680,6 +680,21 @@ io.on("connection", (socket) => {
 				if (!store.verifyPassword(lobbyId, password)) {
 					return socket.emit("toast", { type: "error", message: "Incorrect password." });
 				}
+			}
+
+			// An observer joins a game already under way, which is the whole point of the
+			// role — they take no character, so there is nothing to reclaim and no seat to
+			// choose. Checked before the in-progress branch, which would otherwise send
+			// them off to pick a character they do not want.
+			if (asObserver) {
+				socket.join(room(lobbyId));
+				store.addConnection(lobbyId, socket.id, { observer: true });
+				socket.emit("lobby:joined", { lobbyId, code, observer: true });
+				socket.emit("chat:history", store.getChat(lobbyId, 50));
+				log(`👁️  ${socket.id} is watching ${lobbyId} (${code}) — ${store.observerCount(lobbyId)} watching`);
+				sendState(lobbyId);
+				broadcastLobbies();
+				return;
 			}
 
 			if (lobby.phase === "running" || lobby.phase === "hibernating") {
@@ -919,6 +934,13 @@ io.on("connection", (socket) => {
 	socket.on("player:sheet", ({ lobbyId, name, sheet }) => {
 		try {
 			if (!store.belongs(lobbyId, socket.id)) return;
+			// `action:submit` and `item:use` need no such guard — both resolve the actor
+			// through `playerBySid`, which has no answer for a socket holding no
+			// character. This one and `player:ready` are the two that would *create* the
+			// state that makes an observer into a player, so they say no explicitly.
+			if (store.isObserver(lobbyId, socket.id)) {
+				return socket.emit("toast", { type: "error", message: "You are watching this game, not playing in it." });
+			}
 			store.upsertPlayer(lobbyId, socket.id, name, sheet);
 			store.initializeAtLevel(lobbyId, name, getAbilityForLevel);
 			// This is where a pre-game player first has a name, so it is the earliest
@@ -1039,6 +1061,9 @@ io.on("connection", (socket) => {
 	socket.on("player:ready", ({ lobbyId, ready }) => {
 		try {
 			if (!store.belongs(lobbyId, socket.id)) return;
+			// An observer readying up would be harmless today, since `allReady` filters
+			// them out — but it would put a phantom name in the lobby's ready count.
+			if (store.isObserver(lobbyId, socket.id)) return;
 			store.setReady(lobbyId, socket.id, !!ready);
 			log(`🟢 Player ${socket.id} (${ready ? "ready" : "not ready"}) in lobby ${lobbyId}`);
 			sendState(lobbyId);
