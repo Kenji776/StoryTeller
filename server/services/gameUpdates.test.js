@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { broadcastHPUpdates, broadcastGoldUpdates, configureUpdates } from "./gameUpdates.js";
+import { broadcastHPUpdates, broadcastGoldUpdates, broadcastSpellSlotUpdate, configureUpdates } from "./gameUpdates.js";
 import { createIncidentLog } from "./incidents.js";
 import { progressionMethods } from "./lobby/lobbyProgression.js";
 
@@ -247,4 +247,45 @@ test("a gold change with no stated reason sends an empty one, not a misleading d
 	const { io, store, emitted } = makeDeps();
 	broadcastGoldUpdates(io, store, "lob1", [{ player: "Ayla", delta: 5 }]);
 	assert.equal(emitted.find((e) => e.event === "gold:update").payload.reason, "");
+});
+
+// ── Spell slots ──────────────────────────────────────────────────────────────
+
+test("spending a spell slot tells the room", () => {
+	// The defect: the server decremented the slot, persisted it and logged it, and told
+	// nobody. `spellslots:update` was emitted only by the admin console, so a player
+	// casting Cure Wounds saw no slot event in the action log — the one feed that
+	// reports what a turn actually cost. Found by healer-probe.mjs, which watched the
+	// stored count go 0 → 1 → 2 while no frame ever reached a client.
+	const { io, store, emitted } = makeDeps();
+	configureUpdates({ incidents: null });
+
+	broadcastSpellSlotUpdate(io, store, "lob1", "Ayla", 1, 3);
+
+	const frame = emitted.find((e) => e.event === "spellslots:update");
+	assert.ok(frame, "the room must be told");
+	assert.equal(frame.payload.player, "Ayla");
+	assert.equal(frame.payload.spellSlotsUsed, 1);
+	assert.equal(frame.payload.maxSlots, 3);
+});
+
+test("an unbounded slot pool reports its maximum as null rather than Infinity", () => {
+	// Infinity does not survive JSON: it arrives at the client as null anyway. Sending
+	// null deliberately means the client renders one thing, not "null" on the wire and
+	// Infinity in the tests.
+	const { io, store, emitted } = makeDeps();
+	configureUpdates({ incidents: null });
+
+	broadcastSpellSlotUpdate(io, store, "lob1", "Ayla", 2, Infinity);
+
+	assert.equal(emitted.find((e) => e.event === "spellslots:update").payload.maxSlots, null);
+});
+
+test("a slot update for a character who does not exist is not broadcast", () => {
+	const { io, store, emitted } = makeDeps();
+	configureUpdates({ incidents: null });
+
+	broadcastSpellSlotUpdate(io, store, "lob1", "Nobody", 1, 3);
+
+	assert.equal(emitted.filter((e) => e.event === "spellslots:update").length, 0);
 });

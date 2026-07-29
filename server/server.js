@@ -21,7 +21,7 @@ import { createGallery } from "./services/images/gallery.js";
 import { roll } from "./helpers/dice.js";
 import fetch from "node-fetch";
 import { randomUUID, generateKeyPairSync, createSign, createVerify, createPublicKey } from "crypto";
-import { broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates, broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState, broadcastAbilityUpdates } from "./services/gameUpdates.js";
+import { broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates, broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState, broadcastAbilityUpdates, broadcastSpellSlotUpdate } from "./services/gameUpdates.js";
 import { updateMap, registerMapEndpoints, getDefaultPlayerEmoji } from "./services/mapService.js";
 import { getAbilityForLevel } from "./helpers/classProgression.js";
 import { resolveSfx, findMatch as findSfxMatch } from "./services/sfxService.js";
@@ -1516,6 +1516,9 @@ io.on("connection", (socket) => {
 					store.persist(lobbyId);
 					log(`🔮 Slot spent by ${actor.name} for ${gate.verdict.usesSpell}`
 						+ ` (${player.spellSlotsUsed}/${Number.isFinite(maxSlots) ? maxSlots : "∞"})`);
+					// Without this the spend was server-side only: the action log, which is
+					// where a player reads what a turn cost them, never mentioned it.
+					broadcastSpellSlotUpdate(busIo, store, lobbyId, actor.name, player.spellSlotsUsed, maxSlots);
 				}
 			}
 

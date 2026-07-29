@@ -65,6 +65,17 @@ prose from it. Two defects were invisible in code and obvious on the first rende
 `"casts Magic Missile at Goblin 2 strikes unerringly HITS for 10 force damage"` — the
 attack phrasing and the auto phrasing both applied — and `"DC 13 dex throw"`.
 
+## Spending the slot
+
+The activation is spent on the gate's verdict — not on whether the spell found a target,
+and not on the model reporting `spellUsed`. It is then **broadcast**, which it was not
+originally: the pipeline decremented the count, persisted it and logged it to the server
+console while telling no client, so `spellslots:update` had exactly one publisher — the
+admin console. The number on the sheet still looked right, because the `state:update` that
+follows a turn carries it, and that is what hid the gap; but the action log, where a player
+reads what a turn cost them, never mentioned a spent slot. `healer-probe.mjs` caught it by
+watching the stored count climb from 0 to 2 while no frame reached a client.
+
 ## Known gaps
 
 - **A utility spell still falls to the flat ladder.** Deliberate — there is no right
@@ -78,4 +89,4 @@ attack phrasing and the auto phrasing both applied — and `"DC 13 dex throw"`.
   damage-carrying entries begin at level 3 and no character has exceeded level 3, so this
   has no reach today.
 
-_Last verified: 2026-07-28 against branch `Refactor` (5b84773)._
+_Last verified: 2026-07-29 against branch `Refactor` (50694e6)._

@@ -323,3 +323,34 @@ export function broadcastAbilityUpdates(io, store, lobbyId, updates) {
 		});
 	}
 }
+
+/**
+ * Tells the room that a spell slot was spent.
+ *
+ * @description The turn pipeline decremented the slot, persisted it and logged it to the
+ *   server console, and told no client. `spellslots:update` had exactly one publisher —
+ *   the admin console — so the action log, which is where a player reads what a turn
+ *   actually cost, never mentioned a spent slot. The stored count and the visible one
+ *   agreed only because the following `state:update` happened to carry the number.
+ * @param {import('socket.io').Server} io - Socket.IO server (or the sequencing facade).
+ * @param {object} store - The game state store.
+ * @param {string} lobbyId - The lobby to update.
+ * @param {string} playerName - Whose slot was spent.
+ * @param {number} used - Slots now spent.
+ * @param {number} max - Slot capacity; may be Infinity for an unbounded pool.
+ * @returns {void}
+ */
+export function broadcastSpellSlotUpdate(io, store, lobbyId, playerName, used, max) {
+	const key = store.findPlayerKey(lobbyId, normalizeName(playerName));
+	if (!key) {
+		reportDropped(lobbyId, "spellslots:update", playerName, Object.keys(store.index[lobbyId]?.players || {}));
+		return;
+	}
+	io.to(lobbyId).emit("spellslots:update", {
+		player: key,
+		spellSlotsUsed: used,
+		// Infinity does not survive JSON — it arrives as null regardless. Sending null
+		// deliberately keeps the wire and the tests describing the same thing.
+		maxSlots: Number.isFinite(max) ? max : null,
+	});
+}
