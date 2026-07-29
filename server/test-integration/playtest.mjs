@@ -30,9 +30,25 @@ const arg = (name, fallback) => {
 
 const URL = arg("url", "http://localhost:3013");
 const MAX_ACTIONS = Number(arg("actions", 6));      // hard cap on LLM turns — this is the cost knob
-const WALL_CLOCK_MS = Number(arg("timeout", 420)) * 1000;
+/**
+ * Seconds a turn plausibly needs: the DM call, the persona's own call, and the time it
+ * takes to *speak* the resulting beat, which is the dominant term at roughly 54 seconds
+ * for a typical 134-word passage.
+ */
+const SECONDS_PER_TURN = 95;
 const PACE_MS = Number(arg("pace", 8)) * 1000;      // gap between beats, so a spectator can read
-const HOLD_MS = Number(arg("hold", 0)) * 1000;
+const HOLD_SECONDS = Number(arg("hold", 0));
+const HOLD_MS = HOLD_SECONDS * 1000;
+/**
+ * The wall clock derives from the work asked for rather than sitting at a fixed 420s.
+ *
+ * @description That fixed default silently truncated a 26-action run to 6 once turns
+ *   began waiting out the narration — the transcript simply stopped, mid-fight, with no
+ *   error and a summary that looked like a clean finish. A cap that cannot accommodate
+ *   the actions it was asked for is not a safety net, it is a trap. `--timeout` still
+ *   overrides for anyone who wants a hard ceiling.
+ */
+const WALL_CLOCK_MS = Number(arg("timeout", MAX_ACTIONS * SECONDS_PER_TURN + HOLD_SECONDS + 180)) * 1000;
 const NO_ACT = argv.includes("--noact");
 // With --personas each player decides its own turn from the story so far, instead
 // of walking a fixed list. That is what produces a narrative — and with it the
