@@ -913,6 +913,9 @@ async function handleImportCharacter(e) {
 		}
 
 		// ── Refresh abilities, inventory, and attribute display ──
+		// Spell picks are adopted before the class change fires, because that dispatch is
+		// what fetches the new class's pool and reconciles the picks against it.
+		if (typeof setSpellPicks === "function") setSpellPicks(sheet.spells);
 		els.raceSelect?.dispatchEvent(new Event("change"));
 		els.charClass?.dispatchEvent(new Event("change"));
 		updatePointsDisplay();

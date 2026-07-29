@@ -374,6 +374,9 @@ function renderState(s) {
 		levelInput.value = s.startingLevel;
 		if (typeof recalcPointBudget === "function") recalcPointBudget();
 		if (typeof recalcHP === "function") recalcHP();
+		// The starting level is also the ceiling on which spells may be picked, and the
+		// assignment above fires no event for the picker to listen to.
+		if (typeof refreshSpellPicker === "function") refreshSpellPicker();
 	}
 
 	// === Render Lobby Game Options Panel ===

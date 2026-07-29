@@ -64,7 +64,7 @@ import { reconcileCurrency, stripGrantedLoot } from "./services/lootNormalize.js
 import { resolveConsumable } from "./services/consumables.js";
 import { rollLoot } from "./services/loot.js";
 import { detectLootMoment } from "./services/lootMoment.js";
-import { validateCatalogue } from "./services/spellbook.js";
+import { validateCatalogue, isCaster, castingAbility, maxSpellLevel, spellsAvailableTo, STARTING_SPELL_PICKS } from "./services/spellbook.js";
 import { shouldForceEncounter, encounterDirective } from "./services/encounterPacing.js";
 
 // ── Environment & Express setup ──────────────────────────────────────────────
@@ -1872,6 +1872,30 @@ app.get("/api/features", (req, res) => {
 		tts:        { ...ttsAvailability, any: Object.values(ttsAvailability).some(Boolean) },
 		devMode,
 		version:    process.env.APP_VERSION || "0.0",
+	});
+});
+
+// === SPELL PICKER ===
+// What a caster of this class may choose at this starting level, and how many.
+//
+// An endpoint rather than letting the builder filter `/config/spells.json` itself —
+// which is how it handles weapons and armour — because spells carry a *rule* the
+// weapon list does not: the level ceiling the game master set. Serving the answer keeps
+// that rule in one place, so the picker cannot offer something the save path will then
+// silently drop.
+app.get("/api/spells", (req, res) => {
+	const className = String(req.query.class || "");
+	// The lobby is the authority on its own starting level; the query parameter is only
+	// consulted when no lobby is named, which is the character builder before joining.
+	const lobby = req.query.lobbyId ? store.index[String(req.query.lobbyId)] : null;
+	const startingLevel = lobby ? (Number(lobby.startingLevel) || 1) : Number(req.query.level) || 1;
+
+	res.json({
+		caster: isCaster(className),
+		castingAbility: castingAbility(className),
+		maxSpellLevel: maxSpellLevel(startingLevel),
+		picks: STARTING_SPELL_PICKS,
+		spells: spellsAvailableTo(className, startingLevel),
 	});
 });
 

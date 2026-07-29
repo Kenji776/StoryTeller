@@ -434,6 +434,139 @@
 			"resolution": "utility",
 			"range": "self",
 			"description": "You sense the presence of magic within 30 feet."
+		},
+		{
+			"name": "Scorching Ray",
+			"level": 2,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "attack",
+			"damage": "6d6",
+			"damageType": "fire",
+			"range": "ranged",
+			"description": "Three rays of fire streak toward targets within range."
+		},
+		{
+			"name": "Shatter",
+			"level": 2,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Bard"],
+			"resolution": "save",
+			"save": "con",
+			"onSave": "half",
+			"damage": "3d8",
+			"damageType": "thunder",
+			"range": "ranged",
+			"area": "10-foot radius",
+			"description": "A sudden ringing noise erupts and painfully rattles everything nearby."
+		},
+		{
+			"name": "Moonbeam",
+			"level": 2,
+			"school": "evocation",
+			"classes": ["Druid"],
+			"resolution": "save",
+			"save": "con",
+			"onSave": "half",
+			"damage": "2d10",
+			"damageType": "radiant",
+			"range": "ranged",
+			"area": "5-foot cylinder",
+			"description": "A silvery beam of pale light shines down in a column."
+		},
+		{
+			"name": "Flaming Sphere",
+			"level": 2,
+			"school": "conjuration",
+			"classes": ["Druid", "Wizard", "Sorcerer"],
+			"resolution": "save",
+			"save": "dex",
+			"onSave": "half",
+			"damage": "2d6",
+			"damageType": "fire",
+			"range": "ranged",
+			"description": "A sphere of fire rolls where you direct it and sears what it touches."
+		},
+		{
+			"name": "Heat Metal",
+			"level": 2,
+			"school": "transmutation",
+			"classes": ["Bard", "Druid"],
+			"resolution": "save",
+			"save": "con",
+			"onSave": "none",
+			"damage": "2d8",
+			"damageType": "fire",
+			"range": "ranged",
+			"description": "A manufactured metal object glows red-hot and burns whoever holds it."
+		},
+		{
+			"name": "Spiritual Weapon",
+			"level": 2,
+			"school": "evocation",
+			"classes": ["Cleric"],
+			"resolution": "attack",
+			"damage": "1d8",
+			"damageType": "force",
+			"range": "ranged",
+			"description": "A floating spectral weapon strikes at your command."
+		},
+		{
+			"name": "Prayer of Healing",
+			"level": 2,
+			"school": "evocation",
+			"classes": ["Cleric", "Bard"],
+			"resolution": "heal",
+			"healing": "2d8",
+			"addCastingMod": true,
+			"range": "ranged",
+			"description": "Up to six creatures you can see regain hit points."
+		},
+		{
+			"name": "Hold Person",
+			"level": 2,
+			"school": "enchantment",
+			"classes": ["Cleric", "Druid", "Wizard", "Sorcerer", "Warlock", "Bard"],
+			"resolution": "utility",
+			"save": "wis",
+			"range": "ranged",
+			"description": "A humanoid you can see is paralysed while the spell lasts."
+		},
+		{
+			"name": "Misty Step",
+			"level": 2,
+			"school": "conjuration",
+			"classes": ["Wizard", "Sorcerer", "Warlock"],
+			"resolution": "utility",
+			"range": "self",
+			"description": "Briefly wreathed in silvery mist, you teleport up to 30 feet."
+		},
+		{
+			"name": "Invisibility",
+			"level": 2,
+			"school": "illusion",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Bard"],
+			"resolution": "utility",
+			"range": "touch",
+			"description": "A creature you touch becomes invisible until it attacks or casts."
+		},
+		{
+			"name": "Lesser Restoration",
+			"level": 2,
+			"school": "abjuration",
+			"classes": ["Cleric", "Druid", "Bard"],
+			"resolution": "utility",
+			"range": "touch",
+			"description": "You end one disease or condition afflicting a creature you touch."
+		},
+		{
+			"name": "Mirror Image",
+			"level": 2,
+			"school": "illusion",
+			"classes": ["Wizard", "Sorcerer", "Warlock"],
+			"resolution": "utility",
+			"range": "self",
+			"description": "Three illusory duplicates of yourself appear and confuse attackers."
 		}
 	]
 }

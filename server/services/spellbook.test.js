@@ -533,3 +533,48 @@ test("the problem names the offending spell, so a boot log is actionable", () =>
 	]));
 	assert.match(problem, /Broken Spell/);
 });
+
+// ── The starting level caps what may be picked ───────────────────────────────
+
+test("the pick pool is capped by the lobby's starting level, not by a fixed 1", () => {
+	// The game master sets the starting level; a caster reaches spell level ceil(L/2).
+	// At level 1 and 2 that is spell level 1, so a level-2 spell is out of reach.
+	assert.equal(validateStartingSpells("Wizard", ["Scorching Ray"], 1).spells.length, 0);
+	assert.equal(validateStartingSpells("Wizard", ["Scorching Ray"], 2).spells.length, 0);
+	// At starting level 3 it becomes reachable.
+	assert.deepEqual(
+		validateStartingSpells("Wizard", ["Scorching Ray"], 3).spells.map((s) => s.name),
+		["Scorching Ray"],
+	);
+});
+
+test("a spell above the starting level is dropped and reported", () => {
+	const v = validateStartingSpells("Wizard", ["Fire Bolt", "Scorching Ray"], 1);
+	assert.equal(v.ok, true);
+	assert.deepEqual(v.spells.map((s) => s.name), ["Fire Bolt"]);
+	assert.deepEqual(v.dropped, ["Scorching Ray"]);
+});
+
+test("an omitted starting level is treated as level 1", () => {
+	// Every existing caller passes two arguments; none of them may silently widen.
+	assert.equal(validateStartingSpells("Wizard", ["Scorching Ray"]).spells.length, 0);
+	assert.equal(validateStartingSpells("Wizard", ["Magic Missile"]).spells.length, 1);
+});
+
+test("a malformed starting level does not widen the pool", () => {
+	// Falling back to something permissive here would let a bad payload reach for
+	// anything in the catalogue.
+	for (const level of [null, undefined, "", NaN, 0, -3, "abc", {}]) {
+		assert.equal(
+			validateStartingSpells("Wizard", ["Scorching Ray"], level).spells.length,
+			0,
+			`starting level ${String(level)} reached a level-2 spell`,
+		);
+	}
+});
+
+test("a high starting level opens the pool as far as the catalogue goes", () => {
+	const pool = spellsAvailableTo("Wizard", 25).map((s) => s.name);
+	assert.ok(pool.includes("Scorching Ray"), "a level-25 wizard should reach level-2 spells");
+	assert.ok(pool.includes("Fire Bolt"), "and still have their cantrips");
+});

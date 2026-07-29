@@ -84,6 +84,126 @@ function populateArmorSelect(cls) {
 	}
 }
 
+// === Spell data (served by /api/spells, which owns the level rule) ===
+// Not filtered from /config/spells.json the way weapons and armour are: a spell carries
+// a ceiling the game master set, and computing it here as well would be a second copy of
+// a rule the save path already enforces. The server answers, the picker renders.
+let spellPool = [];          // what this class may choose at this starting level
+let spellPicks = [];         // names the player has chosen, in click order
+let spellPickLimit = 3;      // the server tells us; never hardcode the count in two places
+
+/**
+ * @description Loads the pickable spells for a class and redraws the picker. A
+ *   non-casting class hides the whole row rather than showing an empty one.
+ * @param {string} cls - The selected class.
+ * @returns {Promise<void>} Resolves once the picker reflects the class.
+ */
+async function loadSpellsFor(cls) {
+	const row = document.getElementById("spellPickerRow");
+	if (!row) return;
+
+	// `#level` is the builder's readonly starting-level field, which app.js syncs from
+	// the lobby's `startingLevel`. Read here rather than reaching for app.js's `lobbyId`:
+	// this script is deferred *before* app.js, so that binding is still in its temporal
+	// dead zone at load and even `typeof` would throw. The server re-validates against
+	// the real lobby level on save, so a stale value here cannot produce an illegal pick.
+	const level = Number(document.getElementById("level")?.value) || 1;
+	const query = new URLSearchParams({ class: cls, level: String(level) });
+
+	try {
+		const data = await fetch(`/api/spells?${query}`).then((r) => r.json());
+		spellPool = Array.isArray(data.spells) ? data.spells : [];
+		spellPickLimit = Number(data.picks) || 3;
+		row.classList.toggle("hidden", !data.caster || !spellPool.length);
+		// Drop anything the new class cannot cast, so switching Wizard → Cleric does not
+		// carry Fire Bolt across. The server would drop it too; doing it here means the
+		// player sees the truth rather than discovering it after saving.
+		const pickable = new Set(spellPool.map((s) => s.name));
+		spellPicks = spellPicks.filter((name) => pickable.has(name)).slice(0, spellPickLimit);
+		drawSpellPicker();
+	} catch (err) {
+		console.warn("Could not load spells:", err);
+		row.classList.add("hidden");
+	}
+}
+
+/**
+ * @description Renders the picker and its remaining-count line.
+ * @returns {void}
+ */
+function drawSpellPicker() {
+	const container = document.getElementById("spellPickerContainer");
+	const count = document.getElementById("spellPickerCount");
+	const hint = document.getElementById("spellPickerHint");
+	if (!container) return;
+
+	const remaining = spellPickLimit - spellPicks.length;
+	if (count) count.textContent = `${spellPicks.length} of ${spellPickLimit} chosen`;
+	if (hint) {
+		const cantrips = spellPicks.filter((n) => spellPool.find((s) => s.name === n)?.level === 0).length;
+		// Cantrips are at-will; levelled spells share the ability pool. A caster who
+		// spends every pick on levelled spells can act once and then has nothing, so the
+		// picker says so rather than letting them find out in a fight.
+		hint.textContent = spellPicks.length && !cantrips
+			? "No cantrips chosen — cantrips are the only spells you can cast at will."
+			: "Cantrips (level 0) are at will. Levelled spells spend an ability use.";
+	}
+
+	container.innerHTML = spellPool.map((spell) => {
+		const chosen = spellPicks.includes(spell.name);
+		const full = !chosen && remaining <= 0;
+		const level = spell.level === 0 ? "Cantrip" : `Level ${spell.level}`;
+		const effect = spell.damage ? `${spell.damage} ${spell.damageType || ""}`.trim()
+			: spell.healing ? `heals ${spell.healing}`
+			: spell.resolution === "utility" ? "utility" : "";
+		return `<button type="button" class="spell-option${chosen ? " chosen" : ""}"
+			data-spell="${spell.name}" ${full ? "disabled" : ""}
+			title="${spell.description || ""}">
+			<span class="spell-name">${spell.name}</span>
+			<span class="spell-meta">${level}${effect ? ` · ${effect}` : ""}</span>
+		</button>`;
+	}).join("");
+
+	container.querySelectorAll(".spell-option").forEach((button) => {
+		button.addEventListener("click", () => {
+			const name = button.dataset.spell;
+			if (spellPicks.includes(name)) spellPicks = spellPicks.filter((n) => n !== name);
+			else if (spellPicks.length < spellPickLimit) spellPicks.push(name);
+			drawSpellPicker();
+		});
+	});
+}
+
+/**
+ * @description Reloads the picker for the currently selected class.
+ *
+ *   Exposed because app.js assigns `#level` programmatically when the lobby's starting
+ *   level arrives, and a programmatic assignment fires no `change` event — the same
+ *   blind spot that once left the portrait prompt describing the wrong character. It is
+ *   called explicitly beside `recalcPointBudget` and `recalcHP`, which exist for the
+ *   same reason.
+ * @returns {void}
+ */
+function refreshSpellPicker() {
+	const cls = document.getElementById("cls")?.value;
+	if (cls) loadSpellsFor(cls);
+}
+
+/**
+ * @description Adopts the picks from a loaded or imported sheet.
+ *
+ *   The names are taken verbatim and reconciled by `loadSpellsFor`, not filtered here:
+ *   an import sets the class and the spells in the same breath, and the pool for the new
+ *   class has not been fetched yet. Filtering against the *old* pool would silently drop
+ *   every spell the imported character actually knows.
+ * @param {string[]} names - Stored spell names.
+ * @returns {void}
+ */
+function setSpellPicks(names) {
+	spellPicks = Array.isArray(names) ? names.filter((n) => typeof n === "string") : [];
+	refreshSpellPicker();
+}
+
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
 function generateRaceName(race, gender) {
@@ -476,6 +596,10 @@ function buildCurrentSheet() {
 		weapon,
 		armor,
 		gold,
+		// Names only. The server re-validates against the class list and the lobby's
+		// starting level, and stores names for the same reason: the catalogue owns the
+		// mechanics, so a correction there reaches every character who picked it.
+		spells: spellPicks.slice(),
 	};
 }
 
@@ -688,7 +812,11 @@ if (clsSelectEl) {
 	clsSelectEl.addEventListener("change", () => {
 		populateWeaponSelect(clsSelectEl.value);
 		populateArmorSelect(clsSelectEl.value);
+		loadSpellsFor(clsSelectEl.value);
 	});
+	// The class select arrives pre-filled, so the picker must reflect it before anyone
+	// touches anything — otherwise a wizard who never changes class sees no spells.
+	loadSpellsFor(clsSelectEl.value);
 }
 
 function updateInventory(inventory=[]){

@@ -222,10 +222,14 @@ export function startingSpells(className) {
  *   chose.
  * @param {*} className - The character's class.
  * @param {*} names - The submitted spell names.
+ * @param {*} [startingLevel=1] - The level the game master set for the lobby. A caster
+ *   may pick from that level or lower, so a campaign begun at level 5 opens level-3
+ *   spells. A malformed value narrows to 1 rather than widening — the permissive
+ *   direction would let a bad payload reach the whole catalogue.
  * @returns {{ok: boolean, spells: object[], dropped: string[], reason?: string}} The verdict.
  * @throws {never} Returns a verdict for every input rather than throwing.
  */
-export function validateStartingSpells(className, names) {
+export function validateStartingSpells(className, names, startingLevel = 1) {
 	// A non-caster is not an error — a player who switches class after picking should
 	// lose the spells, not the character.
 	if (!isCaster(className)) return { ok: true, spells: [], dropped: [] };
@@ -234,7 +238,8 @@ export function validateStartingSpells(className, names) {
 		return { ok: false, spells: [], dropped: [], reason: "Spell picks must be a list." };
 	}
 
-	const available = spellsAvailableTo(className, 1);
+	const level = Math.floor(Number(startingLevel));
+	const available = spellsAvailableTo(className, Number.isFinite(level) && level >= 1 ? level : 1);
 	const byName = new Map(available.map((s) => [normalise(s.name), s]));
 
 	const spells = [];

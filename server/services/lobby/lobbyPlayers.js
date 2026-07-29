@@ -5,6 +5,8 @@
 
 import { randomUUID } from "crypto";
 
+import { validateStartingSpells } from "../spellbook.js";
+
 const XP_THRESHOLDS = [
 	0, 300, 900, 2700, 6500,           // 1-5
 	14000, 23000, 34000, 48000, 64000,  // 6-10
@@ -24,6 +26,8 @@ const defaults = {
 	abilities: [],
 	inventory: [],
 	description: "",
+	// Spell names only; the catalogue owns the mechanics. See docs/modules/spells.md.
+	spells: [],
 	spellSlotsUsed: 0,
 	trinket: null,   // { name, description, attributes }
 };
@@ -178,6 +182,35 @@ export const playerMethods = {
 		// Carry forward the init flag (unless cleared above for class change)
 		if (existing._startLevelInit && !classChanged) {
 			merged._startLevelInit = existing._startLevelInit;
+		}
+
+		// Spell picks arrive from a browser, so this is the boundary that rules on them
+		// (`CQ-6`). The lobby's starting level is the ceiling the game master set and a
+		// client may not raise it; a spell off the class list, above that ceiling, or
+		// simply invented is dropped rather than stored.
+		//
+		// Stored as *names*: persisting whole spell objects would freeze a copy of each
+		// one's damage into every lobby file, and a catalogue correction would then never
+		// reach the characters who had already picked it.
+		if (sheet && "spells" in sheet) {
+			const verdict = validateStartingSpells(merged.class, merged.spells, s.startingLevel);
+			// A refusal keeps whatever the character already had. Picking too many is the
+			// only refusal, and dropping their working list over it would be a worse
+			// outcome than ignoring the submission.
+			merged.spells = verdict.ok
+				? verdict.spells.map((spell) => spell.name)
+				: (Array.isArray(existing.spells) ? existing.spells : []);
+		} else {
+			// An omitted field is not a decision. A mid-game re-save for a name change
+			// must not disarm a caster, the same guard `abilities` and `max_hp` have.
+			merged.spells = Array.isArray(existing.spells) ? existing.spells : [];
+		}
+		// A class change invalidates the old list outright; validateStartingSpells has
+		// already dropped anything off the new class's list, so this only covers the
+		// omitted-field path above.
+		if (classChanged) {
+			merged.spells = validateStartingSpells(merged.class, merged.spells, s.startingLevel)
+				.spells.map((spell) => spell.name);
 		}
 
 		s.players[name] = merged;
