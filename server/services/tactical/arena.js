@@ -73,8 +73,13 @@ export const ARCHETYPES = {
 		landmarks: ["the far archway", "the guttering sconce"],
 	},
 	cavern: {
+		// Stalagmites carry this palette, and they did not always. Weighted at one against
+		// rubble's three and water's two, a cavern came out as the most furnished archetype
+		// and the least tactical: eleven pieces of scenery and three cells worth standing in,
+		// because rubble and water block neither a body nor a line of sight and shelter
+		// nobody. Measured, not guessed — the specimen sheet counts sheltered cells per room.
 		aspect: "square", density: 0.18,
-		palette: [{ kind: "rubble", weight: 3 }, { kind: "water", weight: 2 }, { kind: "pillar", weight: 1 }],
+		palette: [{ kind: "pillar", weight: 3 }, { kind: "rubble", weight: 3 }, { kind: "water", weight: 2 }],
 		landmarks: ["the stalagmite cluster", "the black pool"],
 	},
 	ruin: {

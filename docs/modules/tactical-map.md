@@ -101,6 +101,27 @@ stand between the ghoul and the cleric and the ghoul attacks *you*, because you 
 guarding as a consequence of geometry rather than a special rule for it. Nothing else in this
 feature changes how combat feels as much as this line does.
 
+### Choosing a move, in a browser
+
+On your turn the cells `reachableCells` returns are tinted green — faintly, so the room still
+reads as a room — and clicking one sets the destination. The tint is the whole legality
+conversation: an illegal move is not refused with a message, it is simply not offered.
+
+Server-side validation stays regardless. The tint is what a person sees; an agent names a cell
+in a sentence, and neither is trusted.
+
+### Who moves the monsters
+
+The narrator picks an **intent** from a closed set of six verbs — `close`, `hold`, `ranged`,
+`seek_cover`, `withdraw`, `regroup` — and never a cell. The server turns intent into a route.
+Every enemy has a deterministic default that runs whenever the model says nothing or the
+provider falls over, so a fight never depends on a working language model.
+
+The reasoning, the vocabulary and the four rejected alternatives are
+[ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). The short version of
+the test it proposes: **if two competent Dungeon Masters could reasonably disagree, the model
+decides; if they would both reach for a tape measure, the server does.**
+
 ## What each model is told
 
 **The narrator** gets positions as settled fact, in landmark terms with cells attached, and
@@ -124,24 +145,10 @@ Every line is an answer, not a question. The agent picks; it never measures.
 
 ## Generation
 
-An arena appears when an encounter starts and enemies exist. Size follows party and enemy
-count; the archetype follows the scene the narrator has already established — a corridor
-reads differently from a crypt — with the narrator allowed to *hint* an archetype and never
-required to.
-
-Two invariants, both learned from other people's roguelikes:
-
-- **Every enemy must be reachable from every party spawn.** Generation runs a connectivity
-  check and rerolls on failure. A softlock is worse than a boring room.
-- **No spawn adjacent to an enemy** unless the encounter is deliberately an ambush, and then
-  it says so.
-
-### Determinism
-
-Generation takes an injected RNG seeded from `map.seed`, and the seed is persisted. Three
-reasons, and the first is a project rule: `TDD-8` forbids unseeded randomness in anything
-tested. The second is that a lobby reloaded from disk must produce the same room. The third
-is that a bad arena can be reported, reproduced and fixed by seed.
+An arena appears when an encounter starts and enemies exist. Its size follows the head count and
+its archetype follows the scene the narrator has already established — which the narrator may
+*hint* and is never required to. The invariants it guarantees, the determinism it depends on, and
+what measuring it caught are in [tactical-geometry.md](tactical-geometry.md).
 
 ## Rendering
 
@@ -170,10 +177,11 @@ Each phase ends green, committed, and useful on its own.
 3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
    The first point at which the idea can be *looked at*, which is when this project's
    defects have historically surfaced.
-4. **Movement and enforcement.** The pipeline stage, reach and range as settled facts,
-   behind the toggle.
-5. **Proximity targeting.** Enemies move and choose by distance. Where the feature earns
-   itself.
+4. **Movement and enforcement.** The pipeline stage, reach and range as settled facts, the green
+   reachable tint and click-to-move, behind the toggle.
+5. **Proximity targeting and enemy intent.** Enemies move and choose by distance, on the intent
+   vocabulary of [ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). Where
+   the feature earns itself.
 6. **Templates.** Cones, cubes and spheres; closes the area-spell gap.
 
 Deliberately out of scope for now, and each one is a rabbit hole: opportunity attacks,
