@@ -60,9 +60,10 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/images.md](modules/images.md) — the image generation layer
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent
+- [modules/spells.md](modules/spells.md) — what a caster knows, and what casting costs
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0020 — combat balance is measured, not guessed](decisions/0020-combat-balance-measured-not-guessed.md))
+  (newest: [0021 — a caster knows a chosen spell list](decisions/0021-a-caster-knows-a-chosen-spell-list.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._

@@ -20,6 +20,7 @@
 
 import classProgression from "../../client/config/classProgression.json" with { type: "json" };
 import { armourClass } from "./armourClass.js";
+import { knownSpells, castingAbility, isCaster, maxSpellLevel } from "./spellbook.js";
 
 /** Display sentinels that appear in condition strings but are not conditions. */
 const CONDITION_SENTINELS = new Set(["none", "dead", "healthy", "alive", ""]);
@@ -249,6 +250,18 @@ export function buildCapability(lobby, playerName) {
 
 		abilities,
 		inventory,
+
+		// What the character can cast, resolved against the catalogue rather than read
+		// off the record: a spell the DM invented, or one left behind by a class change,
+		// is dropped rather than honoured. Empty for a non-caster.
+		spells: knownSpells(player),
+
+		// Null rather than a default for a non-caster — a Fighter has no casting stat,
+		// and reporting "int" for one is exactly the fiction this module refuses to
+		// invent elsewhere. It is also the value that was hardcoded for every class.
+		spellcasting: isCaster(player.class)
+			? { ability: castingAbility(player.class), maxSpellLevel: maxSpellLevel(level) }
+			: null,
 
 		equipped: {
 			weapon: player.weapon?.name ? safeCopy(player.weapon) : null,

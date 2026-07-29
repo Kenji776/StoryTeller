@@ -333,3 +333,52 @@ test("slotCapacity is the one place the pool size is decided", () => {
 	assert.equal(slotCapacity(player, "unlimited"), Infinity);
 	assert.equal(slotCapacity(player), 1);
 });
+
+// ── Spellcasting ─────────────────────────────────────────────────────────────
+
+test("a caster's known spells are reported", () => {
+	// They were not reported at all, because they did not exist: the class table starts
+	// at level 2, so a level-1 caster's abilities array was empty and the gate rejected
+	// every named spell as unknown.
+	const c = buildCapability(makeLobby({ class: "Wizard", level: 1, spells: ["Fire Bolt", "Magic Missile"] }), "Ayla");
+	assert.deepEqual(c.spells.map((s) => s.name), ["Fire Bolt", "Magic Missile"]);
+});
+
+test("a reported spell carries the mechanics, not just a name", () => {
+	const c = buildCapability(makeLobby({ class: "Wizard", level: 1, spells: ["Fire Bolt"] }), "Ayla");
+	assert.equal(c.spells[0].resolution, "attack");
+	assert.equal(c.spells[0].damage, "1d10");
+});
+
+test("a caster with no stored spell list still has spells", () => {
+	// The 38 casters already in stored lobbies have no `spells` field.
+	const c = buildCapability(makeLobby({ class: "Wizard", level: 1 }), "Ayla");
+	assert.ok(c.spells.length > 0);
+});
+
+test("a non-caster has no spells", () => {
+	// The baseline player is a Fighter.
+	assert.deepEqual(buildCapability(makeLobby(), "Ayla").spells, []);
+});
+
+test("the casting ability reported is the class's own, not intelligence", () => {
+	assert.equal(buildCapability(makeLobby({ class: "Cleric" }), "Ayla").spellcasting.ability, "wis");
+	assert.equal(buildCapability(makeLobby({ class: "Sorcerer" }), "Ayla").spellcasting.ability, "cha");
+	assert.equal(buildCapability(makeLobby({ class: "Wizard" }), "Ayla").spellcasting.ability, "int");
+});
+
+test("a non-caster's spellcasting block is null rather than a fiction", () => {
+	assert.equal(buildCapability(makeLobby(), "Ayla").spellcasting, null);
+});
+
+test("the highest spell level the caster can reach is reported", () => {
+	assert.equal(buildCapability(makeLobby({ class: "Wizard", level: 1 }), "Ayla").spellcasting.maxSpellLevel, 1);
+	assert.equal(buildCapability(makeLobby({ class: "Wizard", level: 3 }), "Ayla").spellcasting.maxSpellLevel, 2);
+});
+
+test("spells are a copy that cannot be used to mutate the lobby", () => {
+	const lobby = makeLobby({ class: "Wizard", level: 1, spells: ["Fire Bolt"] });
+	const c = buildCapability(lobby, "Ayla");
+	c.spells[0].damage = "99d99";
+	assert.notEqual(buildCapability(lobby, "Ayla").spells[0].damage, "99d99");
+});

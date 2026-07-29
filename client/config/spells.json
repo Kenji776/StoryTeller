@@ -1,0 +1,439 @@
+{
+	"_note": "Mechanics are structured fields, not prose. `damage`/`healing` must be a bare dice expression rollExpression() accepts — a parser reading English is the defect this file exists to avoid. See docs/modules/spells.md.",
+	"_resolution": {
+		"attack": "A spell attack roll against the target's armour class.",
+		"save": "The target rolls a saving throw against the caster's spell save DC.",
+		"auto": "No roll — it simply hits (Magic Missile).",
+		"heal": "Restores hit points to an ally.",
+		"utility": "No mechanical outcome the server can compute; the narrator owns it."
+	},
+	"spells": [
+		{
+			"name": "Fire Bolt",
+			"level": 0,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "attack",
+			"damage": "1d10",
+			"damageType": "fire",
+			"range": "ranged",
+			"description": "A mote of fire streaks toward a creature or object within range."
+		},
+		{
+			"name": "Ray of Frost",
+			"level": 0,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "attack",
+			"damage": "1d8",
+			"damageType": "cold",
+			"range": "ranged",
+			"description": "A frigid beam of blue-white light streaks toward a creature, chilling it."
+		},
+		{
+			"name": "Shocking Grasp",
+			"level": 0,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "attack",
+			"damage": "1d8",
+			"damageType": "lightning",
+			"range": "melee",
+			"description": "Lightning springs from your hand to deliver a shock to a creature you touch."
+		},
+		{
+			"name": "Chill Touch",
+			"level": 0,
+			"school": "necromancy",
+			"classes": ["Wizard", "Sorcerer", "Warlock"],
+			"resolution": "attack",
+			"damage": "1d8",
+			"damageType": "necrotic",
+			"range": "ranged",
+			"description": "A ghostly skeletal hand grasps at a creature, and it cannot regain hit points."
+		},
+		{
+			"name": "Eldritch Blast",
+			"level": 0,
+			"school": "evocation",
+			"classes": ["Warlock"],
+			"resolution": "attack",
+			"damage": "1d10",
+			"damageType": "force",
+			"range": "ranged",
+			"description": "A beam of crackling energy streaks toward a creature."
+		},
+		{
+			"name": "Produce Flame",
+			"level": 0,
+			"school": "conjuration",
+			"classes": ["Druid"],
+			"resolution": "attack",
+			"damage": "1d8",
+			"damageType": "fire",
+			"range": "ranged",
+			"description": "A flickering flame appears in your hand, shedding light until you hurl it."
+		},
+		{
+			"name": "Thorn Whip",
+			"level": 0,
+			"school": "transmutation",
+			"classes": ["Druid"],
+			"resolution": "attack",
+			"damage": "1d6",
+			"damageType": "piercing",
+			"range": "melee",
+			"description": "A vine of thorns lashes out and pulls the creature closer to you."
+		},
+		{
+			"name": "Sacred Flame",
+			"level": 0,
+			"school": "evocation",
+			"classes": ["Cleric"],
+			"resolution": "save",
+			"save": "dex",
+			"onSave": "none",
+			"damage": "1d8",
+			"damageType": "radiant",
+			"range": "ranged",
+			"description": "Flame-like radiance descends on a creature, ignoring cover."
+		},
+		{
+			"name": "Toll the Dead",
+			"level": 0,
+			"school": "necromancy",
+			"classes": ["Cleric", "Warlock", "Wizard"],
+			"resolution": "save",
+			"save": "wis",
+			"onSave": "none",
+			"damage": "1d8",
+			"damageType": "necrotic",
+			"range": "ranged",
+			"description": "A dolorous bell tolls, and the sound wracks a creature with pain."
+		},
+		{
+			"name": "Poison Spray",
+			"level": 0,
+			"school": "conjuration",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Druid"],
+			"resolution": "save",
+			"save": "con",
+			"onSave": "none",
+			"damage": "1d12",
+			"damageType": "poison",
+			"range": "melee",
+			"description": "You fling a puff of noxious gas at a creature."
+		},
+		{
+			"name": "Vicious Mockery",
+			"level": 0,
+			"school": "enchantment",
+			"classes": ["Bard"],
+			"resolution": "save",
+			"save": "wis",
+			"onSave": "none",
+			"damage": "1d4",
+			"damageType": "psychic",
+			"range": "ranged",
+			"description": "You unleash a string of insults laced with subtle enchantment."
+		},
+		{
+			"name": "Light",
+			"level": 0,
+			"school": "evocation",
+			"classes": ["Cleric", "Wizard", "Sorcerer", "Bard"],
+			"resolution": "utility",
+			"range": "touch",
+			"description": "An object you touch sheds bright light in a 20-foot radius."
+		},
+		{
+			"name": "Guidance",
+			"level": 0,
+			"school": "divination",
+			"classes": ["Cleric", "Druid"],
+			"resolution": "utility",
+			"range": "touch",
+			"description": "You touch a willing creature and it adds a d4 to one ability check."
+		},
+		{
+			"name": "Mage Hand",
+			"level": 0,
+			"school": "conjuration",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Bard"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "A spectral hand appears and manipulates objects at a distance."
+		},
+		{
+			"name": "Minor Illusion",
+			"level": 0,
+			"school": "illusion",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Bard"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "You create a sound or an image of an object for a short while."
+		},
+		{
+			"name": "Prestidigitation",
+			"level": 0,
+			"school": "transmutation",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Bard"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "A minor magical trick: a spark, a scent, a trinket, a cleaned surface."
+		},
+		{
+			"name": "Druidcraft",
+			"level": 0,
+			"school": "transmutation",
+			"classes": ["Druid"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "You predict the weather, or make a flower bloom, or snuff a small flame."
+		},
+		{
+			"name": "Spare the Dying",
+			"level": 0,
+			"school": "necromancy",
+			"classes": ["Cleric"],
+			"resolution": "utility",
+			"range": "touch",
+			"description": "You touch a dying creature and it becomes stable."
+		},
+
+		{
+			"name": "Magic Missile",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "auto",
+			"damage": "3d4+3",
+			"damageType": "force",
+			"range": "ranged",
+			"description": "Three darts of magical force dart unerringly to their target."
+		},
+		{
+			"name": "Chromatic Orb",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "attack",
+			"damage": "3d8",
+			"damageType": "elemental",
+			"range": "ranged",
+			"description": "You hurl a sphere of energy of a colour and element you choose."
+		},
+		{
+			"name": "Witch Bolt",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer", "Warlock"],
+			"resolution": "attack",
+			"damage": "1d12",
+			"damageType": "lightning",
+			"range": "ranged",
+			"description": "A beam of crackling blue energy lances out and arcs to the target."
+		},
+		{
+			"name": "Guiding Bolt",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Cleric"],
+			"resolution": "attack",
+			"damage": "4d6",
+			"damageType": "radiant",
+			"range": "ranged",
+			"description": "A flash of light streaks toward a creature and leaves it shimmering."
+		},
+		{
+			"name": "Inflict Wounds",
+			"level": 1,
+			"school": "necromancy",
+			"classes": ["Cleric"],
+			"resolution": "attack",
+			"damage": "3d10",
+			"damageType": "necrotic",
+			"range": "melee",
+			"description": "Necrotic energy surges through a creature you touch."
+		},
+		{
+			"name": "Burning Hands",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "save",
+			"save": "dex",
+			"onSave": "half",
+			"damage": "3d6",
+			"damageType": "fire",
+			"range": "melee",
+			"area": "15-foot cone",
+			"description": "A thin sheet of flames shoots from your outspread fingertips."
+		},
+		{
+			"name": "Thunderwave",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Wizard", "Sorcerer", "Bard", "Druid"],
+			"resolution": "save",
+			"save": "con",
+			"onSave": "half",
+			"damage": "2d8",
+			"damageType": "thunder",
+			"range": "melee",
+			"area": "15-foot cube",
+			"description": "A wave of thunderous force sweeps out, pushing creatures away."
+		},
+		{
+			"name": "Arms of Hadar",
+			"level": 1,
+			"school": "conjuration",
+			"classes": ["Warlock"],
+			"resolution": "save",
+			"save": "str",
+			"onSave": "half",
+			"damage": "2d6",
+			"damageType": "necrotic",
+			"range": "melee",
+			"area": "10-foot radius",
+			"description": "Tendrils of dark energy erupt and lash at everything around you."
+		},
+		{
+			"name": "Dissonant Whispers",
+			"level": 1,
+			"school": "enchantment",
+			"classes": ["Bard"],
+			"resolution": "save",
+			"save": "wis",
+			"onSave": "half",
+			"damage": "3d6",
+			"damageType": "psychic",
+			"range": "ranged",
+			"description": "You whisper a discordant melody only one creature can hear."
+		},
+		{
+			"name": "Cure Wounds",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Cleric", "Druid", "Bard"],
+			"resolution": "heal",
+			"healing": "1d8",
+			"addCastingMod": true,
+			"range": "touch",
+			"description": "A creature you touch regains hit points."
+		},
+		{
+			"name": "Healing Word",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Cleric", "Druid", "Bard"],
+			"resolution": "heal",
+			"healing": "1d4",
+			"addCastingMod": true,
+			"range": "ranged",
+			"description": "A creature of your choice regains hit points at the sound of your voice."
+		},
+		{
+			"name": "Bless",
+			"level": 1,
+			"school": "enchantment",
+			"classes": ["Cleric"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "Up to three creatures add a d4 to attack rolls and saving throws."
+		},
+		{
+			"name": "Shield of Faith",
+			"level": 1,
+			"school": "abjuration",
+			"classes": ["Cleric"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "A shimmering field surrounds a creature, granting it +2 armour class."
+		},
+		{
+			"name": "Faerie Fire",
+			"level": 1,
+			"school": "evocation",
+			"classes": ["Druid", "Bard"],
+			"resolution": "utility",
+			"save": "dex",
+			"range": "ranged",
+			"description": "Objects and creatures in the area are outlined in light and cannot hide."
+		},
+		{
+			"name": "Entangle",
+			"level": 1,
+			"school": "conjuration",
+			"classes": ["Druid"],
+			"resolution": "utility",
+			"save": "str",
+			"range": "ranged",
+			"description": "Grasping weeds and vines sprout and restrain the creatures in the area."
+		},
+		{
+			"name": "Hex",
+			"level": 1,
+			"school": "enchantment",
+			"classes": ["Warlock"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "You curse a creature, dealing extra necrotic damage when you hit it."
+		},
+		{
+			"name": "Armor of Agathys",
+			"level": 1,
+			"school": "abjuration",
+			"classes": ["Warlock"],
+			"resolution": "utility",
+			"range": "self",
+			"description": "Protective frost covers you, and harms whoever strikes you."
+		},
+		{
+			"name": "Mage Armor",
+			"level": 1,
+			"school": "abjuration",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "utility",
+			"range": "touch",
+			"description": "A protective magical force surrounds an unarmoured creature."
+		},
+		{
+			"name": "Shield",
+			"level": 1,
+			"school": "abjuration",
+			"classes": ["Wizard", "Sorcerer"],
+			"resolution": "utility",
+			"range": "self",
+			"description": "An invisible barrier of force briefly grants you +5 armour class."
+		},
+		{
+			"name": "Sleep",
+			"level": 1,
+			"school": "enchantment",
+			"classes": ["Wizard", "Sorcerer", "Bard"],
+			"resolution": "utility",
+			"range": "ranged",
+			"description": "This spell sends creatures into a magical slumber."
+		},
+		{
+			"name": "Charm Person",
+			"level": 1,
+			"school": "enchantment",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Bard", "Druid"],
+			"resolution": "utility",
+			"save": "wis",
+			"range": "ranged",
+			"description": "You attempt to charm a humanoid, which then regards you as friendly."
+		},
+		{
+			"name": "Detect Magic",
+			"level": 1,
+			"school": "divination",
+			"classes": ["Wizard", "Sorcerer", "Warlock", "Cleric", "Druid", "Bard"],
+			"resolution": "utility",
+			"range": "self",
+			"description": "You sense the presence of magic within 30 feet."
+		}
+	]
+}

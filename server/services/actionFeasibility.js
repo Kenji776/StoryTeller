@@ -17,6 +17,9 @@
  * it, and it **fails open**. A provider outage must never stop people playing.
  */
 
+import { findSpellIn, costsSlot } from "./spellbook.js";
+import { normaliseForMatch as normalise } from "../helpers/utils.js";
+
 /** Stable identifiers so the client and the incident feed can branch on a cause. */
 export const REJECT_CODES = {
 	EMPTY: "empty",
@@ -53,21 +56,6 @@ const IDIOM_WINDOW = 3;
 
 /** Technology that does not belong in the setting; a hint for the judge, not a verdict. */
 const ANACHRONISM = /\b(machine ?gun|firearm|rifle|pistol|shotgun|bazooka|grenade|missile|nuke|nuclear|laser|plasma|robot|android|computer|laptop|smartphone|internet|helicopter|tank|car|motorcycle|electricity|battery|radio)\b/i;
-
-/**
- * @description Reduces a name to a comparable form: lower case, punctuation removed,
- *   whitespace collapsed. Ability and item names are matched this way because players
- *   type "magic-missile" and "Magic Missile" interchangeably.
- * @param {string} value - Raw name or phrase.
- * @returns {string} The normalised form.
- */
-function normalise(value) {
-	return String(value ?? "")
-		.toLowerCase()
-		.replace(/[^a-z0-9\s]/g, " ")
-		.replace(/\s+/g, " ")
-		.trim();
-}
 
 /**
  * @description Builds a rejection result.
@@ -133,6 +121,27 @@ export function hardChecks(capability, text) {
 		return { allow: true, escalate: true, usesAbility: namedKnown.name };
 	}
 
+	// Does it name a spell they know? Checked after abilities so nothing that already
+	// worked changes, and only against the character's own list — the gate is not being
+	// made permissive here, it is being given something to say yes to. Before this, a
+	// level-1 caster's list was empty in every case, so "I cast magic missile" fell
+	// through to the rejection below and took a strike for it.
+	const namedSpell = findSpellIn(trimmed, capability.spells || []);
+	if (namedSpell) {
+		// A cantrip is at-will. Charging it against the shared pool would give a level-1
+		// caster one Fire Bolt per long rest, which is not a caster.
+		const spendsSlot = costsSlot(namedSpell);
+		if (spendsSlot && slots.remaining <= 0) {
+			return reject(
+				REJECT_CODES.NO_SLOTS,
+				`You have no ability uses left (0 of ${slots.max}). They come back after a long rest —`
+					+ ` your cantrips still work.`,
+				true,
+			);
+		}
+		return { allow: true, escalate: true, usesSpell: namedSpell.name, spendsSlot };
+	}
+
 	// An explicit casting phrase naming something they do not know. Guarded by an
 	// idiom list so ordinary prose is not mistaken for spellcasting.
 	const casting = trimmed.match(/\bcasts?\s+(?:the\s+|a\s+|an\s+|my\s+)?([a-z0-9''\- ]{2,40})/i);
@@ -144,7 +153,13 @@ export function hardChecks(capability, text) {
 		const words = normalise(casting[1]).split(" ").slice(0, IDIOM_WINDOW);
 		const isIdiom = words.some((w) => CAST_IDIOMS.has(w));
 		if (!isIdiom) {
-			const list = known.length ? known.map((a) => a.name).join(", ") : "none yet";
+			// Spells belong in this list too. It named abilities only, so a level-1
+			// caster holding a full spell list was told "You know: none yet."
+			const repertoire = [
+				...known.map((a) => a.name),
+				...(capability.spells || []).map((s) => s.name),
+			];
+			const list = repertoire.length ? repertoire.join(", ") : "none yet";
 			return reject(
 				REJECT_CODES.UNKNOWN_ABILITY,
 				`Your character does not know that. You know: ${list}.`,

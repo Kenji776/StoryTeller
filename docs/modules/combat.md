@@ -185,7 +185,10 @@ combat path that forgets to pass it plays balanced rather than crashing.
   out do. That is probably right, but it is not a considered decision.
 - **No advantage, cover, reach, opportunity attacks or resistances.**
 - **Spells and abilities are not resolved mechanically** — they still go through
-  `autoRollIfNeeded`'s flat ladder and the narrator's judgement.
+  `autoRollIfNeeded`'s flat ladder and the narrator's judgement. Casters now *have*
+  spells, with typed damage and save data ([ADR 0021](../decisions/0021-a-caster-knows-a-chosen-spell-list.md),
+  [modules/spells.md](spells.md)), but nothing rolls them yet and `autoRollIfNeeded`
+  still hardcodes `statKey = "int"` for every class.
 
 ## Probes
 

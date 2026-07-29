@@ -284,3 +284,79 @@ test("the judge is sent no story history, so an earlier poisoned turn cannot rea
 	await judgeAction({ capability: cap(), text: "I search.", getLLMResponse: llm.fn });
 	assert.ok(llm.calls[0].length <= 2, "judge prompt should be a system message plus the action only");
 });
+
+// ── Spells ───────────────────────────────────────────────────────────────────
+
+/**
+ * @description A caster carrying no class-table abilities — the real shape of a level-1
+ *   wizard, whose `abilities` array is empty because the progression table starts at
+ *   level 2.
+ * @param {object} [player] - Player fields to override.
+ * @returns {object} A capability model.
+ */
+function casterCap(player = {}) {
+	return cap({ class: "Wizard", level: 1, abilities: [], spellSlotsUsed: 0, ...player });
+}
+
+test("a level-1 caster may cast a cantrip they know", () => {
+	// The defect: this was rejected as an unknown ability and took a strike, because a
+	// level-1 caster knew nothing at all.
+	const r = hardChecks(casterCap({ spells: ["Fire Bolt"] }), "I cast fire bolt at the goblin.");
+	assert.equal(r.allow, true);
+	assert.equal(r.usesSpell, "Fire Bolt");
+});
+
+test("a cantrip costs no activation, even with the pool empty", () => {
+	// Charging a cantrip against the one-activation pool would give a level-1 wizard a
+	// single Fire Bolt per long rest.
+	const r = hardChecks(casterCap({ spells: ["Fire Bolt"], spellSlotsUsed: 99 }), "I cast fire bolt at the goblin.");
+	assert.equal(r.allow, true);
+	assert.equal(r.spendsSlot, false);
+});
+
+test("a levelled spell is allowed while an activation remains", () => {
+	const r = hardChecks(casterCap({ spells: ["Magic Missile"] }), "I cast magic missile at the goblin.");
+	assert.equal(r.allow, true);
+	assert.equal(r.usesSpell, "Magic Missile");
+	assert.equal(r.spendsSlot, true);
+});
+
+test("a levelled spell with no activations left is rejected and costs a strike", () => {
+	const r = hardChecks(casterCap({ spells: ["Magic Missile"], spellSlotsUsed: 1 }), "I cast magic missile.");
+	assert.equal(r.allow, false);
+	assert.equal(r.code, REJECT_CODES.NO_SLOTS);
+	assert.equal(r.strike, true);
+});
+
+test("a spell outside the character's own list is still rejected", () => {
+	// The gate does not become permissive: not knowing it is still not knowing it.
+	const r = hardChecks(casterCap({ spells: ["Fire Bolt"] }), "I cast cure wounds on the fighter.");
+	assert.equal(r.allow, false);
+	assert.equal(r.code, REJECT_CODES.UNKNOWN_ABILITY);
+	assert.equal(r.strike, true);
+});
+
+test("the refusal tells a caster which spells they do know", () => {
+	// It listed abilities only, so a level-1 caster was told "You know: none yet." while
+	// holding a full spell list.
+	const r = hardChecks(casterCap({ spells: ["Fire Bolt", "Magic Missile"] }), "I cast meteor swarm.");
+	assert.match(r.reason, /Fire Bolt/);
+	assert.match(r.reason, /Magic Missile/);
+});
+
+test("a spell name is matched regardless of case and punctuation", () => {
+	assert.equal(hardChecks(casterCap({ spells: ["Magic Missile"] }), "i cast magic-missile!").usesSpell, "Magic Missile");
+});
+
+test("a non-caster naming a spell is still rejected", () => {
+	const r = hardChecks(cap({ class: "Fighter", abilities: [] }), "I cast fire bolt at the goblin.");
+	assert.equal(r.allow, false);
+	assert.equal(r.code, REJECT_CODES.UNKNOWN_ABILITY);
+});
+
+test("ordinary prose containing a spell word is not treated as casting", () => {
+	// "Light" is a cantrip on the wizard list; lighting a torch is not casting it.
+	const c = casterCap({ spells: ["Light"] });
+	assert.equal(hardChecks(c, "I delight in the chaos and charge.").usesSpell, undefined);
+	assert.equal(hardChecks(c, "I cast a glance over my shoulder.").allow, true);
+});
