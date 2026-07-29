@@ -58,7 +58,12 @@ The differences between providers are absorbed here rather than leaking into the
 game loop:
 
 - **Anthropic takes `system` as a top-level parameter**, not a message role, and
-  requires `max_tokens` (defaulted to 4096, matching previous behaviour).
+  requires `max_tokens` — defaulted to 16384, because that ceiling is spent on the
+  model's private reasoning before any prose comes out of it. See
+  [ADR 0024](../decisions/0024-the-output-budget-must-cover-reasoning.md); the short
+  version is that a budget sized around the narration alone leaves a reasoning model
+  nothing to narrate with, and the failure arrives as an empty reply rather than a
+  short one.
 - **Anthropic requires alternating user/assistant turns**, which StoryTeller
   cannot guarantee — several players can act before the DM replies, and a lobby
   resumed from history may open on the DM's last narration. Consecutive turns

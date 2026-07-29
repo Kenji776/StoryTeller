@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { anthropicProvider } from "./anthropic.js";
+import { anthropicProvider, DEFAULT_MAX_TOKENS } from "./anthropic.js";
 import { LLMRequestError } from "../errors.js";
 
 const FAKE_KEY = "test-key-DO-NOT-USE";
@@ -95,7 +95,40 @@ test("chat always sends max_tokens because Anthropic requires it", async () => {
 
 	await anthropicProvider.chat({ messages: [{ role: "user", content: "hi" }], config: CONFIG, fetchImpl });
 
-	assert.equal(sentBody(fetchImpl).max_tokens, 4096);
+	assert.equal(sentBody(fetchImpl).max_tokens, DEFAULT_MAX_TOKENS);
+});
+
+test("the default output budget leaves a thinking model room to answer", () => {
+	// This assertion replaces one that pinned the default at 4096. That number was not
+	// merely inconvenient, it was wrong: on models that reason before replying —
+	// Sonnet 5 and Opus 5 do so by default when the request omits `thinking` —
+	// `max_tokens` caps reasoning *and* prose together. A live game burned 2,938 of
+	// 4,096 tokens reasoning, leaving 275 for the narration; two turns later the
+	// reasoning consumed the lot and the DM returned no prose at all.
+	//
+	// The floor is the observed worst case (~3k reasoning) plus room for the longest
+	// narration we ask for, with headroom. Anthropic bills what is produced, not what
+	// is reserved, so a generous ceiling costs nothing on turns that stay short.
+	assert.ok(DEFAULT_MAX_TOKENS >= 12000,
+		`a budget of ${DEFAULT_MAX_TOKENS} leaves too little for prose once reasoning is paid for`);
+});
+
+test("a reply truncated before any prose says so, and says what to do", async () => {
+	// The bare "no usable content" this used to raise sent the operator looking at the
+	// model when the fault was our own request budget.
+	const fetchImpl = fakeFetch({
+		content: [{ type: "thinking", thinking: "" }],
+		stop_reason: "max_tokens",
+		usage: { input_tokens: 13596, output_tokens: 4096 },
+	});
+
+	await assert.rejects(
+		() => anthropicProvider.chat({ messages: [{ role: "user", content: "hi" }], config: CONFIG, fetchImpl }),
+		(err) => {
+			assert.match(err.message, /max_tokens/, "it must name the stop reason");
+			assert.match(err.message, /reasoning|thinking/i, "and where the budget went");
+			return true;
+		});
 });
 
 test("chat honours an explicit max_tokens", async () => {

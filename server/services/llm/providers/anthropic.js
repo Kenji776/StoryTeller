@@ -23,11 +23,40 @@ const PROVIDER_ID = "anthropic";
 /** The Messages API version this adapter is written against. */
 const API_VERSION = "2023-06-01";
 
-/** Anthropic requires an explicit response cap; this matches the previous behaviour. */
-const DEFAULT_MAX_TOKENS = 4096;
+/**
+ * Anthropic requires an explicit response cap, and the cap covers the model's private
+ * reasoning as well as the prose it returns. Newer models reason by default when the
+ * request says nothing about it, so a budget sized around the answer alone starves the
+ * answer: a live game spent 2,938 of 4,096 tokens reasoning and had 275 left for the
+ * narration, then hit two turns where reasoning took everything and the reply arrived
+ * with no prose in it at all.
+ *
+ * Anthropic charges for tokens produced, not tokens reserved, so a high ceiling costs
+ * nothing on the short turns and only pays out when a turn genuinely needs the room.
+ */
+export const DEFAULT_MAX_TOKENS = 16384;
 
 /** Separator used when merging turns and joining system prompts. */
 const BLOCK_SEPARATOR = "\n\n";
+
+/**
+ * @description Explains a reply that carried no prose. The two causes want different
+ *   answers from whoever reads the log, so they are worth telling apart: a reply
+ *   truncated at `max_tokens` means our own request budget was too small for the model
+ *   to reason and then answer within it, which is a number we control. Anything else is
+ *   genuinely an unexpected reply shape. The first investigation of this failure went
+ *   looking at the model and the prompt, because the message named neither cause.
+ * @param {object} response - The decoded Anthropic response body.
+ * @returns {LLMRequestError} The error to throw, never thrown here.
+ */
+function emptyReplyError(response) {
+	const spent = response?.usage?.output_tokens;
+	const message = response?.stop_reason === "max_tokens"
+		? `Anthropic stopped at max_tokens having produced no prose: the ${spent ?? "whole"}-token `
+			+ "output budget went on reasoning. Raise maxTokens for this call."
+		: `Anthropic returned no usable content${response?.stop_reason ? ` (stop reason: ${response.stop_reason})` : ""}.`;
+	return new LLMRequestError(message, { provider: PROVIDER_ID, kind: "bad_response" });
+}
 
 /** Filler used when a conversation would otherwise not start with a user turn. */
 const OPENING_TURN = "(begin)";
@@ -132,12 +161,7 @@ async function chat({ messages, config, model, temperature = null, maxTokens = D
 		.map(block => block.text)
 		.join("");
 
-	if (!text) {
-		throw new LLMRequestError(
-			`Anthropic returned no usable content${response?.stop_reason ? ` (stop reason: ${response.stop_reason})` : ""}.`,
-			{ provider: PROVIDER_ID, kind: "bad_response" }
-		);
-	}
+	if (!text) throw emptyReplyError(response);
 
 	return {
 		text,
