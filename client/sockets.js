@@ -1165,8 +1165,13 @@ function registerSocketEvents() {
 
 	socket.on("timer:start", ({ player, endsAt, durationMs }) => {
 		startTimerDisplay(player, endsAt, durationMs);
-		// Audible cue that the turn timer has begun
-		window.sfxManager?.play([{ file: "war_horn_blast_mnf6xmv0exwj.mp3", name: "Turn timer started" }]);
+		// Only the player actually on the clock is told, and never an observer, who is
+		// never on one. This sounded for the whole room on every turn — a war horn per
+		// player per round, four a round for a party of four — which reads as an alarm
+		// about something going wrong rather than as "your turn is timed".
+		if (!window.isObserver && me.name && player === me.name) {
+			window.sfxManager?.play([{ file: "war_horn_blast_mnf6xmv0exwj.mp3", name: "Turn timer started" }]);
+		}
 	});
 
 	socket.on("timer:cancel", () => {
