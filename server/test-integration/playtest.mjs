@@ -28,7 +28,7 @@ const arg = (name, fallback) => {
 	return i !== -1 && argv[i + 1] ? argv[i + 1] : fallback;
 };
 
-const URL = arg("url", "http://localhost:3000");
+const URL = arg("url", "http://localhost:3013");
 const MAX_ACTIONS = Number(arg("actions", 6));      // hard cap on LLM turns — this is the cost knob
 const WALL_CLOCK_MS = Number(arg("timeout", 420)) * 1000;
 const PACE_MS = Number(arg("pace", 8)) * 1000;      // gap between beats, so a spectator can read
@@ -98,7 +98,7 @@ const NOISY = new Set(["narration:audio", "narration:alignment", "lobbies:update
  * @param {object} spec.stats - Ability scores; merged over sane defaults.
  * @returns {object} A server-acceptable sheet.
  */
-function makeSheet({ name, cls, race, stats, abilities = [] }) {
+function makeSheet({ name, cls, race, stats, abilities = [], spells = [] }) {
 	return {
 		name,
 		class: cls,
@@ -117,6 +117,10 @@ function makeSheet({ name, cls, race, stats, abilities = [] }) {
 		// Previous runs gave everyone an empty ability list, so nothing ever spent
 		// from the shared pool and the whole resource path went untested.
 		abilities,
+		// Names only, as the builder sends them; the server validates against the class
+		// list and the lobby's starting level. Without these a caster falls back to the
+		// all-cantrip loadout and the levelled-spell paths never run.
+		spells,
 		inventory: [
 			{ name: "Rations", count: 3, description: "Dry but filling.", attributes: {} },
 			{ name: "Healing Potion", count: 2, description: "Restores health when drunk.", attributes: { healing: "2d4" } },
@@ -140,7 +144,18 @@ const CAST = [
 	{
 		name: "Orrin Vale", cls: "Wizard", race: "Human",
 		stats: { int: 16, wis: 13, con: 10 },
-		abilities: [{ name: "Magic Missile", description: "Three darts of force that never miss.", details: {} }],
+		abilities: [],
+		// A cantrip, an unerring levelled spell, and a saving throw — one of each
+		// resolution path, so a run exercises all three.
+		spells: ["Fire Bolt", "Magic Missile", "Burning Hands"],
+	},
+	{
+		// INT 8 against WIS 17 on purpose: a cleric casting on intelligence would be
+		// visible at a glance in the dice frames.
+		name: "Ovid Marrow", cls: "Cleric", race: "Human",
+		stats: { wis: 17, con: 13, int: 8, str: 12 },
+		abilities: [],
+		spells: ["Sacred Flame", "Guiding Bolt", "Cure Wounds"],
 	},
 ];
 
@@ -152,6 +167,7 @@ const ABILITY_ACTIONS = {
 	"Brannor Ironfoot": "I use Second Wind to catch my breath and recover.",
 	"Sylvie Ashwren": "I use Sneak Attack against the nearest foe from the shadows.",
 	"Orrin Vale": "I cast Magic Missile at whatever threatens us.",
+	"Ovid Marrow": "I cast Guiding Bolt at whatever threatens us.",
 };
 
 /**
@@ -249,6 +265,20 @@ function makePlayer(spec, index) {
 
 	socket.on("connect", () => log(p.short, `** socket connected (${socket.id})`));
 	socket.on("session:token", ({ token }) => { p.sessionToken = token; });
+
+	// Table chat reaches the personas, so a watching operator can actually talk to the
+	// players mid-game. Kept per-player rather than shared, because each one should only
+	// know what was said while it was connected — a rejoining player has not been
+	// listening, and handing it the backlog would give it knowledge it never heard.
+	p.chat = [];
+	socket.on("chat:message", (msg) => {
+		if (!msg || typeof msg.text !== "string") return;
+		p.chat.push({ name: msg.name, text: msg.text });
+		if (msg.name !== p.name) log(p.short, `<- CHAT ${msg.name}: ${msg.text}`);
+	});
+	socket.on("chat:history", (history) => {
+		if (Array.isArray(history)) p.chat = history.map((m) => ({ name: m.name, text: m.text }));
+	});
 	socket.on("player:death", ({ player, message }) => {
 		if (player === p.name) { p.dead = true; log(p.short, `<- DIED: ${message}`); }
 		else log(p.short, `<- death: ${player}`);
@@ -434,11 +464,16 @@ async function run() {
 
 	if (HOLD_MS > 0) {
 		log("RUN", "");
-		log("RUN", `  ┌─────────────────────────────────────────────┐`);
-		log("RUN", `  │  SPECTATE THIS GAME — LOBBY CODE: ${created.code}   │`);
-		log("RUN", `  │  ${URL}/admin/login.html          │`);
-		log("RUN", `  └─────────────────────────────────────────────┘`);
-		log("RUN", `holding ${HOLD_MS / 1000}s for a spectator to attach…`);
+		log("RUN", `  ┌──────────────────────────────────────────────────────────┐`);
+		log("RUN", `  │  WATCH THIS GAME                                         │`);
+		log("RUN", `  │    1. open ${URL}`);
+		log("RUN", `  │    2. tick "Join as observer"                            │`);
+		log("RUN", `  │    3. enter code ${created.code}`);
+		log("RUN", `  │                                                          │`);
+		log("RUN", `  │  Anything you say in chat reaches the players, who take   │`);
+		log("RUN", `  │  it as table talk rather than as orders.                 │`);
+		log("RUN", `  └──────────────────────────────────────────────────────────┘`);
+		log("RUN", `holding ${HOLD_MS / 1000}s for a watcher to attach…`);
 		await sleep(HOLD_MS);
 	}
 	log("RUN", "starting game");
@@ -560,6 +595,7 @@ async function run() {
 				player: actor,
 				story: actor.story,
 				state: actor.state,
+				chat: actor.chat,
 				apiKey: process.env.OPENAI_API_KEY,
 				log,
 			});
