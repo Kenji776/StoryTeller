@@ -600,3 +600,65 @@ test("a failed portrait render does not lose the likeness that was just created"
 	assert.equal(result.characterId, "chr_1");
 	assert.equal(result.b64, "cmVmZXJlbmNl", "should fall back to the reference rather than fail");
 });
+
+// ── A name is not an identity ────────────────────────────────────────────────
+//
+// The image server keys characters by name and `POST /characters` is get-or-create:
+// two characters sharing a name silently become one, and the second is handed the
+// first's face. Observed — one probe id, `chr_23113b65`, came back for three
+// different lobbies in a row. Its own brief says to qualify names for exactly this.
+
+test("the same character name in two lobbies makes two identities", async () => {
+	const first = makeScript([
+		{ body: { id: "chr_a", image: "cmVm" } },
+		{ body: { images: ["ZHJhd24="], model: "krea2" } },
+	]);
+	const second = makeScript([
+		{ body: { id: "chr_b", image: "cmVm" } },
+		{ body: { images: ["ZHJhd24="], model: "krea2" } },
+	]);
+
+	await makeGateway({ ...IMAGE_SETUP, fetchImpl: first }).gateway.ensureCharacterImage({
+		lobbyId: "lobby-one", record: {}, name: "Brannor", appearance: "A Dwarf.",
+	});
+	await makeGateway({ ...IMAGE_SETUP, fetchImpl: second }).gateway.ensureCharacterImage({
+		lobbyId: "lobby-two", record: {}, name: "Brannor", appearance: "A Dwarf.",
+	});
+
+	assert.notEqual(
+		first.calls[0].payload.name,
+		second.calls[0].payload.name,
+		"both lobbies asked the image server for the same identity",
+	);
+});
+
+test("the character's own name survives inside the qualified one", async () => {
+	// It is shown in the image server's own UI, so it has to stay recognisable.
+	const fetchImpl = makeScript([
+		{ body: { id: "chr_a", image: "cmVm" } },
+		{ body: { images: ["ZHJhd24="], model: "krea2" } },
+	]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor Ironfoot", appearance: "A Dwarf.",
+	});
+
+	assert.match(fetchImpl.calls[0].payload.name, /Brannor Ironfoot/);
+});
+
+test("the same character in the same lobby keeps one identity", async () => {
+	// Qualifying must be stable, or a rejoin would mint a second face.
+	const runs = [0, 1].map(() => makeScript([
+		{ body: { id: "chr_a", image: "cmVm" } },
+		{ body: { images: ["ZHJhd24="], model: "krea2" } },
+	]));
+
+	for (const fetchImpl of runs) {
+		await makeGateway({ ...IMAGE_SETUP, fetchImpl }).gateway.ensureCharacterImage({
+			lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf.",
+		});
+	}
+
+	assert.equal(runs[0].calls[0].payload.name, runs[1].calls[0].payload.name);
+});

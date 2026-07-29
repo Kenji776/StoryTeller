@@ -295,7 +295,17 @@ export function createLLMGateway({
 				return { ...image, characterId: plan.characterId, appearance, created: false };
 			}
 
-			const character = await adapter.createCharacter({ name, appearance, config: resolved.config, signal, fetchImpl });
+			// The image server keys characters by name, and `POST /characters` is
+			// get-or-create — so two characters sharing a name silently become one, and
+			// the second is handed the first's face. Its own brief says to qualify names
+			// for exactly this reason. Observed before it was: one identity,
+			// `chr_23113b65`, came back for three different lobbies in a row.
+			//
+			// The lobby is the qualifier because a character belongs to one game. Stable
+			// across a rejoin, distinct across games, and the player's own name stays
+			// readable in the image server's UI.
+			const identity = lobbyId ? `${name} (${lobbyId})` : name;
+			const character = await adapter.createCharacter({ name: identity, appearance, config: resolved.config, signal, fetchImpl });
 
 			if (plan.retire) {
 				// Best effort. The new likeness already exists, and failing the portrait
