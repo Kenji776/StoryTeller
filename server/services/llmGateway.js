@@ -262,7 +262,7 @@ export function createLLMGateway({
 		 *   appearance: string, created: boolean}>} The portrait and the identity to store.
 		 * @throws {Error} When no image provider is available, or generation failed.
 		 */
-		async ensureCharacterImage({ lobbyId, record, name, appearance, portraitPrompt, portraitScene = PORTRAIT_SCENE, provider, force = false, size, signal } = {}) {
+		async ensureCharacterImage({ lobbyId, record, name, appearance, portraitPrompt, portraitScene = PORTRAIT_SCENE, register = true, provider, force = false, size, signal } = {}) {
 			const resolved = resolveImage(lobbyId, provider);
 			const adapter = credentials.providerFor("image", resolved.config.providerId);
 
@@ -282,10 +282,17 @@ export function createLLMGateway({
 			 */
 			const drawPortrait = () => adapter.generate({ prompt: drawing, config: resolved.config, size, signal, fetchImpl });
 
-			if (!adapter?.createCharacter) {
-				// No continuity here, but a portrait is still better than a refusal.
+			if (!adapter?.createCharacter || !register) {
+				// A draft. Players press Generate repeatedly while building a character,
+				// and every press used to reach `POST /characters` — so the identity every
+				// later scene matched against was minted from whatever the sheet said at
+				// some arbitrary press, and editing between presses retired one identity
+				// to mint another. Only the character that enters the game defines the
+				// face; until then this just draws pictures.
+				//
+				// Any likeness the character already has is left exactly as it is.
 				const image = await drawPortrait();
-				return { ...image, characterId: null, appearance, created: false };
+				return { ...image, characterId: record?.imageCharacterId ?? null, appearance, created: false };
 			}
 
 			const plan = characterPlan({ record, appearance, force });
@@ -337,6 +344,56 @@ export function createLLMGateway({
 				appearance,
 				created: true,
 			};
+		},
+
+		/**
+		 * Stores the likeness every later scene will match against.
+		 *
+		 * @description Called when a character actually enters the game, not while one
+		 *   is being built. Registration is the act that fixes a face, so doing it on
+		 *   every draft portrait meant the canonical identity came from whichever press
+		 *   of Generate happened to be last — and an edit between presses retired one
+		 *   identity to mint another.
+		 *
+		 *   Draws nothing. The image server renders its own neutral reference, which is
+		 *   what a later scene is matched against; the picture the player is shown was
+		 *   already drawn separately.
+		 * @param {object} request - Who to remember.
+		 * @param {string} request.lobbyId - Whose credential pays, and the identity qualifier.
+		 * @param {object} request.record - The player's stored record.
+		 * @param {string} request.name - The character's name.
+		 * @param {string} request.appearance - What is permanently true of them.
+		 * @param {string} [request.provider] - A specific image provider.
+		 * @param {boolean} [request.force=false] - Re-register regardless.
+		 * @param {AbortSignal} [request.signal] - Cancellation signal.
+		 * @returns {Promise<{characterId: string|null, appearance: string, created: boolean}>}
+		 *   The identity to store on the character record.
+		 * @throws {Error} When no image provider is available, or the call failed.
+		 */
+		async registerCharacterLikeness({ lobbyId, record, name, appearance, provider, force = false, signal } = {}) {
+			const resolved = resolveImage(lobbyId, provider);
+			const adapter = credentials.providerFor("image", resolved.config.providerId);
+			if (!adapter?.createCharacter) return { characterId: null, appearance, created: false };
+
+			const plan = characterPlan({ record, appearance, force });
+			// Unchanged character, likeness already stored: nothing to do, and calling
+			// again would cost a reference render for no gain.
+			if (plan.action === "reuse") return { characterId: plan.characterId, appearance, created: false };
+
+			const identity = lobbyId ? `${name} (${lobbyId})` : name;
+			const character = await adapter.createCharacter({ name: identity, appearance, config: resolved.config, signal, fetchImpl });
+
+			if (plan.retire) {
+				try {
+					await adapter.deleteCharacter({ characterId: plan.retire, config: resolved.config, fetchImpl });
+					log(`🎭 Retired the previous likeness ${plan.retire} for ${name}`);
+				} catch (err) {
+					log(`⚠️ Could not retire the previous likeness ${plan.retire}: ${err.message}`);
+				}
+			}
+
+			log(`🎭 Registered the likeness for ${name} as ${character.id}`);
+			return { characterId: character.id, appearance, created: true };
 		},
 
 		/**

@@ -662,3 +662,70 @@ test("the same character in the same lobby keeps one identity", async () => {
 
 	assert.equal(runs[0].calls[0].payload.name, runs[1].calls[0].payload.name);
 });
+
+// ── A draft portrait must not become the canonical face ──────────────────────
+//
+// Players press Generate repeatedly while building a character. Every press used to
+// reach `POST /characters`, so the identity every later scene matches against was
+// minted from whatever the sheet happened to say at some arbitrary press — and
+// editing the sheet between presses retired one identity and minted another. Only the
+// character that actually enters the game should define the face.
+
+test("drawing a draft portrait registers no likeness", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["ZHJhZnQ="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf.", register: false,
+	});
+
+	assert.equal(fetchImpl.calls.length, 1, "more than the picture was requested");
+	assert.doesNotMatch(fetchImpl.calls[0].url, /characters/, "a draft minted an identity");
+	assert.equal(result.characterId, null);
+	assert.equal(result.b64, "ZHJhZnQ=");
+});
+
+test("a draft does not disturb a likeness the character already has", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["ZHJhZnQ="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_locked", imageAppearance: "A Dwarf." },
+		name: "Brannor",
+		appearance: "A completely different Elf.",
+		register: false,
+	});
+
+	assert.equal(result.characterId, "chr_locked", "a draft retired the established identity");
+	assert.equal(fetchImpl.calls.length, 1);
+});
+
+test("registering a likeness stores it without drawing another picture", async () => {
+	const fetchImpl = makeScript([{ body: { id: "chr_final", image: "cmVm" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.registerCharacterLikeness({
+		lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf.",
+	});
+
+	assert.equal(result.characterId, "chr_final");
+	assert.equal(fetchImpl.calls.length, 1, "registration should not also render");
+	assert.match(fetchImpl.calls[0].url, /\/characters$/);
+	assert.match(fetchImpl.calls[0].payload.name, /Brannor/);
+});
+
+test("registering twice with the same character keeps one likeness", async () => {
+	const fetchImpl = makeScript([]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.registerCharacterLikeness({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_final", imageAppearance: "A Dwarf." },
+		name: "Brannor",
+		appearance: "A Dwarf.",
+	});
+
+	assert.equal(result.characterId, "chr_final");
+	assert.equal(fetchImpl.calls.length, 0, "an unchanged character was registered again");
+});

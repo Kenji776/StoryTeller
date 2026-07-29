@@ -85,6 +85,42 @@ function log(...args) {
 	console.log(`[${stamp}]`, ...args);
 }
 const room = (lobbyId) => lobbyId;
+
+/**
+ * Fixes every party member's likeness as the game begins.
+ *
+ * @description Registration is the act that decides which face a character keeps, so
+ *   it belongs to the moment they enter the game rather than to the character builder,
+ *   where a player may draw a dozen drafts and edit the sheet between them.
+ *
+ *   Never rejects, and never blocks the opening. A character that fails to register
+ *   simply has no stored likeness: their scene art will not match a reference, which
+ *   is a smaller loss than a game that would not start.
+ * @param {string} lobbyId - The lobby whose party is entering play.
+ * @returns {void}
+ */
+function registerPartyLikenesses(lobbyId) {
+	const lobby = store.index[lobbyId];
+	if (!lobby?.players) return;
+
+	for (const player of Object.values(lobby.players)) {
+		if (!player?.name || player.disconnected) continue;
+
+		const appearance = buildAppearance(player);
+		if (!appearance) continue;
+
+		registerCharacterLikeness({ lobbyId, record: player, name: player.name, appearance })
+			.then(({ characterId }) => {
+				if (!characterId) return;
+				const record = store.index[lobbyId]?.players?.[player.name];
+				if (!record) return;
+				record.imageCharacterId = characterId;
+				record.imageAppearance = appearance;
+				store.persist(lobbyId);
+			})
+			.catch((err) => log(`⚠️ Could not register a likeness for ${player.name}: ${err.message}`));
+	}
+}
 // Admins watching a lobby join this alongside the game room, so operator-facing
 // traffic can be addressed without broadcasting it to the players. Kept in step
 // with the join in routes/adminEvents.js.
@@ -275,7 +311,7 @@ const credentials = createCredentialSystem({
  * that the credential now comes from the resolver rather than a module-load
  * client built from .env. See docs/modules/credentials.md.
  */
-const { getLLMResponse, generateImage, ensureCharacterImage, generateCharacterScene } = createLLMGateway({
+const { getLLMResponse, generateImage, ensureCharacterImage, registerCharacterLikeness, generateCharacterScene } = createLLMGateway({
 	credentials,
 	logDir: LOG_DIR,
 	fetchImpl: fetch,
@@ -1066,6 +1102,13 @@ io.on("connection", (socket) => {
 
 			log(`🚀 Game starting for lobby ${lobbyId}`);
 			console.log('Game starting event dispatched to lobby: ' + lobbyId);
+
+			// The characters are final now, so this is where their faces are fixed.
+			// Doing it during creation would have let a half-built draft — or whichever
+			// press of Generate happened to be last — become the likeness every later
+			// scene matches against. Not awaited: the game opens while they register,
+			// and a failure costs continuity rather than the session.
+			registerPartyLikenesses(lobbyId);
 			busIo.to(room(lobbyId)).emit("game:starting", { message: "✨ The Dungeon Master is preparing your tale..." });
 			const initiativeRolls = store.startGame(lobbyId);
 
@@ -1894,6 +1937,11 @@ app.post("/api/character-image", async (req, res) => {
 			// computed and then dropped: the picture came from `appearance` alone, so
 			// nothing the player typed ever reached it.
 			portraitPrompt: finalPrompt,
+			// A draft. Players press Generate several times while building a character,
+			// and none of those attempts should decide the face every later scene is
+			// matched against — the likeness is registered when the game starts, from
+			// the sheet they actually brought into it.
+			register: false,
 			force: Boolean(req.body?.regenerate),
 		});
 		log(`   model: ${model}`);
