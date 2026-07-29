@@ -410,7 +410,9 @@ test("a player drawn again with the same appearance keeps their likeness", async
 
 	assert.equal(result.characterId, "chr_1");
 	assert.equal(result.created, false);
-	assert.match(fetchImpl.calls[0].url, /\/characters\/chr_1\/generate$/, "an existing likeness should be posed, not recreated");
+	// The portrait itself is a free render now, so what this pins is that the likeness
+	// was *not* recreated — which is what the test has always been about.
+	assert.doesNotMatch(fetchImpl.calls[0].url, /\/characters$/, "the likeness was recreated");
 });
 
 test("a permanently changed appearance mints a new likeness and retires the old", async () => {
@@ -524,25 +526,36 @@ test("a first portrait is rendered from the new likeness rather than being the r
 	assert.match(fetchImpl.calls[1].url, /generate/);
 });
 
-test("the portrait scene directs a pose, and never asks them to face the viewer", async () => {
-	// "a formal character portrait, facing the viewer" was hardcoded here.
-	const fetchImpl = makeScript([{ body: { images: ["cG9zZWQ="], model: "krea2" } }]);
+// ── The portrait is drawn from the prompt, not from the reference ────────────
+//
+// Rendering it from the stored likeness kept reproducing that likeness's framing —
+// a neutral front-facing bust, which is right for matching a face later and is the
+// driving-licence photo the operator objected to. The portrait is now a free render
+// from the player's own prompt. The likeness is still created and still drives scene
+// illustrations, so faces stay consistent in play.
+
+test("the first portrait is drawn from the prompt, and the likeness is still stored", async () => {
+	const fetchImpl = makeScript([
+		{ body: { id: "chr_1", image: "cmVmZXJlbmNl" } },       // createCharacter
+		{ body: { images: ["ZHJhd24="], model: "krea2" } },      // the free render
+	]);
 	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
 
-	await gateway.ensureCharacterImage({
-		lobbyId: LOBBY,
-		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
-		name: "Brannor",
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor",
 		appearance: "A Dwarf Paladin. Copper beard.",
+		portraitPrompt: "A Dwarf Paladin. Copper beard. Mid-swing, low angle.",
 	});
 
-	const { scene } = fetchImpl.calls[0].payload;
-	assert.doesNotMatch(scene, /facing the viewer|formal/i, "still asking for a passport photo");
-	assert.match(scene, /pose|motion|stance|angle/i, "the scene gives no direction");
+	assert.equal(result.characterId, "chr_1", "the likeness was not stored");
+	assert.equal(result.b64, "ZHJhd24=");
+	assert.match(fetchImpl.calls[0].url, /\/characters$/);
+	assert.doesNotMatch(fetchImpl.calls[1].url, /characters/, "still rendering from the reference");
+	assert.equal(fetchImpl.calls[1].payload.prompt, "A Dwarf Paladin. Copper beard. Mid-swing, low angle.");
 });
 
-test("a caller may direct the portrait itself", async () => {
-	const fetchImpl = makeScript([{ body: { images: ["cG9zZWQ="], model: "krea2" } }]);
+test("a re-drawn portrait is also a free render", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["ZHJhd24="], model: "krea2" } }]);
 	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
 
 	await gateway.ensureCharacterImage({
@@ -550,16 +563,15 @@ test("a caller may direct the portrait itself", async () => {
 		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
 		name: "Brannor",
 		appearance: "A Dwarf Paladin. Copper beard.",
-		portraitScene: "mid-leap over a chasm, cloak snapping",
+		portraitPrompt: "A Dwarf Paladin. Copper beard. Mid-swing, low angle.",
 	});
 
-	assert.equal(fetchImpl.calls[0].payload.scene, "mid-leap over a chasm, cloak snapping");
+	assert.doesNotMatch(fetchImpl.calls[0].url, /characters/);
+	assert.equal(fetchImpl.calls[0].payload.prompt, "A Dwarf Paladin. Copper beard. Mid-swing, low angle.");
 });
 
-test("the scene carries direction only, never the appearance", async () => {
-	// The image server prepends the stored appearance itself; restating it inside the
-	// scene is the documented cause of the likeness drifting.
-	const fetchImpl = makeScript([{ body: { images: ["cG9zZWQ="], model: "krea2" } }]);
+test("with no prompt given, the portrait is the appearance plus the house direction", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["ZHJhd24="], model: "krea2" } }]);
 	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
 
 	await gateway.ensureCharacterImage({
@@ -569,5 +581,22 @@ test("the scene carries direction only, never the appearance", async () => {
 		appearance: "A Dwarf Paladin. Copper beard.",
 	});
 
-	assert.doesNotMatch(fetchImpl.calls[0].payload.scene, /Dwarf|Paladin|Copper beard/i);
+	const { prompt } = fetchImpl.calls[0].payload;
+	assert.match(prompt, /A Dwarf Paladin\. Copper beard\./);
+	assert.match(prompt, /pose|motion|angle/i, "the house direction is missing");
+});
+
+test("a failed portrait render does not lose the likeness that was just created", async () => {
+	const fetchImpl = makeScript([
+		{ body: { id: "chr_1", image: "cmVmZXJlbmNl" } },
+		{ status: 500, body: { error: "busy" } },
+	]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf Paladin. Copper beard.",
+	});
+
+	assert.equal(result.characterId, "chr_1");
+	assert.equal(result.b64, "cmVmZXJlbmNl", "should fall back to the reference rather than fail");
 });

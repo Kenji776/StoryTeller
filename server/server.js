@@ -1890,6 +1890,10 @@ app.post("/api/character-image", async (req, res) => {
 			record: player ?? {},
 			name: playerName,
 			appearance: buildAppearance(sheet) || finalPrompt,
+			// What actually gets drawn, and the reason the prompt box exists. This was
+			// computed and then dropped: the picture came from `appearance` alone, so
+			// nothing the player typed ever reached it.
+			portraitPrompt: finalPrompt,
 			force: Boolean(req.body?.regenerate),
 		});
 		log(`   model: ${model}`);

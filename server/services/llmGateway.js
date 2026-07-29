@@ -262,27 +262,36 @@ export function createLLMGateway({
 		 *   appearance: string, created: boolean}>} The portrait and the identity to store.
 		 * @throws {Error} When no image provider is available, or generation failed.
 		 */
-		async ensureCharacterImage({ lobbyId, record, name, appearance, portraitScene = PORTRAIT_SCENE, provider, force = false, size, signal } = {}) {
+		async ensureCharacterImage({ lobbyId, record, name, appearance, portraitPrompt, portraitScene = PORTRAIT_SCENE, provider, force = false, size, signal } = {}) {
 			const resolved = resolveImage(lobbyId, provider);
 			const adapter = credentials.providerFor("image", resolved.config.providerId);
 
+			// What the player is shown. Drawn from the prompt rather than from the
+			// stored likeness: rendering it from the likeness reproduced that
+			// likeness's framing, and the reference the image server draws is a neutral
+			// front-facing bust — right for matching a face in a later scene, and
+			// exactly the driving-licence photo this is meant to stop being.
+			//
+			// The likeness is still created and still drives scene illustrations, so
+			// faces stay consistent in play. Only the portrait is free.
+			const drawing = String(portraitPrompt || "").trim() || `${appearance} ${portraitScene}`.trim();
+
+			/**
+			 * @description Renders the player-facing portrait from the prompt.
+			 * @returns {Promise<object>} The image.
+			 */
+			const drawPortrait = () => adapter.generate({ prompt: drawing, config: resolved.config, size, signal, fetchImpl });
+
 			if (!adapter?.createCharacter) {
 				// No continuity here, but a portrait is still better than a refusal.
-				const image = await adapter.generate({ prompt: appearance, config: resolved.config, size, signal, fetchImpl });
+				const image = await drawPortrait();
 				return { ...image, characterId: null, appearance, created: false };
 			}
 
 			const plan = characterPlan({ record, appearance, force });
 
 			if (plan.action === "reuse") {
-				const image = await adapter.generateForCharacter({
-					characterId: plan.characterId,
-					scene: portraitScene,
-					config: resolved.config,
-					size,
-					signal,
-					fetchImpl,
-				});
+				const image = await drawPortrait();
 				return { ...image, characterId: plan.characterId, appearance, created: false };
 			}
 
@@ -302,18 +311,9 @@ export function createLLMGateway({
 			log(`🎭 Stored a likeness for ${name} as ${character.id}`);
 
 			// The reference the image server draws when a likeness is created is neutral
-			// and front-on, which is right for matching a face later and wrong for the
-			// picture a player is shown — handing it over directly is what produced
-			// portraits the operator described as driving-licence photos. The reference
-			// stays as it is; what they see is rendered from it, with direction.
-			const posed = await adapter.generateForCharacter({
-				characterId: character.id,
-				scene: portraitScene,
-				config: resolved.config,
-				size,
-				signal,
-				fetchImpl,
-			}).catch((err) => {
+			// and front-on. It stays that way — it is what future scenes match against —
+			// and the picture the player sees is drawn separately from the prompt.
+			const posed = await drawPortrait().catch((err) => {
 				// The likeness exists and is stored either way. A portrait that fell back
 				// to the reference beats failing after paying for the character.
 				log(`⚠️ Could not pose the new portrait for ${name}: ${err.message}`);
