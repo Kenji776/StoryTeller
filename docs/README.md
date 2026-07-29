@@ -60,12 +60,13 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/images.md](modules/images.md) — the image generation layer
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent
+- [modules/encounters.md](modules/encounters.md) — when a fight happens, and how big it is
 - [modules/spells.md](modules/spells.md) — what a caster knows, and what casting costs
 - [modules/spell-resolution.md](modules/spell-resolution.md) — what a cast spell does
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [runbooks/](runbooks/) — repeatable procedures (start here for restarting the server)
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0021 — a caster knows a chosen spell list](decisions/0021-a-caster-knows-a-chosen-spell-list.md))
+  (newest: [0023 — a quest reward is read from both sides](decisions/0023-a-quest-reward-is-read-from-both-sides.md))
 - [worklog/](worklog/) — append-only session journal
 
-_Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._
+_Last verified: 2026-07-28 against branch `Refactor` (6a2adfb)._

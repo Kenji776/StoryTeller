@@ -141,3 +141,246 @@ test("a missing enemy roster is treated as an empty one", () => {
 	assert.equal(detectLootMoment({ action: "I loot the bodies." }).source, "search");
 	assert.equal(detectLootMoment({ action: "I loot the bodies.", enemies: null }).source, "search");
 });
+
+// ── Quest rewards ────────────────────────────────────────────────────────────
+//
+// A quest reward is the one loot source the player cannot produce alone. "I hand
+// over the amulet to the elder" and "I hand over my sword to the guard" are the
+// same sentence; only what the narrator said last turn tells them apart. So the
+// detector reads both sides, and fires only when both agree.
+
+/** The narrator putting a reward on the table, in its own voice. */
+const OFFER = "<p>Elder Maren turns the amulet over in her hands. 'You have done what none of us could.'"
+	+ " She nods to the strongbox by the hearth. 'Your reward, exactly as we agreed.'</p>";
+
+/** A narration with no reward anywhere in it. */
+const NO_OFFER = "<p>The market is loud with hawkers and the smell of frying onions."
+	+ " Elder Maren is nowhere in sight.</p>";
+
+/**
+ * Builds a lobby history whose most recent DM turn is the given narration.
+ *
+ * @description Shaped as the server actually holds it at the moment the detector runs:
+ *   the player's own action has already been appended by `appendUser`, so the DM's
+ *   offer is never the last entry, and `appendDM` stores the model's raw JSON reply
+ *   rather than the prose inside it.
+ * @param {string} narration - What the DM said on its last turn.
+ * @param {object} [opts] - Shaping options.
+ * @param {boolean} [opts.asJson=true] - Store it as the DM's JSON reply, which is the
+ *   form `appendDM` writes. False stores bare prose, which older lobbies hold.
+ * @returns {Array<object>} The history.
+ */
+function historyEndingWith(narration, { asJson = true } = {}) {
+	return [
+		{ role: "assistant", content: JSON.stringify({ text: "<p>The road bends south through the pines.</p>" }) },
+		{ role: "user", name: "Sylvie", content: "I follow the road." },
+		{ role: "assistant", content: asJson ? JSON.stringify({ text: narration, music: "calm" }) : narration },
+		{ role: "user", name: "Sylvie", content: "I step up to the elder." },
+	];
+}
+
+test("accepting a reward the narrator just offered is a quest moment", () => {
+	for (const action of [
+		"I accept the reward.",
+		"I take the payment she offers.",
+		"I claim the bounty.",
+		"I collect our reward and thank her.",
+		"I pocket the purse.",
+	]) {
+		assert.equal(
+			detectLootMoment({ action, enemies: {}, history: historyEndingWith(OFFER) })?.source,
+			"quest",
+			`"${action}" was not read as a quest reward`,
+		);
+	}
+});
+
+test("turning the job in is a quest moment", () => {
+	for (const action of [
+		"I turn in the quest.",
+		"I hand over the amulet to the elder.",
+		"I hand the amulet over and wait.",
+		"I deliver the sealed letter to the captain.",
+		"I complete the contract and step back.",
+	]) {
+		assert.equal(
+			detectLootMoment({ action, enemies: {}, history: historyEndingWith(OFFER) })?.source,
+			"quest",
+			`"${action}" was not read as a quest reward`,
+		);
+	}
+});
+
+test("the player accepting alone is not a quest reward", () => {
+	// The whole point of reading both sides. Without an offer behind it, "I accept the
+	// reward" is a player asking for treasure, and a quest roll pays an item every time.
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {}, history: historyEndingWith(NO_OFFER) }), null);
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {} }), null);
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {}, history: [] }), null);
+});
+
+test("the narrator offering alone is not a quest reward", () => {
+	assert.equal(
+		detectLootMoment({ action: "I swing my shortsword at the nearest goblin.", enemies: {}, history: historyEndingWith(OFFER) }),
+		null,
+	);
+	assert.equal(
+		detectLootMoment({ action: "I ask the elder what the reward will be.", enemies: {}, history: historyEndingWith(OFFER) }),
+		null,
+	);
+});
+
+test("only the narrator's most recent turn can offer a reward", () => {
+	// An offer two turns back has already been accepted or ignored. Scanning further
+	// would let one quest reward pay out for the rest of the session.
+	const stale = [
+		{ role: "assistant", content: JSON.stringify({ text: OFFER }) },
+		{ role: "user", name: "Sylvie", content: "I ask her to hold it for me." },
+		{ role: "assistant", content: JSON.stringify({ text: NO_OFFER }) },
+		{ role: "user", name: "Sylvie", content: "I come back the next morning." },
+	];
+
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {}, history: stale }), null);
+});
+
+test("a narration stored as bare prose is read the same as one stored as JSON", () => {
+	const asProse = historyEndingWith(OFFER, { asJson: false });
+
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {}, history: asProse })?.source, "quest");
+});
+
+test("an unparseable DM entry is scanned as raw text rather than throwing", () => {
+	const truncated = [{ role: "assistant", content: `{"text":"${OFFER}` }];
+
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {}, history: truncated })?.source, "quest");
+});
+
+// ── Quest rewards: what is deliberately refused ──────────────────────────────
+
+test("rewarding yourself is not a quest reward", () => {
+	// The operator's own example. Both halves of the reward test pass on this sentence —
+	// "reward" is named, "take" is a receiving verb — and it is a drink at a bar.
+	assert.equal(
+		detectLootMoment({
+			action: "I reward myself with a drink and take a room for the night.",
+			enemies: {},
+			history: historyEndingWith(OFFER),
+		}),
+		null,
+	);
+});
+
+test("refusing the reward pays nothing", () => {
+	// Every one of these names a reward *and* a receiving verb, so each fires without
+	// the refusal guard. A player who says no must not be handed it anyway.
+	for (const action of [
+		"I refuse to take the reward.",
+		"I won't take the payment.",
+		"I decline to accept the reward.",
+		"I turn down the reward and take my leave.",
+	]) {
+		assert.equal(
+			detectLootMoment({ action, enemies: {}, history: historyEndingWith(OFFER) }),
+			null,
+			`"${action}" was read as collecting a reward`,
+		);
+	}
+});
+
+test("paying somebody is not being paid", () => {
+	for (const action of [
+		"I hand over the payment to the smith.",
+		"I pay the ferryman for passage.",
+	]) {
+		assert.equal(
+			detectLootMoment({ action, enemies: {}, history: historyEndingWith(OFFER) }),
+			null,
+			`"${action}" was read as collecting a reward`,
+		);
+	}
+
+	// This one already reads as an ordinary search — "take" aimed at "gold" — and it
+	// must stay one. The failure to guard against is promotion, not the old verdict.
+	assert.equal(
+		detectLootMoment({ action: "I hand over the gold and take the key.", enemies: {}, history: historyEndingWith(OFFER) }).source,
+		"search",
+	);
+});
+
+test("accepting something that is not a reward is not a quest moment", () => {
+	for (const action of [
+		"I accept the challenge.",
+		"I accept her apology.",
+		"I take the seat by the fire.",
+		"I return to the tavern to wait for the elder.",
+	]) {
+		assert.equal(
+			detectLootMoment({ action, enemies: {}, history: historyEndingWith(OFFER) }),
+			null,
+			`"${action}" was read as collecting a reward`,
+		);
+	}
+});
+
+test("going through the dead is looting, whatever the narrator just offered", () => {
+	// A corpse pays what the corpse is worth. Letting a reward offer promote it would
+	// make every post-fight search after a quest hand-in pay like a quest.
+	const action = "I take the purse from the dead bandit's body.";
+
+	assert.equal(
+		detectLootMoment({ action, enemies: DEAD_GOBLINS, history: historyEndingWith(OFFER) }).source,
+		"trash",
+	);
+});
+
+test("a named container still outranks a quest reward", () => {
+	const action = "I open the strongbox by the hearth and take my reward.";
+
+	assert.equal(detectLootMoment({ action, enemies: {}, history: historyEndingWith(OFFER) }).source, "cache");
+});
+
+// ── Quest rewards: boundaries and malformed history ─────────────────────────
+
+test("a history with nothing from the narrator in it cannot offer a reward", () => {
+	const playersOnly = [
+		{ role: "user", name: "Sylvie", content: "I walk into the hall." },
+		{ role: "user", name: "Brannor", content: "I follow her." },
+	];
+
+	assert.equal(detectLootMoment({ action: "I accept the reward.", enemies: {}, history: playersOnly }), null);
+});
+
+test("an empty last narration cannot offer a reward", () => {
+	for (const content of ["", "   ", null, 42, undefined]) {
+		assert.equal(
+			detectLootMoment({ action: "I accept the reward.", enemies: {}, history: [{ role: "assistant", content }] }),
+			null,
+			`content ${JSON.stringify(content)} was read as an offer`,
+		);
+	}
+});
+
+test("a malformed history is ignored rather than fatal", () => {
+	// The detector runs inside the action handler. Throwing here would cost the player
+	// their turn over a history entry nobody will ever look at.
+	for (const history of [null, 42, "a string", { role: "assistant" }, [null], [undefined], [{}]]) {
+		assert.equal(
+			detectLootMoment({ action: "I accept the reward.", enemies: {}, history }),
+			null,
+			`history ${JSON.stringify(history)} was read as an offer`,
+		);
+	}
+});
+
+test("history does not disturb any of the other sources", () => {
+	// The regression guard. Every existing source must classify identically whether or
+	// not the narrator happened to mention a reward last turn.
+	const history = historyEndingWith(OFFER);
+
+	assert.equal(detectLootMoment({ action: "I loot the corpses.", enemies: DEAD_CHIEFTAIN, history }).source, "boss");
+	assert.equal(detectLootMoment({ action: "I search the goblin bodies for coin.", enemies: DEAD_GOBLINS, history }).source, "trash");
+	assert.equal(detectLootMoment({ action: "I pry open the coffer.", enemies: {}, history }).source, "cache");
+	assert.equal(detectLootMoment({ action: "I search for anything valuable.", enemies: {}, history }).source, "search");
+	assert.equal(detectLootMoment({ action: "I search the crowd for my brother's face.", enemies: {}, history }), null);
+	assert.equal(detectLootMoment({ action: "I climb the rope to the ledge above.", enemies: {}, history }), null);
+});

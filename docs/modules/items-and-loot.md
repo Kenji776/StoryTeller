@@ -106,7 +106,8 @@ The turn now runs in this order, mirroring how enemy attacks are already handled
 
 1. `services/lootMoment.js` reads the player's action and decides whether this is a
    looting turn, and against what — `trash`, `elite` or `boss` (by the challenge
-   rating of what lies dead), `cache` (a named container or hoard), or `search`.
+   rating of what lies dead), `cache` (a named container or hoard), `quest` (a reward
+   being collected, see below), or `search`.
 2. `services/loot.js` rolls it, **before** the model is called, because the narration
    has to describe the outcome and so the outcome has to exist first.
 3. The result goes into the prompt as an authoritative `LOOT THIS TURN` block —
@@ -137,6 +138,33 @@ Two pacing corrections sit on top:
   the bodies" typed twenty times is not a gold faucet. It resets when a new
   encounter begins.
 
+### The quest reward reads both sides of the table
+
+Every other source is decided from the player's words alone. A quest reward cannot be:
+"I hand over the amulet to the elder" and "I hand over my sword to the guard" are the
+same sentence, and only what the narrator said last turn separates them. It is also the
+only source that pays an item on *every* roll, so a false positive is not a wasted turn
+— it is a free rarity-biased item, minted out of a regex. All three of these must hold
+([ADR 0023](../decisions/0023-a-quest-reward-is-read-from-both-sides.md)):
+
+1. **The narrator offered**, in its most recent turn — the one the player is answering:
+   *reward*, *payment*, *wages*, *bounty*, *as we agreed*, *for your trouble*, *earned*,
+   *owes you*. The prose is unwrapped from the raw JSON `appendDM` stores, as
+   `autoSummarize` does. Only the newest DM turn counts — an offer two turns back has
+   been answered already, and scanning past it lets one reward pay out all session.
+2. **The player is collecting or delivering** — a receiving verb aimed at a named reward
+   ("I accept the reward", "I claim the bounty"), or a hand-over ("I turn in the quest",
+   "I hand over the amulet", "I deliver the letter").
+3. **None of the four vetoes** — refusing it, paying it, rewarding *yourself*, or going
+   through a corpse. Each is load-bearing: remove any one and a case that currently
+   returns `null` starts returning `quest`.
+
+Deliberately unmatched, because nothing available to a regex separates them from the
+ordinary reading: `return` and `present` as hand-over verbs ("I return to the tavern",
+"I present myself to the guard"), and *treasure*, *loot* and *gold* as reward nouns,
+which `cache` and `search` already cover. Without a `history` argument the branch cannot
+fire, so every other source is decided exactly as it was before.
+
 ### Rarity
 
 Party level caps the tier: below 5 nothing above uncommon, below 9 nothing above
@@ -152,8 +180,15 @@ The tables live in `server/config/loot-tables.json`, deliberately **not** under
 
 Naming the thing and saying where it came from — the part worth reading. It may not
 change the item, its rarity, its effect, or the amount of gold, and it is told not to
-invent equipment as a reward for searching. Shops, gifts, agreed quest rewards,
-consumables and quest items all remain its own.
+invent equipment as a reward for searching. Shops, gifts, wagers, consumables and
+`quest`-typed story items all remain its own.
+
+A quest reward no longer does. The prompt used to name "the agreed reward for a
+completed job" beside shops and wagers as the DM's to hand over freely; where it is now
+given no block it thanks the NPC and leaves the purse alone. That clause is the seam to
+watch: a missed turn-in costs the party a reward rather than merely a roll — the
+opposite trade to every other source, and why detection demands two agreeing signals
+rather than a wider regex.
 
 ## Probes
 
@@ -162,4 +197,4 @@ consumables and quest items all remain its own.
 | `test-integration/loot-probe.mjs` | Does the DM honour the server's decision? `--force nothing` and `--force treasure` pin the roll so the run measures obedience rather than dice; `--set failed` repeats the scenarios on failed rolls. | real DM calls |
 | `test-integration/consumable-probe.mjs` | Can a player actually drink a potion, and is the amount applied? | free — no model |
 
-_Last verified: 2026-07-28 against branch `Refactor` (09eb5fb)._
+_Last verified: 2026-07-28 against branch `Refactor` (6a2adfb)._

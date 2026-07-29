@@ -202,6 +202,73 @@ test("illustrations off tell the DM never to populate the field", () => {
 	assert.match(systemPromptFor("off"), /Do not use the "illustrate" field/);
 });
 
+// ===== How many things attack =====
+//
+// The standing prompt is the one that shapes most fights: `encounterDirective` only
+// fires when the table has gone quiet too long, but this block is on every DM turn.
+// It knew the party size and spent it on level guidance alone, then told the model to
+// "adjust the NUMBER of enemies rather than using single overpowered foes" with no
+// ceiling — advice that is actively wrong for the 39% of games with one character in
+// them. Enemy count is the sharpest lever in the engine: measured over the goblin
+// archetype it carries a Hardcore party of three from 93% to 11% in three steps.
+
+import { encounterBudget, encounterDirective } from "../encounterPacing.js";
+
+/**
+ * @description Builds the DM system message for a lobby of a given size and difficulty,
+ *   which is what the encounter budget is derived from.
+ * @param {number} partySize - How many living, connected characters to seat.
+ * @param {string} difficulty - The lobby difficulty.
+ * @returns {string} The composed prompt text.
+ */
+function promptForTable(partySize, difficulty) {
+	const players = {};
+	for (let i = 0; i < partySize; i++) {
+		players[`P${i}`] = { name: `P${i}`, class: "Fighter", level: 1, stats: { hp: 12, max_hp: 12 } };
+	}
+	const store = Object.create(promptMethods);
+	store.index = { L1: { lobbyId: "L1", difficulty, abilitySlotsBase: 3, players, history: [], enemies: {} } };
+	store.tail = () => [];
+	store.describeParty = () => "";
+	store.enemyRoster = () => "";
+	store.describeEnemies = () => "";
+	store.storyContext = () => "";
+	store.recentHistory = () => [];
+	return store.composeMessages("L1", "P0", "I swing", null).map((m) => m.content).join("\n");
+}
+
+test("the standing prompt states the enemy count this table should face", () => {
+	for (const [partySize, difficulty] of [[1, "standard"], [3, "hardcore"], [4, "merciless"]]) {
+		const { max } = encounterBudget({ partySize, difficulty });
+		assert.match(promptForTable(partySize, difficulty), new RegExp(`\\b${max} hostile creature`), `P${partySize} ${difficulty}`);
+	}
+});
+
+test("a solo table is never told to pad the encounter out with more bodies", () => {
+	// "Adjust the NUMBER of enemies rather than using single overpowered foes" is the
+	// exact instruction that put two goblins in front of one level 1 character, which
+	// is a 34% fight on Hardcore where one goblin is an 84% fight.
+	assert.doesNotMatch(promptForTable(1, "merciless"), /adjust the number of enemies/i);
+});
+
+test("a solo table's standing prompt warns against a party-sized single monster", () => {
+	// The count ceiling of one does not protect a lone character from one big thing:
+	// the CR 2 ogre that is a 55% fight for a party of three is a 0% fight solo.
+	assert.match(promptForTable(1, "standard"), /would be a fair fight for a party/i);
+	assert.doesNotMatch(promptForTable(4, "standard"), /would be a fair fight for a party/i);
+});
+
+test("the standing prompt and the forced-encounter directive agree on the count", () => {
+	// Two places holding the same number is how armour class, spell slots and the
+	// condition vocabulary each drifted. Both read `encounterBudget`.
+	for (const [partySize, difficulty] of [[1, "casual"], [2, "standard"], [4, "hardcore"], [6, "merciless"]]) {
+		const { max } = encounterBudget({ partySize, difficulty });
+		const phrase = new RegExp(`\\b${max} hostile creature`);
+		assert.match(promptForTable(partySize, difficulty), phrase, `standing prompt, P${partySize} ${difficulty}`);
+		assert.match(encounterDirective(difficulty, { partySize }), phrase, `directive, P${partySize} ${difficulty}`);
+	}
+});
+
 // ===== The loot block =====
 //
 // The server decides what the party finds and hands the narrator the answer. Two
@@ -315,6 +382,18 @@ test("giving a player something in a shop or as a reward is still allowed", () =
 	const text = systemPromptFor("off");
 
 	assert.match(text, /buys|purchases|shop|reward|gives/i);
+});
+
+test("a reward for a completed job is no longer the DM's to size", () => {
+	// The carve-out used to name "the agreed reward for a completed job" alongside
+	// shops and wagers, which is now false: `detectLootMoment` emits a `quest` source
+	// and the server rolls it. Leaving the old wording in place invites the model to
+	// pay the party twice — once from the block, once from its own imagination.
+	const text = systemPromptFor("off");
+
+	assert.doesNotMatch(text, /agreed reward for a completed job/i);
+	assert.match(text, /completed job/i);
+	assert.match(text, /LOOT THIS TURN/);
 });
 
 test("the DM is told player damage is not its arithmetic to do", () => {

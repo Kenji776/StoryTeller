@@ -1532,7 +1532,13 @@ io.on("connection", (socket) => {
 			// so the outcome has to exist first. Asked to decide for itself, the model
 			// paid out on six of six loot-seeking turns and on two of three turns where
 			// the roll had *failed* — see ADR 0017.
-			const lootMoment = detectLootMoment({ action: text, enemies: s.enemies });
+			// `history` is read only for the narrator's previous turn, and only to
+			// recognise a quest reward: that is the one source the player's own words
+			// cannot identify, because "I hand over the amulet to the elder" and "I hand
+			// over my sword to the guard" are the same sentence. `appendUser` above has
+			// already pushed this action, so the newest assistant entry is the offer the
+			// player is answering.
+			const lootMoment = detectLootMoment({ action: text, enemies: s.enemies, history: s.history });
 			let loot = null;
 			if (lootMoment) {
 				const living = Object.values(s.players || {}).filter((p) => !p.dead);
