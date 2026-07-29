@@ -1868,7 +1868,9 @@ body.observing #lobbyCharacterColumn,
 body.observing #importCharBtn,
 body.observing #exportCharBtn,
 body.observing #randomizeChar,
-body.observing #exportCharGameBtn {
+body.observing #exportCharGameBtn,
+body.observing #gameCharacterSection,
+body.observing #actionLogSection {
 	display: none !important;
 }
 .observer-banner {
