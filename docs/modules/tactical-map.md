@@ -70,9 +70,9 @@ stops the narration layer from quietly acquiring rules.
 
 ## What the server computes
 
-The geometry layer — distance, line of sight, cover, reach and pathing — is
-[tactical-geometry.md](tactical-geometry.md). It is phase 1: built, tested, and imported by
-nothing.
+The geometry layer and the generator — distance, line of sight, cover, reach, pathing, and
+laying out the room itself — are [tactical-geometry.md](tactical-geometry.md). Phases 1 and 2:
+built, tested, and imported by nothing.
 
 ## The turn, with the map on
 
@@ -166,7 +166,7 @@ the toggle is off would change narration in every existing game, and it would do
 Each phase ends green, committed, and useful on its own.
 
 1. **Geometry.** ✅ Done — [tactical-geometry.md](tactical-geometry.md), 83 tests, wired to nothing.
-2. **Generation.** Seeded arenas, archetypes, the connectivity invariant, persistence.
+2. **Generation.** ✅ Done — seeded arenas, archetypes as data, the connectivity invariant. Persistence lands with the pipeline in phase 4.
 3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
    The first point at which the idea can be *looked at*, which is when this project's
    defects have historically surfaced.
@@ -180,5 +180,5 @@ Deliberately out of scope for now, and each one is a rabbit hole: opportunity at
 flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
 beyond a `size` field, and doors.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phase 1 built, phases 2–6
-still design only._
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1 and 2 built,
+phases 3–6 still design only._

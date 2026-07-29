@@ -2,7 +2,7 @@
 
 The spatial rulebook: how far, can it be seen, does it shelter, can I get there.
 
-Phase 1 of the tactical map ([ADR 0026](../decisions/0026-tactical-combat-happens-on-a-grid.md)).
+Phases 1 and 2 of the tactical map ([ADR 0026](../decisions/0026-tactical-combat-happens-on-a-grid.md)).
 The feature it serves is [tactical-map.md](tactical-map.md). **Nothing imports this yet** —
 that is deliberate, and `grep -rn "tactical/" server/ client/` outside the directory itself
 returning nothing is the check.
@@ -15,6 +15,8 @@ deleted rather than unpicked:
 | `grid.js` | cells, labels, distance, and what occupies a square |
 | `sight.js` | what can be seen from where, and what shelters it |
 | `movement.js` | where a token can get to, and by what route |
+| `random.js` | a random source you can ask for the same answers twice |
+| `arena.js` | laying out a room to fight in |
 
 ## The computed facts
 
@@ -86,4 +88,39 @@ Worth stating because the alternative — adjusting an assertion to match what t
 — is what `TDD-5` forbids, and the difference is whether the new number can be derived
 independently.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phase 1 complete, 83 tests._
+## Generation
+
+`arena.js` takes who is fighting and returns the room, reproducibly from a seed. Two
+invariants are checked before an arena is returned rather than hoped for, and both are worth
+more than any amount of interesting scenery:
+
+- **Everyone is in one walkable region.** A party that cannot reach the enemy has a softlock,
+  and no in-game action gets them out of it. A boring room is strictly better.
+- **Nobody starts in melee** unless an ambush was asked for, because the first enemy round
+  landing before anyone has chosen anything reads as the engine cheating.
+
+Both hold structurally rather than by luck. Spawn zones sit at opposite ends and scenery is
+never placed in them, so separation falls out of the layout; and the connectivity check thins
+the scenery on each retry until, at zero, an empty room is connected by construction.
+Generation cannot fail to return a playable arena — which matters, because it is called with a
+fight already under way.
+
+Archetypes are **data**: `aspect`, `density`, a weighted `palette`, and some landmark names.
+Adding a room type is a row in the table and no new branch anywhere.
+
+### What looking at it caught
+
+Every test passed on the first draft and the output was useless. An 8×7 crypt came out with
+**two pillars in it** — connected, nobody in melee, and nothing whatsoever to take cover
+behind, which is the entire point of the feature. `density` was being applied to the middle
+ground alone, and the middle is only a few columns wide.
+
+The count is now a fraction of the whole arena while placement stays in the middle, with a
+floor of three so even the smallest room has cover and a ceiling of 45% of the middle so it
+never becomes a maze. Rooms went from 2 features to 8–11.
+
+Rendering the arenas as ASCII is what showed it. No assertion would have: "is this room fun"
+is not a property, and the honest check was to draw six of them and look.
+
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1 and 2 complete,
+132 tests._

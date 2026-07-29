@@ -54,6 +54,35 @@ function squeezes(map, from, to) {
 }
 
 /**
+ * Whether a single step is allowed, and what it costs.
+ *
+ * @description The two occupancy rules lived as a comment inside the search loop until `npx
+ *   fallow` put that loop at 21 cyclomatic. They are rules, so they get a name:
+ *
+ *   - **An enemy is a wall.** They cannot be passed at all, which is what makes holding a
+ *     corridor mean something.
+ *   - **A friend is a turnstile.** Squeeze past, never stop on. Treating an ally as solid would
+ *     let a party seal itself into a passage — a softlock wearing the costume of a rule.
+ * @param {object} map - The tactical map.
+ * @param {string} tokenName - The token moving.
+ * @param {string} faction - The mover's faction, which decides who counts as a friend.
+ * @param {number[]} from - The cell being left.
+ * @param {number[]} to - The cell being entered.
+ * @returns {{costFeet: number, canRest: boolean}|null} The step, or `null` when it is not
+ *   allowed at all.
+ */
+function stepInto(map, tokenName, faction, from, to) {
+	if (!inBounds(map, to) || blocksMovement(map, to)) return null;
+	if (squeezes(map, from, to)) return null;
+
+	const occupant = tokenAt(map, to);
+	const someoneElse = occupant && occupant.name !== tokenName;
+	if (someoneElse && occupant.token?.faction !== faction) return null;
+
+	return { costFeet: moveCostFeet(map, to), canRest: !someoneElse };
+}
+
+/**
  * The one search both public questions are answered from.
  *
  * @description Dijkstra rather than a breadth-first fill, because scenery makes steps cost
@@ -102,14 +131,10 @@ function search(map, tokenName, budgetFeet) {
 
 		for (const [dx, dy] of neighbours()) {
 			const next = [current.cell[0] + dx, current.cell[1] + dy];
-			if (!inBounds(map, next) || blocksMovement(map, next)) continue;
-			if (squeezes(map, current.cell, next)) continue;
+			const step = stepInto(map, tokenName, faction, current.cell, next);
+			if (!step) continue;
 
-			const occupant = tokenAt(map, next);
-			// An enemy is a wall. A friend is a turnstile.
-			if (occupant && occupant.name !== tokenName && occupant.token?.faction !== faction) continue;
-
-			const cost = current.costFeet + moveCostFeet(map, next);
+			const cost = current.costFeet + step.costFeet;
 			if (cost > budgetFeet) continue;
 
 			const label = cellLabel(next);
@@ -118,8 +143,8 @@ function search(map, tokenName, budgetFeet) {
 			cameFrom.set(label, current.cell);
 			frontier.push({ cell: next, costFeet: cost });
 
-			if (occupant && occupant.name !== tokenName) restable.delete(label);
-			else restable.add(label);
+			if (step.canRest) restable.add(label);
+			else restable.delete(label);
 		}
 	}
 
@@ -200,4 +225,42 @@ export function pathTo(map, tokenName, destination, { budgetFeet } = {}) {
 		if (!cursor) return null;
 	}
 	return { cells, costFeet: best.get(targetLabel) };
+}
+
+/**
+ * Every cell walkable from a starting cell, ignoring speed and ignoring who is standing where.
+ *
+ * @description A different question from `reachableCells`, and deliberately so. That one
+ *   answers "where can I go this turn" and is bounded by a budget and blocked by bodies; this
+ *   one asks whether a room hangs together at all.
+ *
+ *   Generation is the caller. It needs to know that every enemy can be got at from every party
+ *   spawn before it accepts an arena, and both qualifications matter: a five-foot speed must
+ *   not make a perfectly traversable room look disconnected, and a creature parked in a
+ *   doorway must not either — tokens move, terrain does not.
+ * @param {object} map - The tactical map.
+ * @param {number[]} start - Where to fill from.
+ * @returns {Set<string>} Cell labels, including the start. Empty when the start is off the map,
+ *   impassable, or malformed. A `Set` because the only question asked of it is membership, once
+ *   per spawn per generation attempt.
+ */
+export function walkableRegion(map, start) {
+	const region = new Set();
+	if (!Array.isArray(start) || !inBounds(map, start) || blocksMovement(map, start)) return region;
+
+	region.add(cellLabel(start));
+	const pending = [start];
+	while (pending.length) {
+		const current = pending.pop();
+		for (const [dx, dy] of neighbours()) {
+			const next = [current[0] + dx, current[1] + dy];
+			if (!inBounds(map, next) || blocksMovement(map, next)) continue;
+			if (squeezes(map, current, next)) continue;
+			const label = cellLabel(next);
+			if (region.has(label)) continue;
+			region.add(label);
+			pending.push(next);
+		}
+	}
+	return region;
 }

@@ -17,7 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { reachableCells, pathTo, canReach, movementBudgetFeet } from "./movement.js";
+import { reachableCells, pathTo, canReach, movementBudgetFeet, walkableRegion } from "./movement.js";
 import { cellLabel } from "./grid.js";
 import { arena, emptyRoom } from "./mapFixtures.js";
 
@@ -243,4 +243,72 @@ test("a path never costs more than the budget it was found under", () => {
 		assert.equal(path.costFeet, entry.costFeet, `${cellLabel(entry.cell)} disagrees on cost`);
 		assert.ok(path.costFeet <= 30);
 	}
+});
+
+// ── Terrain connectivity ────────────────────────────────────────────────────
+
+/**
+ * @description A room cut clean in two by a wall down column C.
+ * @returns {object} The map, hero on the left of the divide.
+ */
+function divided() {
+	return {
+		width: 5, height: 3, feetPerCell: 5,
+		features: [{ id: "d", kind: "wall", cells: [[2, 0], [2, 1], [2, 2]] }],
+		landmarks: [],
+		tokens: { Hero: { faction: "party", cell: [0, 0], size: 1, speedFeet: 30, reachFeet: 5 } },
+	};
+}
+
+test("an open room is one region", () => {
+	assert.equal(walkableRegion(emptyRoom(3, 3), [0, 0]).size, 9);
+});
+
+test("a region ignores speed, because generation asks a question about terrain", () => {
+	// `reachableCells` answers "where can I go this turn" and is bounded. Whether a room is
+	// traversable at all is a different question, and a five-foot speed must not make an
+	// arena look disconnected and send generation into a reroll loop.
+	const map = emptyRoom(10, 10);
+	map.tokens.Hero.speedFeet = 5;
+	assert.equal(walkableRegion(map, [0, 0]).size, 100);
+});
+
+test("a wall across the room splits it into two regions", () => {
+	const region = walkableRegion(divided(), [0, 0]);
+	assert.equal(region.size, 6, "the three cells of columns A and B");
+	assert.equal(region.has("D1"), false, "and nothing beyond the divide");
+});
+
+test("the far side of a divide is its own region", () => {
+	assert.equal(walkableRegion(divided(), [3, 0]).size, 6);
+});
+
+test("a region ignores who is standing where", () => {
+	// Tokens move; terrain does not. An enemy parked in a doorway must not make generation
+	// reject an arena that is perfectly traversable once the fight starts.
+	const map = divided();
+	map.features = [{ id: "d", kind: "wall", cells: [[2, 0], [2, 2]] }];
+	map.tokens.Blocker = { faction: "enemy", cell: [2, 1], size: 1, speedFeet: 30, reachFeet: 5 };
+	// Thirteen: five by three, less the two wall cells. Were the token treated as an obstacle
+	// the fill would stop at the divide and return six.
+	assert.equal(walkableRegion(map, [0, 0]).size, 13);
+});
+
+test("a region starting on a wall is empty", () => {
+	assert.equal(walkableRegion(divided(), [2, 1]).size, 0);
+});
+
+test("a region starting off the map, or from nonsense, is empty", () => {
+	for (const bad of [[99, 99], null, "C1"]) {
+		assert.equal(walkableRegion(divided(), bad).size, 0);
+	}
+	assert.equal(walkableRegion(null, [0, 0]).size, 0);
+});
+
+test("a region is a set of labels, so membership is a cheap question", () => {
+	// Generation asks "is every spawn in the same region" once per attempt, and rerolls on a
+	// miss; the answer wants to be a lookup rather than a search.
+	const region = walkableRegion(emptyRoom(3, 3), [0, 0]);
+	assert.ok(region.has("A1"));
+	assert.ok(region.has("C3"));
 });
