@@ -257,3 +257,45 @@ test("buildAppearance carries permanent traits but never a pose", () => {
 	assert.match(appearance, /copper beard/);
 	assert.doesNotMatch(appearance, /standing|kneeling|holding aloft|background of/i);
 });
+
+// ── The house style has to direct a picture worth looking at ─────────────────
+
+test("the style asks for a pose, not a passport photo", () => {
+	// It used to end "full-body character portrait against a simple muted background",
+	// which is a description of a mugshot: squared to the camera, nothing happening,
+	// no world behind them. The portraits came back looking like driving licences.
+	const style = buildPortraitPrompt({ race: "Dwarf", class: "Fighter" })
+		.replace(buildAppearance({ race: "Dwarf", class: "Fighter" }), "").trim();
+
+	assert.match(style, /pose|motion|action|stance/i, "the style does not ask for a pose");
+	assert.match(style, /angle|three-quarter|low/i, "the style does not direct the camera");
+	assert.doesNotMatch(style, /muted background|plain background|simple background/i,
+		"the style still asks for the blank backdrop that caused this");
+});
+
+test("the style keeps the lighting and painterly direction that already worked", () => {
+	const style = buildPortraitPrompt({ race: "Dwarf", class: "Fighter" });
+
+	assert.match(style, /light/i);
+	assert.match(style, /painterly|illustration|concept art/i);
+});
+
+test("the style invites no words into the picture", () => {
+	// The guard removes writing, but the style must not invite it in the first place:
+	// "poster", "cover" and "card" all reliably produce typography.
+	const style = buildPortraitPrompt({ race: "Dwarf", class: "Fighter" });
+
+	assert.doesNotMatch(style, /\b(poster|cover|title|banner|logo|magazine|card|label)\b/i);
+});
+
+test("the appearance still carries none of the rendering style", () => {
+	// Restated against the real style rather than three hand-picked words, so it
+	// cannot quietly stop checking when the style is reworded.
+	const sheet = { race: "Half-Elf", class: "Ranger", gender: "woman" };
+	const appearance = buildAppearance(sheet);
+	const style = buildPortraitPrompt(sheet).replace(appearance, "").trim();
+
+	for (const phrase of style.split(/[.,]/).map((s) => s.trim()).filter((s) => s.length > 12)) {
+		assert.ok(!appearance.includes(phrase), `appearance leaked style: "${phrase}"`);
+	}
+});

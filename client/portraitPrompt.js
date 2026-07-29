@@ -25,9 +25,30 @@ export const NO_TEXT_GUARD = "Pure illustration with no writing of any kind anyw
 /** Longest prompt sent. Well under the API limit; beyond this it is a paste. */
 const MAX_PROMPT = 4000;
 
-/** The house style, applied unless the player edits it away. */
-const STYLE = "Painterly digital fantasy illustration, dramatic cinematic lighting, "
-	+ "rich detail, full-body character portrait against a simple muted background.";
+/**
+ * The house style, applied unless the player edits it away.
+ *
+ * @description This used to end "full-body character portrait against a simple muted
+ *   background", which is a description of a passport photo — squared to the camera,
+ *   nothing happening, no world behind them — and that is exactly what came back.
+ *
+ *   The fix is direction rather than adjectives: a pose, a camera angle, and somewhere
+ *   to be. "Heroic" on its own buys nothing; "caught mid-motion, low three-quarter
+ *   angle" buys a picture. The one negative clause is kept short and concrete, because
+ *   a long list of things not to draw tends to summon them.
+ *
+ *   Words that reliably invite typography — poster, cover, card, title, banner — are
+ *   avoided on purpose. `NO_TEXT_GUARD` removes writing, but not inviting it is
+ *   cheaper than telling the model to take it back out.
+ */
+export const PORTRAIT_SCENE = "Dynamic fantasy character concept art, painterly and richly detailed. "
+	+ "Caught mid-motion in a confident, characterful pose, seen from a low three-quarter "
+	+ "angle so they read as formidable — not squared up to the camera, not standing still. "
+	+ "Dramatic directional lighting with strong rim light and atmosphere, and a suggestion "
+	+ "of their world behind them in soft focus.";
+
+/** The same direction, under the name the prompt builder has always used. */
+const STYLE = PORTRAIT_SCENE;
 
 /**
  * @description Describes a physique from ability scores, so two characters with the

@@ -20,6 +20,7 @@
  */
 
 import path from "path";
+import { PORTRAIT_SCENE } from "../../client/portraitPrompt.js";
 import fsDefault from "fs";
 
 import { redactLLMConfig } from "./llm/config.js";
@@ -261,7 +262,7 @@ export function createLLMGateway({
 		 *   appearance: string, created: boolean}>} The portrait and the identity to store.
 		 * @throws {Error} When no image provider is available, or generation failed.
 		 */
-		async ensureCharacterImage({ lobbyId, record, name, appearance, provider, force = false, size, signal } = {}) {
+		async ensureCharacterImage({ lobbyId, record, name, appearance, portraitScene = PORTRAIT_SCENE, provider, force = false, size, signal } = {}) {
 			const resolved = resolveImage(lobbyId, provider);
 			const adapter = credentials.providerFor("image", resolved.config.providerId);
 
@@ -276,7 +277,7 @@ export function createLLMGateway({
 			if (plan.action === "reuse") {
 				const image = await adapter.generateForCharacter({
 					characterId: plan.characterId,
-					scene: "a formal character portrait, facing the viewer",
+					scene: portraitScene,
 					config: resolved.config,
 					size,
 					signal,
@@ -299,9 +300,29 @@ export function createLLMGateway({
 			}
 
 			log(`🎭 Stored a likeness for ${name} as ${character.id}`);
+
+			// The reference the image server draws when a likeness is created is neutral
+			// and front-on, which is right for matching a face later and wrong for the
+			// picture a player is shown — handing it over directly is what produced
+			// portraits the operator described as driving-licence photos. The reference
+			// stays as it is; what they see is rendered from it, with direction.
+			const posed = await adapter.generateForCharacter({
+				characterId: character.id,
+				scene: portraitScene,
+				config: resolved.config,
+				size,
+				signal,
+				fetchImpl,
+			}).catch((err) => {
+				// The likeness exists and is stored either way. A portrait that fell back
+				// to the reference beats failing after paying for the character.
+				log(`⚠️ Could not pose the new portrait for ${name}: ${err.message}`);
+				return null;
+			});
+
 			return {
-				b64: character.b64,
-				model: null,
+				b64: posed?.b64 ?? character.b64,
+				model: posed?.model ?? null,
 				characterId: character.id,
 				appearance,
 				created: true,

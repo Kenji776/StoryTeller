@@ -497,3 +497,77 @@ test("scenes are unavailable on a provider that cannot pose a character", async 
 		/does not support|continuity|scene/i,
 	);
 });
+
+// ── The portrait a player is shown is posed, not a reference shot ────────────
+//
+// The image server draws a neutral, front-facing reference when a likeness is
+// created — correct for identity matching, and exactly the driving-licence photo the
+// operator complained about, because that reference was handed straight to the player
+// as their portrait. The reference stays neutral; what they are shown is rendered
+// from it with direction.
+
+test("a first portrait is rendered from the new likeness rather than being the reference", async () => {
+	const fetchImpl = makeScript([
+		{ body: { id: "chr_1", image: "cmVmZXJlbmNl" } },          // createCharacter
+		{ body: { images: ["cG9zZWQ="], model: "krea2" } },         // the posed render
+	]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	const result = await gateway.ensureCharacterImage({
+		lobbyId: LOBBY, record: {}, name: "Brannor", appearance: "A Dwarf Paladin. Copper beard.",
+	});
+
+	assert.equal(result.characterId, "chr_1");
+	assert.equal(result.created, true);
+	assert.equal(result.b64, "cG9zZWQ=", "the player was handed the reference shot");
+	assert.match(fetchImpl.calls[0].url, /\/characters$/);
+	assert.match(fetchImpl.calls[1].url, /generate/);
+});
+
+test("the portrait scene directs a pose, and never asks them to face the viewer", async () => {
+	// "a formal character portrait, facing the viewer" was hardcoded here.
+	const fetchImpl = makeScript([{ body: { images: ["cG9zZWQ="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
+		name: "Brannor",
+		appearance: "A Dwarf Paladin. Copper beard.",
+	});
+
+	const { scene } = fetchImpl.calls[0].payload;
+	assert.doesNotMatch(scene, /facing the viewer|formal/i, "still asking for a passport photo");
+	assert.match(scene, /pose|motion|stance|angle/i, "the scene gives no direction");
+});
+
+test("a caller may direct the portrait itself", async () => {
+	const fetchImpl = makeScript([{ body: { images: ["cG9zZWQ="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
+		name: "Brannor",
+		appearance: "A Dwarf Paladin. Copper beard.",
+		portraitScene: "mid-leap over a chasm, cloak snapping",
+	});
+
+	assert.equal(fetchImpl.calls[0].payload.scene, "mid-leap over a chasm, cloak snapping");
+});
+
+test("the scene carries direction only, never the appearance", async () => {
+	// The image server prepends the stored appearance itself; restating it inside the
+	// scene is the documented cause of the likeness drifting.
+	const fetchImpl = makeScript([{ body: { images: ["cG9zZWQ="], model: "krea2" } }]);
+	const { gateway } = makeGateway({ ...IMAGE_SETUP, fetchImpl });
+
+	await gateway.ensureCharacterImage({
+		lobbyId: LOBBY,
+		record: { imageCharacterId: "chr_1", imageAppearance: "A Dwarf Paladin. Copper beard." },
+		name: "Brannor",
+		appearance: "A Dwarf Paladin. Copper beard.",
+	});
+
+	assert.doesNotMatch(fetchImpl.calls[0].payload.scene, /Dwarf|Paladin|Copper beard/i);
+});
