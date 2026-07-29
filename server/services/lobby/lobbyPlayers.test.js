@@ -179,3 +179,108 @@ test("a malformed spells field does not throw or corrupt the sheet", () => {
 		assert.ok(Array.isArray(store.index.lob1.players.Elara.spells), `${JSON.stringify(value)} left a non-array`);
 	}
 });
+
+// ── Learning a spell on level-up ─────────────────────────────────────────────
+
+/**
+ * @description A caster at a given level with a chosen spell list.
+ * @param {object} store - The store double.
+ * @param {number} level - The character level.
+ * @param {string[]} spells - Spells already known.
+ * @returns {object} The stored player record.
+ */
+function caster(store, level, spells) {
+	store.upsertPlayer("lob1", "sid1", "Elara", {
+		class: "Wizard", level, stats: { hp: 8, max_hp: 8 }, spells,
+	});
+	const player = store.index.lob1.players.Elara;
+	player.level = level;   // upsert clamps level from the sheet; set it directly
+	return player;
+}
+
+test("a caster learns a spell they picked", () => {
+	const store = makeStore();
+	store.index.lob1.startingLevel = 3;
+	caster(store, 3, ["Fire Bolt"]);
+	const result = store.learnSpell("lob1", "Elara", "Magic Missile");
+	assert.equal(result.ok, true);
+	assert.deepEqual(store.index.lob1.players.Elara.spells, ["Fire Bolt", "Magic Missile"]);
+});
+
+test("the pick may be a lower-level spell, not only the newest tier", () => {
+	// The operator's rule: "from that level or lower".
+	const store = makeStore();
+	store.index.lob1.startingLevel = 3;
+	caster(store, 3, ["Scorching Ray"]);
+	assert.equal(store.learnSpell("lob1", "Elara", "Fire Bolt").ok, true);
+	assert.ok(store.index.lob1.players.Elara.spells.includes("Fire Bolt"));
+});
+
+test("a spell above the character's level is refused", () => {
+	const store = makeStore();
+	caster(store, 1, ["Fire Bolt"]);
+	const result = store.learnSpell("lob1", "Elara", "Scorching Ray");
+	assert.equal(result.ok, false);
+	assert.ok(result.reason);
+	assert.deepEqual(store.index.lob1.players.Elara.spells, ["Fire Bolt"]);
+});
+
+test("a spell off the class list is refused", () => {
+	const store = makeStore();
+	caster(store, 3, ["Fire Bolt"]);
+	const result = store.learnSpell("lob1", "Elara", "Cure Wounds");
+	assert.equal(result.ok, false);
+	assert.match(result.reason, /class/i);
+});
+
+test("a spell already known is refused rather than duplicated", () => {
+	const store = makeStore();
+	caster(store, 3, ["Fire Bolt"]);
+	const result = store.learnSpell("lob1", "Elara", "Fire Bolt");
+	assert.equal(result.ok, false);
+	assert.match(result.reason, /already/i);
+	assert.deepEqual(store.index.lob1.players.Elara.spells, ["Fire Bolt"]);
+});
+
+test("the level-up pick is not capped by the lobby's starting level", () => {
+	// The starting level bounds character *creation*. A caster who levels past it must
+	// keep gaining reach, or the pick would freeze at whatever the campaign began on.
+	const store = makeStore();
+	store.index.lob1.startingLevel = 1;
+	caster(store, 3, ["Fire Bolt"]);
+	assert.equal(store.learnSpell("lob1", "Elara", "Scorching Ray").ok, true);
+});
+
+test("a non-caster cannot learn a spell", () => {
+	const store = makeStore();
+	store.upsertPlayer("lob1", "sid1", "Bron", { class: "Fighter", stats: { hp: 12 } });
+	const result = store.learnSpell("lob1", "Bron", "Fire Bolt");
+	assert.equal(result.ok, false);
+});
+
+test("learning refuses junk rather than throwing", () => {
+	const store = makeStore();
+	caster(store, 3, ["Fire Bolt"]);
+	for (const name of [null, undefined, "", 42, {}]) {
+		assert.equal(store.learnSpell("lob1", "Elara", name).ok, false, JSON.stringify(name));
+	}
+	assert.equal(store.learnSpell("lob1", "Nobody", "Fire Bolt").ok, false);
+	assert.equal(store.learnSpell("nolobby", "Elara", "Fire Bolt").ok, false);
+});
+
+test("the choices offered are what remains available at that level", () => {
+	const store = makeStore();
+	caster(store, 3, ["Fire Bolt"]);
+	const choices = store.spellChoices("lob1", "Elara").map((s) => s.name);
+	assert.ok(choices.length > 0);
+	assert.ok(!choices.includes("Fire Bolt"), "already known");
+	assert.ok(choices.includes("Scorching Ray"), "level 2, reachable at character level 3");
+});
+
+test("choices for a non-caster or a missing character are empty", () => {
+	const store = makeStore();
+	store.upsertPlayer("lob1", "sid1", "Bron", { class: "Fighter", stats: { hp: 12 } });
+	assert.deepEqual(store.spellChoices("lob1", "Bron"), []);
+	assert.deepEqual(store.spellChoices("lob1", "Nobody"), []);
+	assert.deepEqual(store.spellChoices("nolobby", "Elara"), []);
+});

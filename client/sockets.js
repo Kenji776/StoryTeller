@@ -674,7 +674,7 @@ function registerSocketEvents() {
 	});
 
 	// === LEVEL UP EVENT HANDLING (client-side) ===
-	socket.on("player:levelup", ({ newLevel, upcomingAbility }) => {
+	socket.on("player:levelup", ({ newLevel, upcomingAbility, spellChoices }) => {
 		// Update visible level field
 		els.level.value = newLevel;
 		appendActionLog(`🎉 <strong>${me.name}</strong> reached level ${newLevel}!`, "levelup-event");
@@ -693,6 +693,25 @@ function registerSocketEvents() {
 				</div>`
 			: "";
 
+		// A caster picks one new spell per level, from their class list at the level they
+		// are reaching or lower. A non-caster is sent an empty list and sees nothing.
+		const choices = Array.isArray(spellChoices) ? spellChoices : [];
+		let chosenSpell = null;
+		const spellPickerHTML = choices.length
+			? `<div style="margin:0.75em 0;">
+					<strong>📖 Learn one new spell</strong>
+					<div id="levelSpellPicker" class="spell-picker" style="max-height:180px;margin-top:0.4em;">
+						${choices.map((sp) => `<button type="button" class="spell-option" data-spell="${sp.name}"
+							title="${(sp.description || "").replace(/"/g, "&quot;")}">
+							<span class="spell-name">${sp.name}</span>
+							<span class="spell-meta">${sp.level === 0 ? "Cantrip" : `Level ${sp.level}`}${
+								sp.damage ? ` · ${sp.damage} ${sp.damageType || ""}`.trimEnd() : ""
+							}</span>
+						</button>`).join("")}
+					</div>
+				</div>`
+			: "";
+
 		// Create a modal overlay
 		const modal = document.createElement("div");
 		modal.classList.add("modal");
@@ -701,6 +720,7 @@ function registerSocketEvents() {
       <button class="modal-close">✕</button>
       <h3>🎉 Level ${newLevel}!</h3>
       ${abilityPreviewHTML}
+      ${spellPickerHTML}
       <p style="margin-top:0.75em;">You have <strong>2 points</strong> to distribute among your attributes.</p>
       <p style="margin-top:0;"><em>You will also gain <strong>1d6 + CON mod</strong> HP and 1 spell slot automatically on confirm.</em></p>
       <div class="grid two">
@@ -728,6 +748,19 @@ function registerSocketEvents() {
 
 		cancelBtn.addEventListener("click", () => modal.remove());
 
+		// One pick, and clicking it again clears it — a player who changes their mind
+		// should not have to cancel the whole level-up to do so.
+		const spellButtons = modal.querySelectorAll("#levelSpellPicker .spell-option");
+		spellButtons.forEach((button) => {
+			button.addEventListener("click", () => {
+				const name = button.dataset.spell;
+				chosenSpell = chosenSpell === name ? null : name;
+				spellButtons.forEach((other) => {
+					other.classList.toggle("chosen", other.dataset.spell === chosenSpell);
+				});
+			});
+		});
+
 		confirmBtn.addEventListener("click", () => {
 			const gains = {};
 			let total = 0;
@@ -748,15 +781,20 @@ function registerSocketEvents() {
 			});
 			updatePointsDisplay();
 
-			socket.emit("player:levelup:confirm", { lobbyId, gains });
+			socket.emit("player:levelup:confirm", { lobbyId, gains, spell: chosenSpell });
 			modal.remove();
 			appendLog(`✅ Level-up applied locally and sent to server.\n`);
 		});
 	});
 
 	// Confirmation from server
-	socket.on("player:levelup:confirm", ({ newStats, newLevel, hpGained, newAbility }) => {
+	socket.on("player:levelup:confirm", ({ newStats, newLevel, hpGained, newAbility, learnedSpell }) => {
 		appendLog("✨ Level-up confirmed by server.\n");
+		// Announced from the server's reply, not from the click: the pick is validated
+		// there, and a refusal arrives as a toast instead.
+		if (learnedSpell) {
+			appendActionLog(`📖 <strong>${me.name}</strong> learned <strong>${learnedSpell.name}</strong>.`, "levelup-event");
+		}
 
 		// Sync stats (includes updated hp/max_hp from HP roll)
 		if (newStats) {

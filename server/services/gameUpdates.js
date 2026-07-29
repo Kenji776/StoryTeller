@@ -81,7 +81,14 @@ export function broadcastXPUpdates(io, store, lobbyId, updates) {
 				const playerData = store.index[lobbyId].players[key];
 				const newLvl = (playerData.level || 1) + 1;
 				const upcomingAbility = getAbilityForLevel(playerData.class, newLvl);
-				io.to(sid).emit("player:levelup", { newLevel: newLvl, upcomingAbility: upcomingAbility || null });
+				io.to(sid).emit("player:levelup", {
+					newLevel: newLvl,
+					upcomingAbility: upcomingAbility || null,
+					// A caster picks one spell per level. Offered for the level they are about
+					// to reach, so a tier this level-up unlocks is pickable on the level-up that
+					// unlocks it. Empty for a non-caster, and the window hides the picker.
+					spellChoices: store.spellChoices ? store.spellChoices(lobbyId, key, newLvl) : [],
+				});
 			}
 		}
 	}

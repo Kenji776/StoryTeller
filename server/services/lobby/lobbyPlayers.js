@@ -5,7 +5,7 @@
 
 import { randomUUID } from "crypto";
 
-import { validateStartingSpells } from "../spellbook.js";
+import { validateStartingSpells, canLearn, spellChoicesFor } from "../spellbook.js";
 
 const XP_THRESHOLDS = [
 	0, 300, 900, 2700, 6500,           // 1-5
@@ -215,6 +215,47 @@ export const playerMethods = {
 
 		s.players[name] = merged;
 		this.persist(lobbyId);
+	},
+	/**
+	 * Teach a character one spell, as a level-up pick.
+	 *
+	 * @description Validated through `canLearn`, which is the same rule the character
+	 *   builder's picks go through — the name arrives from a client and a client may not
+	 *   grant itself Meteor Swarm. Bounded by the character's *own* level, not by the
+	 *   lobby's starting level: that bounds creation, and a caster who levels past it must
+	 *   keep gaining reach or the pick would freeze at whatever the campaign began on.
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @param {string} playerName - The character learning.
+	 * @param {*} spellName - The requested spell.
+	 * @returns {{ok: boolean, reason?: string, spell?: object}} The verdict.
+	 */
+	learnSpell(lobbyId, playerName, spellName) {
+		const s = this.index[lobbyId];
+		const player = s?.players?.[playerName];
+		if (!player) return { ok: false, reason: "That character could not be found." };
+
+		const verdict = canLearn(player, spellName);
+		if (!verdict.ok) return verdict;
+
+		// Stored as a name, like every other pick, so the catalogue stays the one place
+		// a spell's mechanics live.
+		player.spells = [...(Array.isArray(player.spells) ? player.spells : []), verdict.spell.name];
+		this.persist(lobbyId);
+		return verdict;
+	},
+	/**
+	 * What this character may pick, for the level-up window to offer.
+	 *
+	 * @param {string} lobbyId - The target lobby ID.
+	 * @param {string} playerName - The character.
+	 * @param {number} [atLevel] - Consider them this level instead of their stored one,
+	 *   so the window can offer what the level they are *about to reach* unlocks.
+	 * @returns {object[]} The choices, empty for a non-caster.
+	 */
+	spellChoices(lobbyId, playerName, atLevel) {
+		const player = this.index[lobbyId]?.players?.[playerName];
+		if (!player) return [];
+		return spellChoicesFor(atLevel ? { ...player, level: atLevel } : player);
 	},
 	/**
 	 * Set the ready state for a socket's player slot in a lobby.

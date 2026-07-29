@@ -1047,7 +1047,7 @@ io.on("connection", (socket) => {
 		}
 	});
 
-	socket.on("player:levelup:confirm", ({ lobbyId, gains }) => {
+	socket.on("player:levelup:confirm", ({ lobbyId, gains, spell }) => {
 		if (!store.belongs(lobbyId, socket.id)) return;
 		const lobby = store.index[lobbyId];
 		if (!lobby) return;
@@ -1061,8 +1061,26 @@ io.on("connection", (socket) => {
 		const newAbility = getAbilityForLevel(playerClass, newLevel);
 		if (newAbility) store.addAbility(lobbyId, playerName, { ...newAbility, level: newLevel });
 
+		// One spell per level, chosen by the player from their class list at the level they
+		// have just reached or lower. Validated here rather than trusted, because the name
+		// comes from a browser. A refusal is reported and the level still stands — losing a
+		// whole level-up over a bad pick would be worse than a missed spell.
+		let learnedSpell = null;
+		if (spell) {
+			const verdict = store.learnSpell(lobbyId, playerName, spell);
+			if (verdict.ok) {
+				learnedSpell = verdict.spell;
+				log(`📖 ${playerName} learned ${verdict.spell.name} at level ${newLevel}`);
+			} else {
+				log(`📖 ${playerName} could not learn "${spell}": ${verdict.reason}`);
+				socket.emit("toast", { type: "warning", message: verdict.reason });
+			}
+		}
+
 		const newStats = lobby.players[playerName]?.stats ?? null;
-		socket.emit("player:levelup:confirm", { newStats, newLevel, hpGained, newAbility: newAbility || null });
+		socket.emit("player:levelup:confirm", {
+			newStats, newLevel, hpGained, newAbility: newAbility || null, learnedSpell,
+		});
 		log(`⬆️ ${playerName} leveled up to ${newLevel} (+${hpGained} HP)${newAbility ? ` — gained: ${newAbility.name}` : ""}`);
 
 		broadcastPartyState(busIo, store, lobbyId);
@@ -1070,7 +1088,13 @@ io.on("connection", (socket) => {
 		if (store.checkLevelUp(lobbyId, playerName)) {
 			const nextLevel = newLevel + 1;
 			const upcomingAbility = getAbilityForLevel(playerClass, nextLevel);
-			socket.emit("player:levelup", { newLevel: nextLevel, upcomingAbility: upcomingAbility || null });
+			socket.emit("player:levelup", {
+				newLevel: nextLevel,
+				upcomingAbility: upcomingAbility || null,
+				// Offered for the level they are about to reach, so a tier this level-up unlocks
+				// is pickable on the level-up that unlocks it.
+				spellChoices: store.spellChoices(lobbyId, playerName, nextLevel),
+			});
 		}
 	});
 

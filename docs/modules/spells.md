@@ -60,6 +60,17 @@ A caster knows a **chosen** list, not their whole class list.
 | Character creation | pick `STARTING_SPELL_PICKS` (3) from anything available to the class |
 | Each level | one more pick, from that spell level **or lower** |
 
+The level-up pick is offered in the level-up window and applied by `store.learnSpell`,
+which runs the same `canLearn` validation the builder's picks go through — the name comes
+from a browser, and a client may not grant itself Meteor Swarm. A refusal is reported as a
+toast and **the level still stands**: losing a whole level-up over a bad pick would be a
+worse outcome than a missed spell.
+
+Choices are computed for the level the character is *about to reach*, so a tier a
+level-up unlocks is pickable on that same level-up. Unlike the creation picks this is
+bounded by the character's own level rather than the lobby's starting level — that bounds
+creation, and a caster who levels past it must keep gaining reach.
+
 Spell level is half character level rounded up, capped at 9 — so a level-1 caster reaches
 level-1 spells, and a level-3 caster reaches level-2 spells.
 
@@ -209,8 +220,6 @@ cast Light, and a bare "Touch" must not beat "Chill Touch".
   cube; the resolver rolls one save for the chosen target only.
 - **Concentration, duration and per-turn damage are not tracked.** Witch Bolt describes
   damage each turn; nothing continues it.
-- **No level-up pick.** `canLearn` and `spellChoicesFor` are written and tested, but
-  `player:levelup:confirm` does not yet offer or apply a choice.
 - **The catalogue is levels 0–2 only.** `maxSpellLevel` reaches 9; the data does not, so a
   caster above level 4 gains no new options.
 - **No half-caster spells.** Paladin and Ranger are in `CASTING_ABILITY` and are treated
