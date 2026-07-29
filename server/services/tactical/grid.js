@@ -26,16 +26,31 @@ const COLUMNS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
  *   pit stops a body without stopping an arrow, and a low wall is shot over while still
  *   being leaned behind. Adding scenery means adding a row here, never a branch elsewhere.
  *
- *   `cover` is what the feature grants to somebody sheltering *at or beside* it, and is
+ *   `sight` has three values rather than two, and the middle one exists because of something a
+ *   rendered briefing showed:
+ *
+ *   - `blocked` — no shot at all, and nothing to be seen. A wall.
+ *   - `obstructs` — the shot is still available, at this feature's cover. A pillar.
+ *   - `clear` — no effect on sight whatsoever.
+ *
+ *   Pillars were `blocked` at first, which is physically true of a stone column and ruinous as a
+ *   rule: eight of them in a nine-by-seven crypt meant nobody could see anybody, so ranged attacks
+ *   mostly failed outright and *cover never engaged at all* — the measured crypt had nineteen
+ *   full-cover cells against three of half. The single centre-line test is what turns "half cover"
+ *   into "no shot"; 5e traces lines to a target's corners and grants total cover only when every
+ *   one is blocked. `obstructs` is the cheap approximation of that, and it is what makes cover the
+ *   common case it is supposed to be.
+ *
+ *   `cover` is what the feature grants to somebody sheltering at, beside, or behind it, and is
  *   read by `sight.js` — this module only reports it.
  */
 export const FEATURE_RULES = {
-	wall:     { movement: "blocked", sight: "blocked", cover: "full" },
-	pillar:   { movement: "blocked", sight: "blocked", cover: "half" },
-	low_wall: { movement: "blocked", sight: "clear",   cover: "half" },
-	rubble:   { movement: "double",  sight: "clear",   cover: "none" },
-	water:    { movement: "double",  sight: "clear",   cover: "none" },
-	pit:      { movement: "blocked", sight: "clear",   cover: "none" },
+	wall:     { movement: "blocked", sight: "blocked",   cover: "full" },
+	pillar:   { movement: "blocked", sight: "obstructs", cover: "half" },
+	low_wall: { movement: "blocked", sight: "clear",     cover: "half" },
+	rubble:   { movement: "double",  sight: "clear",     cover: "none" },
+	water:    { movement: "double",  sight: "clear",     cover: "none" },
+	pit:      { movement: "blocked", sight: "clear",     cover: "none" },
 };
 
 /**

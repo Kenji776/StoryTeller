@@ -53,12 +53,14 @@ compute; labels narrate. One conversion, at the edge.
 ### Feature kinds
 
 Each kind is a fixed tuple of three mechanical properties. Adding a kind means adding a row,
-never a branch elsewhere.
+never a branch elsewhere. `obstructs` means the shot is still available, at that feature's cover —
+only a wall denies it outright. See [tactical-geometry.md](tactical-geometry.md) for why a pillar
+is not `blocked`.
 
 | kind | movement | sight | cover |
 |---|---|---|---|
 | `wall` | blocked | blocked | full |
-| `pillar` | blocked | blocked | half |
+| `pillar` | blocked | obstructs | half |
 | `low_wall` | blocked | clear | half |
 | `rubble` | costs double | clear | none |
 | `water` | costs double | clear | none |

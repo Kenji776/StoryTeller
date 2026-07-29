@@ -163,10 +163,15 @@ test("a wall stops movement and sight and grants full cover", () => {
 	assert.equal(coverOf(map, [2, 1]), "full");
 });
 
-test("a pillar stops movement and sight but grants only half cover", () => {
+test("a pillar stops a body, obstructs a shot without denying it, and grants half cover", () => {
+	// This replaces an assertion that a pillar blocks sight outright. That was physically true of
+	// a stone column and ruinous as a rule: eight pillars in a nine-by-seven crypt meant almost
+	// nothing could see anything, ranged attacks failed rather than being made harder, and cover
+	// never engaged — the measured crypt had nineteen full-cover cells against three of half.
+	// A pillar is now `obstructs`, so the shot exists and costs the attacker cover.
 	const map = arena();
 	assert.equal(blocksMovement(map, [4, 2]), true);
-	assert.equal(blocksSight(map, [4, 2]), true);
+	assert.equal(blocksSight(map, [4, 2]), false);
 	assert.equal(coverOf(map, [4, 2]), "half");
 });
 

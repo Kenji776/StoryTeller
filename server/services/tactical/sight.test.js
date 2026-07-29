@@ -84,8 +84,17 @@ test("a wall between two cells stops sight", () => {
 	assert.equal(hasLineOfSight(arena(), [0, 1], [4, 1]), false);
 });
 
-test("a pillar between two cells stops sight", () => {
-	assert.equal(hasLineOfSight(arena(), [3, 2], [5, 2]), false);
+test("a pillar between two cells makes the shot harder rather than impossible", () => {
+	// Replaces an assertion that a pillar denied the shot. Only a wall does that now. A pillar
+	// obstructs: the attack is still available and the target gets its cover, which is what makes
+	// cover the common case instead of a rarity behind a wall of total-cover cells.
+	const map = arena();
+	assert.equal(hasLineOfSight(map, [3, 2], [5, 2]), true);
+	assert.equal(coverBetween(map, [3, 2], [5, 2]), "half");
+});
+
+test("a wall is still the thing that denies a shot outright", () => {
+	assert.equal(hasLineOfSight(arena(), [0, 1], [4, 1]), false);
 });
 
 test("a low wall is seen over", () => {

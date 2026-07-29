@@ -7,7 +7,7 @@ The feature it serves is [tactical-map.md](tactical-map.md). **Nothing imports t
 that is deliberate, and `grep -rn "tactical/" server/ client/` outside the directory itself
 returning nothing is the check.
 
-Six modules under `server/services/tactical/`, one directory so the whole feature can be deleted
+Seven modules under `server/services/tactical/`, one directory so the whole feature can be deleted
 rather than unpicked:
 
 | module | one sentence |
@@ -18,6 +18,7 @@ rather than unpicked:
 | `random.js` | a random source you can ask for the same answers twice |
 | `arena.js` | laying out a room to fight in |
 | `session.js` | a lobby's map: when it exists, who is on it, what it allows |
+| `briefing.js` | what each audience is told about it |
 
 ## The computed facts
 
@@ -51,10 +52,15 @@ whole tactical rulebook, and it is unit-testable in isolation.
 - **A diagonal clips both neighbouring cells.** Sight does not pass through the joint between
   two diagonally-placed pillars. Genuinely ambiguous in the source material; this is the
   conservative reading, chosen out loud rather than falling out of an epsilon.
-- **Cover from beside is capped at half.** A pillar blocks sight, so its half cover can never
-  be earned by a line *through* it — that is no shot at all. It has to come from standing
-  beside it, on the attacker's side, which is what "behind a pillar" means to a player. The
-  cap is why a wall beside you shelters you without making you untargetable.
+- **Cover from beside is capped at half.** Cover is earned two ways: from the line crossing
+  something, and from standing beside something on the attacker's side — which is what "behind a
+  pillar" means to a player. The cap applies to the second, and it is why a *wall* beside you
+  shelters you without making you untargetable; anything that truly denied the shot would have
+  denied line of sight and been reported before reaching the cap.
+
+  (This bullet used to argue that a pillar could only ever grant cover from beside, because a
+  line through one was no shot at all. That stopped being true when `pillar` became `obstructs` —
+  see *What reading them changed* below.)
 - **An enemy is a wall; a friend is a turnstile.** Squeeze past an ally, never stop on one.
   Treating allies as solid would let a party seal itself into a corridor — a softlock wearing
   the costume of a rule.
@@ -147,5 +153,31 @@ The arena is seeded from the lobby id plus the names of the opposition, which bu
 without storing a counter — a reload lays out the same room, and a new encounter against different
 enemies lays out a different one.
 
+## The two briefings
+
+`briefing.js` produces the strings each audience reads, so they are behaviour rather than
+presentation and their grammar is asserted. `narratorBlock` opens with the sentence the whole
+feature rests on — *these positions are settled fact, do not move anyone* — and gives each creature
+a cell plus something narratable. `moveMenu` gives a player answers rather than questions, and names
+the cells it offers, which is what makes an agent's reply extractable: it repeats an option instead
+of inventing a coordinate. A property test checks every cell the menu offers is genuinely reachable.
+
+### What reading them changed
+
+Rendering the briefings caught three things no assertion had:
+
+- **The two disagreed about the same square.** The block called Dorn "under cover" while his own
+  menu said "no cover". Both read `coverBetween`, which reports `full` for *no line of sight* as
+  well as for real full cover — one answer, correct for the resolver since neither yields a shot,
+  and wrong for prose. Both now ask `hasLineOfSight` first and separately.
+- **A pillar denying sight made cover pointless.** Eight pillars in a nine-by-seven crypt meant
+  almost nothing could see anything, so ranged attacks failed outright instead of getting harder,
+  and the measured crypt had nineteen full-cover cells against three of half. `sight` gained a third
+  value, `obstructs`: the shot exists and costs the attacker cover. That is the cheap approximation
+  of 5e tracing lines to a target's corners, and it makes cover the common case it is meant to be.
+- **"Under cover" on all six lines told the narrator nothing.** Once every long shot across a
+  cluttered hall crosses a pillar, having cover *is* the ordinary condition, so only the exposed get
+  a phrase — and each creature carries a distance to its nearest opponent instead, which varies.
+
 _Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2 and 4a complete,
-173 tests._
+195 tests._
