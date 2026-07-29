@@ -161,13 +161,10 @@ is that a bad arena can be reported, reproduced and fixed by seed.
 ## Rendering
 
 A separate window at `/map/:lobbyId`, opened from the game view, subscribing to `map:update`.
-Canvas over a JSON snapshot; no new dependency.
-
-Kept out of the main document deliberately — the toggle has to be able to change nothing
-about the existing UI, and a panel wired into the game view would not be.
-
-Observers see it too. It is the shared state of a fight, not a personal sheet — the same
-reasoning that keeps the action log visible to watchers.
+Canvas over a JSON snapshot; no new dependency. Kept out of the main document deliberately —
+the toggle has to change nothing about the existing UI, and a panel wired into the game view
+would not. Observers see it too: it is the shared state of a fight, not a personal sheet, the
+same reasoning that keeps the action log visible to watchers.
 
 ## Toggle discipline
 
