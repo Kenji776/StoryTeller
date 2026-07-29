@@ -36,6 +36,40 @@ const API_VERSION = "2023-06-01";
  */
 export const DEFAULT_MAX_TOKENS = 16384;
 
+/**
+ * How hard the model should reason before it answers.
+ *
+ * These models reason at `high` when asked for nothing, which suits a hard coding
+ * problem and not a narrator with a table waiting on it: one DM turn spent 2,935 tokens
+ * deliberating and took 37 seconds, and another ran past the 60-second cap and lost its
+ * narration outright. `medium` keeps the reasoning that makes the DM consistent about
+ * hit points and initiative, and gives up the part that was only costing wall clock.
+ */
+export const DEFAULT_EFFORT = "medium";
+
+/**
+ * Model families that accept `output_config`. Anything older rejects it outright, and
+ * the model is picked by the operator from a dropdown that still lists older ones — so
+ * this is matched positively rather than by exclusion. A model nobody listed here loses
+ * the effort hint, which is the safe direction to be wrong in.
+ */
+const EFFORT_CAPABLE = [
+	"claude-sonnet-4-6", "claude-sonnet-5",
+	"claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
+	"claude-fable-5", "claude-mythos-5",
+];
+
+/**
+ * @description Reports whether a model accepts the `output_config` parameter. Matches on
+ *   prefix so a dated release id (`claude-sonnet-5-20260114`) is recognised alongside
+ *   the bare alias.
+ * @param {string} model - The resolved model id.
+ * @returns {boolean} True when the effort hint is safe to send.
+ */
+function supportsEffort(model) {
+	return EFFORT_CAPABLE.some(prefix => typeof model === "string" && model.startsWith(prefix));
+}
+
 /** Separator used when merging turns and joining system prompts. */
 const BLOCK_SEPARATOR = "\n\n";
 
@@ -107,7 +141,10 @@ function toConversation(messages) {
  *   deliberately ignored: Anthropic has no response-format parameter, so JSON
  *   steering lives in the prompt.
  * @param {number|null} [options.temperature=null] - Sampling temperature; omitted when not finite.
- * @param {number} [options.maxTokens=4096] - Mandatory response cap.
+ * @param {number} [options.maxTokens=16384] - Mandatory response cap, covering reasoning as
+ *   well as prose.
+ * @param {string} [options.effort="medium"] - How hard the model should reason before
+ *   answering. Sent only to models that accept it; see `supportsEffort`.
  * @param {AbortSignal} [options.signal] - Cancellation signal.
  * @param {Function} [options.fetchImpl] - Fetch implementation for testing.
  * @returns {Promise<{text: string, model: string, finishReason: string|null, usage: object|null}>}
@@ -116,7 +153,7 @@ function toConversation(messages) {
  *   were supplied, "bad_response" when the reply carries no text block, or a
  *   transport/status-derived kind propagated from the HTTP layer.
  */
-async function chat({ messages, config, model, temperature = null, maxTokens = DEFAULT_MAX_TOKENS, signal, fetchImpl }) {
+async function chat({ messages, config, model, temperature = null, maxTokens = DEFAULT_MAX_TOKENS, effort = DEFAULT_EFFORT, signal, fetchImpl }) {
 	if (!Array.isArray(messages) || messages.length === 0) {
 		throw new LLMRequestError("An Anthropic request needs at least one message.", {
 			provider: PROVIDER_ID,
@@ -145,6 +182,7 @@ async function chat({ messages, config, model, temperature = null, maxTokens = D
 	};
 	if (systemPrompt) body.system = systemPrompt;
 	if (Number.isFinite(temperature)) body.temperature = temperature;
+	if (effort && supportsEffort(resolvedModel)) body.output_config = { effort };
 
 	const response = await requestJson(`${config.baseUrl}/messages`, {
 		provider: PROVIDER_ID,

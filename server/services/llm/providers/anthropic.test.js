@@ -131,6 +131,65 @@ test("a reply truncated before any prose says so, and says what to do", async ()
 		});
 });
 
+test("chat asks a reasoning model for moderate effort rather than the default", async () => {
+	// Reasoning effort defaults to `high` on these models, which bought the DM 2,935
+	// tokens of deliberation and a 37-second turn — and one turn that ran past the
+	// 60-second cap and lost its narration entirely. A game narrating to a table in
+	// real time wants a decision it can wait for, not the most considered one.
+	const fetchImpl = fakeFetch(message("hi"));
+
+	await anthropicProvider.chat({
+		messages: [{ role: "user", content: "hi" }],
+		config: { ...CONFIG, model: "claude-sonnet-5" },
+		fetchImpl,
+	});
+
+	assert.equal(sentBody(fetchImpl).output_config?.effort, "medium");
+});
+
+test("chat says nothing about effort to a model that predates it", async () => {
+	// `output_config` is rejected by models older than the 4.6 generation, and the model
+	// is chosen by the operator from a dropdown that still lists them. Sending it
+	// unconditionally would turn a working game into a 400 on every turn.
+	const fetchImpl = fakeFetch(message("hi"));
+
+	await anthropicProvider.chat({
+		messages: [{ role: "user", content: "hi" }],
+		config: { ...CONFIG, model: "claude-3-5-sonnet-20241022" },
+		fetchImpl,
+	});
+
+	assert.equal("output_config" in sentBody(fetchImpl), false);
+});
+
+test("chat honours an explicit effort", async () => {
+	const fetchImpl = fakeFetch(message("hi"));
+
+	await anthropicProvider.chat({
+		messages: [{ role: "user", content: "hi" }],
+		config: { ...CONFIG, model: "claude-opus-5" },
+		effort: "low",
+		fetchImpl,
+	});
+
+	assert.equal(sentBody(fetchImpl).output_config.effort, "low");
+});
+
+test("an explicit effort is still withheld from a model that would reject it", async () => {
+	// Otherwise a caller asking for cheap reasoning would break the older models
+	// outright, which is the opposite of what they asked for.
+	const fetchImpl = fakeFetch(message("hi"));
+
+	await anthropicProvider.chat({
+		messages: [{ role: "user", content: "hi" }],
+		config: { ...CONFIG, model: "claude-3-5-sonnet-20241022" },
+		effort: "low",
+		fetchImpl,
+	});
+
+	assert.equal("output_config" in sentBody(fetchImpl), false);
+});
+
 test("chat honours an explicit max_tokens", async () => {
 	const fetchImpl = fakeFetch(message("hi"));
 

@@ -199,7 +199,15 @@ const ELEVEN_VOICE_ID = process.env.ELEVEN_VOICE_ID || "dAcds2QMcvmv86jQMC3Y";
 const LOCAL_TTS_URL = process.env.LOCAL_TTS_URL || "http://127.0.0.1:8199";
 const TTS_CONFIG_FILE = path.join(__dirname, "data", "tts-config.json");
 const REJECTED_REQUEST_STATUS = 204;
-const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 60000;
+/**
+ * A turn that overruns this loses its narration entirely, so the ceiling has to sit
+ * above the slowest turn we are willing to wait for rather than the typical one. At 60s
+ * it sat below it: a model that reasons before answering took 37s on a busy turn and
+ * once ran past the cap, and the table got nothing for that action. Reasoning effort is
+ * capped separately in the Anthropic adapter, which is the lever that actually keeps
+ * turns short — this is only the backstop.
+ */
+const LLM_TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS) || 120000;
 const HISTORY_SUMMARIZE_THRESHOLD = Number(process.env.HISTORY_SUMMARIZE_THRESHOLD) || 2;
 const MAX_SUMMARY_LENGTH = Number(process.env.MAX_SUMMARY_LENGTH) || 60000;
 const VOICE_CACHE_FILE = path.join(__dirname, "..", "client", "config", "voices_cache.json");

@@ -64,6 +64,10 @@ game loop:
   version is that a budget sized around the narration alone leaves a reasoning model
   nothing to narrate with, and the failure arrives as an empty reply rather than a
   short one.
+- **Anthropic reasons at `high` effort unless told otherwise**, which costs 20–40s a
+  turn. The adapter asks for `medium`, and only from the model families that accept
+  `output_config` — see [ADR 0025](../decisions/0025-reasoning-effort-is-capped-for-a-live-table.md).
+  That list is hand-maintained: a model missing from it silently runs at `high`.
 - **Anthropic requires alternating user/assistant turns**, which StoryTeller
   cannot guarantee — several players can act before the DM replies, and a lobby
   resumed from history may open on the DM's last narration. Consecutive turns
