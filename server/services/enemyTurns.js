@@ -190,7 +190,19 @@ export function resolveEnemyAttacks({ enemies, players, difficulty, round, turnI
 	const attacks = [];
 	const damage = {};
 
-	let swing = 0;
+	// Offset by the acting player's turn, not started from zero.
+	//
+	// This function runs once per player turn and the share-out above usually hands it a single
+	// enemy, so a counter local to the call never advanced past its first value: `targets[0]`, every
+	// turn, for the whole fight. The comment below promised round-robin and delivered "always hit
+	// whoever is first in the players object", which picked the party off in object order.
+	//
+	// A simulation with the tactical map switched off is what surfaced it — Dorn at 0 hit points
+	// while the other three finished untouched. Deriving the offset from `turnIndex` advances it
+	// between calls while keeping the result a function of state, so a fight is still reproducible
+	// (`TDD-8`) rather than depending on a counter that would leak between lobbies.
+	const turnOffset = Number.isFinite(Number(turnIndex)) ? Math.abs(Math.floor(Number(turnIndex))) : 0;
+	let swing = turnOffset;
 	attackers.forEach((enemy) => {
 		const cr = crValue(enemy.cr);
 

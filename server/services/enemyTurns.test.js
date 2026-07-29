@@ -629,3 +629,47 @@ test("without a round the whole roster acts, as the timer path expects", () => {
 
 	assert.equal(r.attacks.length, 3);
 });
+
+// ===== Spreading the damage across turns =====
+
+test("successive turns do not all land on the first character", () => {
+	// The "round-robin" was not one. `swing` is scoped inside this function, and the action
+	// share-out means one enemy usually acts per call — so the counter was always 0, the target was
+	// always `targets[0]`, and the party got picked off in object order.
+	//
+	// Found by running battle-sim with the tactical map off: Dorn dropped to 0 while the other
+	// three finished untouched, which is the exact outcome the comment above the line says it
+	// exists to prevent.
+	const enemies = goblins();
+	const struck = new Set();
+	for (let turnIndex = 0; turnIndex < 4; turnIndex++) {
+		// One enemy per call, which is what the share-out produces for a party of three or more.
+		const result = resolveEnemyAttacks({
+			enemies: { "Goblin 1": enemies["Goblin 1"] },
+			players: party(),
+			round: 1 + turnIndex,
+			turnIndex,
+			partySize: 2,
+			rollD20: scripted(19),
+		});
+		for (const attack of result.attacks) struck.add(attack.target);
+		enemies["Goblin 1"].actedInRound = undefined;
+	}
+	assert.ok(struck.size > 1, `every blow landed on ${[...struck]} across four turns`);
+});
+
+test("the spread is the same on every run, so a fight is reproducible", () => {
+	// `TDD-8`. Whatever replaces the counter has to be derived from state, not from a module-level
+	// variable that leaks between lobbies.
+	const shots = (attempt) => {
+		const hits = [];
+		for (let turnIndex = 0; turnIndex < 4; turnIndex++) {
+			const result = resolveEnemyAttacks({
+				enemies: goblins(), players: party(), round: 1, turnIndex, partySize: 2, rollD20: scripted(19),
+			});
+			hits.push(result.attacks.map((a) => a.target).join(","));
+		}
+		return hits.join("|");
+	};
+	assert.equal(shots(1), shots(2));
+});
