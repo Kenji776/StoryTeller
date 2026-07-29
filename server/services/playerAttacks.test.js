@@ -427,3 +427,19 @@ test("difficulty does not touch the damage a player's weapon deals", () => {
 		assert.equal(resolveAttack({ ...opts, difficulty }).damage, 7, `${difficulty} changed player damage`);
 	}
 });
+
+test("a spell named Fire Bolt is read as an attack by the regex alone", () => {
+	// Recorded, not desired. The ammunition branch matches "fire" + "bolt", so the spell
+	// Fire Bolt looks exactly like firing a crossbow bolt — despite the comment above
+	// ATTACK_ACTION saying casting a fire bolt is not a bow attack.
+	//
+	// Live consequence: a wizard casting Fire Bolt took a *quarterstaff swing as well*,
+	// two damage rolls on one turn. The fix is precedence in the action handler — a spell
+	// the gate recognised is a spell — because a text-only rule cannot tell "I cast fire
+	// bolt" from "I fire a bolt" reliably, and future spells like Flame Strike collide
+	// with `strikes?` in the same way.
+	//
+	// This test exists so the collision is not rediscovered as a surprise.
+	assert.equal(isAttackAction("I cast fire bolt at the nearest hobgoblin."), true);
+	assert.equal(isAttackAction("I fire a bolt at the hobgoblin."), true);
+});

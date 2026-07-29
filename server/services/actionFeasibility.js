@@ -192,9 +192,17 @@ function digest(capability) {
 	].filter(Boolean).join(", ") || "none";
 	const conditions = (capability.conditions || []).join(", ") || "none";
 
+	// Spells are listed only for a caster. "Spells known: none" would invite the judge to
+	// reason about spellcasting a Fighter does not have; absence is the honest rendering.
+	// Omitting them altogether is what made a live judge reject a legal Guiding Bolt as
+	// "not listed among Ovid's known abilities or spells" — `hardChecks` had been taught
+	// about spells and its sibling here had not.
+	const spells = (capability.spells || []).map((s) => s.name).join(", ");
+
 	return [
 		`Character: ${id.name ?? "unknown"}, a level ${id.level ?? "?"} ${id.race ?? ""} ${id.className ?? ""}`.trim(),
 		`Abilities known: ${abilities}`,
+		...(spells ? [`Spells known: ${spells}`] : []),
 		`Carrying: ${items}`,
 		`Equipped: ${gear}`,
 		capability.resources?.slots?.unlimited

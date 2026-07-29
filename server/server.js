@@ -1321,7 +1321,15 @@ io.on("connection", (socket) => {
 			// owns. Until now an attack was graded against a flat DC of 15, so an enemy's
 			// `ac` decided nothing, and the damage was whatever the narration felt like.
 			// See ADR 0018.
-			const attackTarget = isAttackAction(text) ? chooseTarget(text, s.enemies) : null;
+			// A spell the gate recognised wins over the attack regex. "I cast fire bolt"
+			// matches the ammunition branch of ATTACK_ACTION — "fire" + "bolt" reads as
+			// firing a crossbow bolt — so a wizard casting Fire Bolt also took a quarterstaff
+			// swing, two damage rolls on one turn. A text-only rule cannot separate those
+			// reliably, and Flame Strike would collide with `strikes?` the same way; the gate
+			// having matched a spell the character actually knows is far stronger evidence.
+			const attackTarget = isAttackAction(text) && !gate.verdict?.usesSpell
+				? chooseTarget(text, s.enemies)
+				: null;
 			const attack = attackTarget
 				? resolveAttack({ attacker: s.players[actor.name], target: attackTarget, difficulty: s.difficulty })
 				: null;
@@ -1391,7 +1399,11 @@ io.on("connection", (socket) => {
 						: cast.resolution === "heal"
 							? `${cast.spellName} — healing`
 							: `${cast.spellName} vs ${cast.targetName} (AC ${cast.ac})`,
-					value: cast.resolution === "save" ? cast.saveTotal : (cast.total ?? cast.healed),
+					// An unerring spell has no roll to show, so the interesting number is what
+					// it did. It read "Magic Missile → 0", which looks like it fizzled.
+					value: cast.resolution === "save" ? cast.saveTotal
+						: cast.resolution === "heal" ? cast.healed
+							: (cast.total ?? cast.damage),
 					detail: {
 						base: cast.base ?? cast.saveRoll ?? null,
 						bonus: cast.bonus ?? cast.saveBonus ?? 0,
@@ -1409,7 +1421,9 @@ io.on("connection", (socket) => {
 						? ` — heals ${cast.healed}`
 						: ` → ${cast.targetName}: ${cast.resolution === "save"
 							? `save ${cast.saveTotal} vs DC ${cast.dc} — ${cast.saved ? "saved" : "failed"}`
-							: `${cast.total} vs AC ${cast.ac} — ${cast.hit ? "hit" : "miss"}`}`
+							: cast.resolution === "auto"
+								? "unerring"
+								: `${cast.total} vs AC ${cast.ac} — ${cast.hit ? "hit" : "miss"}`}`
 							+ `, ${cast.damage} ${cast.damageType || "damage"}`));
 
 				// A kill pays here rather than through `updateEnemies`, which never sees this
@@ -1420,18 +1434,21 @@ io.on("connection", (socket) => {
 					if (earned.length) broadcastXPUpdates(busIo, store, lobbyId, earned);
 				}
 
-				// The activation is spent here, not on the model reporting `spellUsed`. The
-				// server knows a levelled spell was cast; asking the narrator to remember is
-				// the class of bookkeeping every ADR since 0008 has been removing.
-				if (gate.verdict.spendsSlot) {
-					const player = store.index[lobbyId]?.players?.[actor.name];
-					const maxSlots = slotCapacity(player, store.index[lobbyId]?.abilitySlotsBase);
-					if (player && (player.spellSlotsUsed || 0) < maxSlots) {
-						player.spellSlotsUsed = (player.spellSlotsUsed || 0) + 1;
-						store.persist(lobbyId);
-						log(`🔮 Slot spent by ${actor.name} for ${cast.spellName}`
-							+ ` (${player.spellSlotsUsed}/${Number.isFinite(maxSlots) ? maxSlots : "∞"})`);
-					}
+			}
+
+			// The activation is spent on the gate's verdict, not on whether the spell found a
+			// target and not on the model reporting `spellUsed`. Keying it on resolution let a
+			// cantrip cast with nobody to aim at fall through to the narrator's flag, which
+			// knows nothing about spell levels and charged for it — a live run spent one of
+			// Kessa's three activations on Eldritch Blast.
+			if (gate.verdict?.usesSpell && gate.verdict.spendsSlot) {
+				const player = store.index[lobbyId]?.players?.[actor.name];
+				const maxSlots = slotCapacity(player, store.index[lobbyId]?.abilitySlotsBase);
+				if (player && (player.spellSlotsUsed || 0) < maxSlots) {
+					player.spellSlotsUsed = (player.spellSlotsUsed || 0) + 1;
+					store.persist(lobbyId);
+					log(`🔮 Slot spent by ${actor.name} for ${gate.verdict.usesSpell}`
+						+ ` (${player.spellSlotsUsed}/${Number.isFinite(maxSlots) ? maxSlots : "∞"})`);
 				}
 			}
 
@@ -1642,7 +1659,11 @@ io.on("connection", (socket) => {
 					// The enemy this turn's attack resolved is off limits: its hit points
 					// are the server's, and the model's copy would overwrite them.
 					const killed = store.updateEnemies(lobbyId, u.enemies, {
-						serverResolved: attack ? [attack.targetName] : [],
+						// Both resolvers' targets. A spell's was missing, so the model's own
+						// `enemies` block could rewrite the hit points Fire Bolt had just taken
+						// off — including reviving something a spell had killed, which is the
+						// defect this list exists to prevent for weapons.
+						serverResolved: [attack?.targetName, cast?.targetName].filter(Boolean),
 						difficulty: s.difficulty,
 					});
 					const living = Object.values(store.index[lobbyId]?.players || {})
@@ -1653,10 +1674,11 @@ io.on("connection", (socket) => {
 				}
 				if (dmObj.combat_over) store.purgeDeadEnemies(lobbyId);
 
-				// Only for a class-table ability now. A spell from the catalogue spends its
-				// activation at the point the server resolved it, above — charging again here
-				// would take two uses for one cast.
-				if (dmObj.spellUsed === true && !cast) {
+				// Only for a class-table ability now. Anything the gate recognised as a spell
+				// has already been ruled on above — including a cantrip, which is free — so
+				// letting the narrator's flag through here would both double-charge a levelled
+				// spell and charge for a cantrip that costs nothing.
+				if (dmObj.spellUsed === true && !gate.verdict?.usesSpell) {
 					const player = store.index[lobbyId]?.players?.[actor.name];
 					if (player) {
 						// The host-configured pool, not player.level. These disagreed: a level-1

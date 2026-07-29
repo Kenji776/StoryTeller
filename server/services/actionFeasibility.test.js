@@ -360,3 +360,32 @@ test("ordinary prose containing a spell word is not treated as casting", () => {
 	assert.equal(hardChecks(c, "I delight in the chaos and charge.").usesSpell, undefined);
 	assert.equal(hardChecks(c, "I cast a glance over my shoulder.").allow, true);
 });
+
+test("the judge is told which spells the character knows", async () => {
+	// Live defect, seen in a three-caster game: the judge rejected a legal Guiding Bolt
+	// with "not listed among Ovid's known abilities or spells", because the digest lists
+	// abilities and never mentioned spells. `hardChecks` had been taught about them and
+	// this, its sibling in the same file, had not — the EDIT-2 failure exactly.
+	const llm = fakeLLM('{"verdict":"allow"}');
+	await judgeAction({
+		capability: cap({ class: "Cleric", abilities: [], spells: ["Sacred Flame", "Guiding Bolt"] }),
+		text: "I cast guiding bolt at the hobgoblin.",
+		getLLMResponse: llm.fn,
+	});
+	const prompt = llm.calls[0].map((m) => m.content).join("\n");
+	assert.match(prompt, /Guiding Bolt/);
+	assert.match(prompt, /Sacred Flame/);
+});
+
+test("a non-caster's digest does not claim an empty spell list", async () => {
+	// "Spells known: none" invites the judge to reason about a spellcasting a Fighter
+	// does not have. Absence is the honest rendering.
+	const llm = fakeLLM('{"verdict":"allow"}');
+	await judgeAction({
+		capability: cap({ class: "Fighter", abilities: [{ name: "Second Wind", description: "" }] }),
+		text: "I shove the table over.",
+		getLLMResponse: llm.fn,
+	});
+	const prompt = llm.calls[0].map((m) => m.content).join("\n");
+	assert.doesNotMatch(prompt, /Spells known/);
+});

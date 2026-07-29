@@ -150,9 +150,20 @@ saving throw needs.
 identify it to allow the action, so matching the name again in the handler would be a
 second implementation of one question.
 
-**The activation is spent by the server**, at the point the spell resolves, not on the
-model reporting `spellUsed` — that flag now only covers class-table abilities, and
-charging on both paths would take two uses for one cast.
+**The activation is spent on the gate's verdict**, not on whether the spell found a
+target and not on the model reporting `spellUsed` — that flag now only covers class-table
+abilities. Keying it on *resolution* instead let a cantrip cast with nobody to aim at fall
+through to the narrator's flag, which knows nothing about spell levels and charged for it.
+
+**A recognised spell outranks the attack regex.** `isAttackAction` matches "I cast fire
+bolt" — "fire" + "bolt" reads as firing a crossbow bolt — so a wizard casting Fire Bolt
+also took a quarterstaff swing, two damage rolls on one turn. Text alone cannot separate
+those, and Flame Strike would collide with `strikes?` the same way; the gate having
+matched a spell the character actually knows is stronger evidence.
+
+**Both resolvers' targets are protected** from the model's `enemies` block via
+`serverResolved`. The spell's was missing at first, so a narration could rewrite the hit
+points a spell had just taken off.
 
 **`describeSpell`'s grammar is load-bearing** and is asserted, because a model writes
 prose from it. Two defects were invisible in code and obvious on the first render:
@@ -177,7 +188,8 @@ cast Light, and a bare "Touch" must not beat "Chill Touch".
 
 | Probe | What it answers | Cost |
 |---|---|---|
-| `test-integration/spell-picker-probe.mjs` | Do a caster's picks survive the round trip, and does the server refuse what a browser should not be able to save? Drives the real socket path. | free — no model |
+| `test-integration/spell-picker-probe.mjs` | Do a caster's picks survive the round trip, and does the server refuse what a browser should not be able to save? | free — no model |
+| `test-integration/caster-party-probe.mjs` | Do three casters of different classes actually get to cast, on their own stats, against real armour classes and save DCs, with cantrips free? Every defect listed under Resolution was found by this. | one DM call per turn |
 
 ## Known gaps
 
