@@ -15,11 +15,25 @@
  *   blow must never take a character from full health to dead, and no encounter should
  *   be unwinnable at any setting.
  *
+ *   **Enemy counts come from `encounterBudget`, not from this file.** They used to be
+ *   hand-written per row, and the only solo row was the only row at two enemies per
+ *   character while every party row sat at one — so the file reported a 65-point solo
+ *   penalty that was entirely an artifact of its own scenario table. Reading the budget
+ *   the DM is actually given makes the solo and party rows comparable, and means a
+ *   change to the budget shows up here instead of having to be mirrored by hand. The
+ *   `n` column is the count that was used. See ADR 0022.
+ *
+ *   Each archetype is run solo and in a party so the two can be read against each
+ *   other. The ogre is exempt from the budget on purpose: one big monster is a
+ *   legitimate encounter the directive explicitly allows, and it is the case a
+ *   head-count budget cannot express.
+ *
  *     node server/test-integration/balance-sim.mjs
  */
 
 import { resolveEnemyAttacks } from "../services/enemyTurns.js";
 import { resolveAttack } from "../services/playerAttacks.js";
+import { encounterBudget } from "../services/encounterPacing.js";
 import { difficultyModifiers } from "../../client/difficulty.js";
 
 const TRIALS = 4000;
@@ -134,23 +148,49 @@ function sample(scenario) {
 	};
 }
 
+/** The creatures the model reaches for, at the level a party meets them. */
+const GOBLIN = { cr: "1/4", enemyHp: 7, enemyAc: 15, enemyStr: 8 };
+const HOBGOBLIN = { cr: "1/2", enemyHp: 11, enemyAc: 18, enemyStr: 13 };
+const ORC = { cr: "1", enemyHp: 15, enemyAc: 13, enemyStr: 16 };
+const OGRE = { cr: "2", enemyHp: 59, enemyAc: 11, enemyStr: 19 };
+
 const SCENARIOS = [
-	{ label: "L1 solo vs 2 goblins (CR 1/4)", partySize: 1, level: 1, enemyCount: 2, cr: "1/4", enemyHp: 7, enemyAc: 15, enemyStr: 8 },
-	{ label: "L1 party of 3 vs 3 goblins", partySize: 3, level: 1, enemyCount: 3, cr: "1/4", enemyHp: 7, enemyAc: 15, enemyStr: 8 },
-	{ label: "L3 party of 3 vs 2 hobgoblins (CR 1/2)", partySize: 3, level: 3, enemyCount: 2, cr: "1/2", enemyHp: 11, enemyAc: 18, enemyStr: 13 },
-	{ label: "L3 party of 3 vs 1 ogre (CR 2)", partySize: 3, level: 3, enemyCount: 1, cr: "2", enemyHp: 59, enemyAc: 11, enemyStr: 19 },
-	{ label: "L5 party of 4 vs 4 orcs (CR 1)", partySize: 4, level: 5, enemyCount: 4, cr: "1", enemyHp: 15, enemyAc: 13, enemyStr: 16 },
+	{ label: "L1 solo vs goblins (CR 1/4)", partySize: 1, level: 1, ...GOBLIN },
+	{ label: "L1 party of 3 vs goblins", partySize: 3, level: 1, ...GOBLIN },
+	{ label: "L3 solo vs hobgoblins (CR 1/2)", partySize: 1, level: 3, ...HOBGOBLIN },
+	{ label: "L3 party of 3 vs hobgoblins", partySize: 3, level: 3, ...HOBGOBLIN },
+	{ label: "L5 solo vs orcs (CR 1)", partySize: 1, level: 5, ...ORC },
+	{ label: "L5 party of 4 vs orcs", partySize: 4, level: 5, ...ORC },
+	// Budget-exempt: the directive allows one larger monster to stand in for a group,
+	// and a head count is the one thing that cannot express it.
+	{ label: "L3 solo vs 1 ogre (CR 2) [boss]", partySize: 1, level: 3, enemyCount: 1, ...OGRE },
+	{ label: "L3 party of 3 vs 1 ogre (CR 2) [boss]", partySize: 3, level: 3, enemyCount: 1, ...OGRE },
 ];
+
+/**
+ * @description How many creatures this row fights. A row that states its own count is
+ *   a boss and keeps it; every other row asks the budget the DM is given, at its
+ *   ceiling — the hardest encounter the directive permits, which is the bound worth
+ *   measuring.
+ * @param {object} scenario - The row.
+ * @param {string} difficulty - The setting being measured.
+ * @returns {number} Enemies to field.
+ */
+function enemyCountFor(scenario, difficulty) {
+	return scenario.enemyCount ?? encounterBudget({ partySize: scenario.partySize, difficulty }).max;
+}
 
 for (const difficulty of ["casual", "standard", "hardcore", "merciless"]) {
 	console.log(`\n══ ${difficulty.toUpperCase()} ${"═".repeat(60 - difficulty.length)}`);
-	console.log("  scenario                                    win%    1-shot  1-turn  rounds");
+	console.log("  scenario                                    n   win%    1-shot  1-turn  rounds");
 	for (const s of SCENARIOS) {
-		const r = sample({ ...s, difficulty });
-		console.log(`  ${s.label.padEnd(42)} ${r.win.padStart(6)}  ${r.oneShot.padStart(6)}  ${r.oneTurn.padStart(6)}  ${r.rounds.padStart(5)}`);
+		const enemyCount = enemyCountFor(s, difficulty);
+		const r = sample({ ...s, enemyCount, difficulty });
+		console.log(`  ${s.label.padEnd(40)} ${String(enemyCount).padStart(2)} ${r.win.padStart(6)}  ${r.oneShot.padStart(6)}  ${r.oneTurn.padStart(6)}  ${r.rounds.padStart(5)}`);
 	}
 }
 
-console.log("\n  win%    = party wipes the encounter without losing everyone");
+console.log("\n  n       = enemies fielded, from encounterBudget(...).max — [boss] rows are exempt");
+console.log("  win%    = party wipes the encounter without losing everyone");
 console.log("  1-shot  = a SINGLE enemy attack dealt >= a character's full hit points");
 console.log("  1-turn  = one player-turn's worth of enemy attacks did");

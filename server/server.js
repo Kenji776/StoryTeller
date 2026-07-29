@@ -1556,8 +1556,14 @@ io.on("connection", (socket) => {
 
 			const msgs = store.composeMessages(lobbyId, actor.name, text, rollPayload, loot);
 			if (forceEncounter) {
-				msgs.push({ role: "system", content: encounterDirective(s.difficulty) });
-				console.log(`⚔️  Encounter forced after ${s.quietTurns} quiet turn(s)`);
+				// Sized to the table, not to the world. Told nothing about the party, the
+				// model wrote the same fight for one character as for four, and 39% of
+				// stored games are solo — see ADR 0022. The seat count is the one the
+				// enemies' share-out divides by, so the encounter the DM is asked for and
+				// the round the server resolves are talking about the same party.
+				const partySize = (s.initiative || []).filter((name) => !s.players?.[name]?.dead).length;
+				msgs.push({ role: "system", content: encounterDirective(s.difficulty, { partySize }) });
+				console.log(`⚔️  Encounter forced after ${s.quietTurns} quiet turn(s) for a party of ${partySize}`);
 				s.quietTurns = 0;
 			}
 			if (attack) {

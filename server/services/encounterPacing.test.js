@@ -15,7 +15,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { shouldForceEncounter, encounterDirective, QUIET_TURNS_BY_DIFFICULTY } from "./encounterPacing.js";
+import { shouldForceEncounter, encounterDirective, encounterBudget, QUIET_TURNS_BY_DIFFICULTY } from "./encounterPacing.js";
+
+/** Every difficulty the dial offers, plus the values a stored lobby can actually hold. */
+const DIFFICULTIES = ["casual", "standard", "hardcore", "merciless"];
+const UNKNOWN_DIFFICULTIES = [undefined, null, "", "nightmare", 7];
 
 // ===== When a fight is due =====
 
@@ -61,7 +65,180 @@ test("a malformed quiet count does not force a fight every turn", () => {
 	}
 });
 
+// ===== How big the fight is =====
+//
+// 39% of stored games are solo. Nothing sized the encounter to the table, so the
+// lone character and the party of four were handed the same instruction and the
+// solo player faced several times the opposition per head. Measured over 2000
+// fights per cell, that — not the action economy and not the one-blow cap — is
+// the whole of the solo penalty: at one enemy per character a solo character wins
+// 84% of Hardcore goblin fights against a party of four's 94%, while at two per
+// character it wins 34%.
+
+test("a solo character is not sent a party's worth of enemies", () => {
+	const solo = encounterBudget({ partySize: 1, difficulty: "standard" });
+	const four = encounterBudget({ partySize: 4, difficulty: "standard" });
+	assert.equal(solo.max, 1);
+	assert.ok(four.max > solo.max, `party of four got ${four.max}, solo got ${solo.max}`);
+});
+
+test("the roster grows with the party", () => {
+	for (const difficulty of DIFFICULTIES) {
+		let previous = 0;
+		for (const partySize of [1, 2, 3, 4, 5, 6, 7, 8]) {
+			const { max } = encounterBudget({ partySize, difficulty });
+			assert.ok(max >= previous, `${difficulty} P${partySize}: ${max} < ${previous}`);
+			previous = max;
+		}
+	}
+});
+
+test("no encounter exceeds one enemy per character", () => {
+	// Measured ceiling, not taste. Above one per character a Hardcore or Merciless
+	// party facing an AC 18 creature wins 0-6% of the time, and "nothing is
+	// unwinnable" is the line this engine holds.
+	for (const difficulty of [...DIFFICULTIES, ...UNKNOWN_DIFFICULTIES]) {
+		for (const partySize of [1, 2, 3, 4, 5, 6, 7, 8]) {
+			const { max } = encounterBudget({ partySize, difficulty });
+			assert.ok(max <= partySize, `${String(difficulty)} P${partySize}: ${max} > ${partySize}`);
+		}
+	}
+});
+
+test("a harsher difficulty never asks for fewer enemies", () => {
+	for (const partySize of [1, 2, 3, 4, 5, 6, 7, 8]) {
+		let previousMin = 0;
+		let previousMax = 0;
+		for (const difficulty of DIFFICULTIES) {
+			const { min, max } = encounterBudget({ partySize, difficulty });
+			assert.ok(min >= previousMin, `${difficulty} P${partySize} min ${min} < ${previousMin}`);
+			assert.ok(max >= previousMax, `${difficulty} P${partySize} max ${max} < ${previousMax}`);
+			previousMin = min;
+			previousMax = max;
+		}
+	}
+});
+
+test("casual sends a smaller crowd than standard", () => {
+	assert.ok(encounterBudget({ partySize: 4, difficulty: "casual" }).max
+		< encounterBudget({ partySize: 4, difficulty: "standard" }).max);
+});
+
+test("a budget always asks for at least one enemy and never inverts", () => {
+	for (const difficulty of [...DIFFICULTIES, ...UNKNOWN_DIFFICULTIES]) {
+		for (const partySize of [1, 2, 3, 4, 5, 6, 7, 8]) {
+			const { min, max } = encounterBudget({ partySize, difficulty });
+			assert.ok(Number.isInteger(min) && Number.isInteger(max), `${String(difficulty)} P${partySize}`);
+			assert.ok(min >= 1, `${String(difficulty)} P${partySize} min ${min}`);
+			assert.ok(min <= max, `${String(difficulty)} P${partySize}: ${min} > ${max}`);
+		}
+	}
+});
+
+test("an empty or malformed party is budgeted as a solo one, not as none", () => {
+	// An encounter for zero characters is an encounter that never starts, which is
+	// the failure this module exists to end.
+	for (const bad of [0, -3, NaN, Infinity, "three", null, undefined, {}]) {
+		const { min, max } = encounterBudget({ partySize: bad, difficulty: "standard" });
+		assert.equal(min, 1, String(bad));
+		assert.equal(max, 1, String(bad));
+	}
+});
+
+test("every paced difficulty also has a budget", () => {
+	// The two tables are keyed the same and looked up through one resolver. Adding a
+	// difficulty to one and not the other would destructure `undefined` and throw on
+	// the first forced encounter of a lobby set to it.
+	for (const difficulty of Object.keys(QUIET_TURNS_BY_DIFFICULTY)) {
+		assert.doesNotThrow(() => encounterBudget({ partySize: 3, difficulty }), difficulty);
+		assert.ok(encounterBudget({ partySize: 3, difficulty }).max >= 1, difficulty);
+	}
+	assert.deepEqual(Object.keys(QUIET_TURNS_BY_DIFFICULTY).sort(), DIFFICULTIES.slice().sort());
+});
+
+test("an unknown difficulty is budgeted as standard", () => {
+	const standard = encounterBudget({ partySize: 4, difficulty: "standard" });
+	for (const unknown of UNKNOWN_DIFFICULTIES) {
+		assert.deepEqual(encounterBudget({ partySize: 4, difficulty: unknown }), standard, String(unknown));
+	}
+});
+
+test("the difficulty is read case- and whitespace-insensitively", () => {
+	assert.deepEqual(
+		encounterBudget({ partySize: 4, difficulty: "  Casual " }),
+		encounterBudget({ partySize: 4, difficulty: "casual" }),
+	);
+});
+
+test("a missing argument object is budgeted as a solo standard table", () => {
+	assert.deepEqual(encounterBudget(), { min: 1, max: 1 });
+});
+
 // ===== What the DM is told =====
+
+test("the directive states how many enemies this table should face", () => {
+	const text = encounterDirective("standard", { partySize: 4 });
+	const { min, max } = encounterBudget({ partySize: 4, difficulty: "standard" });
+	assert.match(text, new RegExp(`\\b${min}\\b`), text);
+	assert.match(text, new RegExp(`\\b${max}\\b`), text);
+});
+
+test("the directive tells a solo table it is one character", () => {
+	// The count alone is not enough: the model reaches for "a pack of them" unless
+	// it is told the size of the table it is writing for.
+	const text = encounterDirective("standard", { partySize: 1 });
+	assert.match(text, /\b1 character\b/i, text);
+});
+
+test("a solo directive asks for fewer enemies than a party's", () => {
+	assert.notEqual(
+		encounterDirective("merciless", { partySize: 1 }),
+		encounterDirective("merciless", { partySize: 4 }),
+	);
+});
+
+test("the directive counts the table in grammatical English", () => {
+	// It is read by a model that is being asked to write prose. "1 character are
+	// playing" is the sort of thing it happily imitates.
+	assert.match(encounterDirective("standard", { partySize: 1 }), /1 character is playing/i);
+	assert.match(encounterDirective("standard", { partySize: 4 }), /4 characters are playing/i);
+	assert.ok(!/1 characters|1 character are|4 character is|4 character\b/i.test(
+		encounterDirective("standard", { partySize: 4 }) + encounterDirective("standard", { partySize: 1 }),
+	));
+});
+
+test("a solo table is not offered a monster to stand in for a group of one", () => {
+	// The directive is line-wrapped, so the phrase can straddle a newline.
+	assert.doesNotMatch(encounterDirective("merciless", { partySize: 1 }), /stand\s+in for/i);
+});
+
+test("a solo table is told to size the creature to one character, not to a party", () => {
+	// Measured: a level 3 solo character against the CR 2 ogre that is a 55% fight for
+	// a party of three wins 0.7% of the time on Standard and 0% above it. Capping the
+	// *count* at one does nothing about this — one creature sized for a party is still
+	// one creature, and it is the worst encounter a lone character can be handed.
+	const text = encounterDirective("hardcore", { partySize: 1 });
+	assert.match(text, /alone|lone|single character|one character/i, text);
+	assert.match(text, /would be a fair fight for a party|not.*for a party|sized for a party/i, text);
+});
+
+test("a party is not given the lone-character warning", () => {
+	assert.doesNotMatch(encounterDirective("hardcore", { partySize: 4 }), /kills? a lone character/i);
+});
+
+test("the directive leaves room for a single larger monster", () => {
+	// A budget stated as a head count would otherwise forbid the ogre, which is a
+	// legitimate encounter for a party of three and one the engine handles.
+	assert.match(encounterDirective("standard", { partySize: 3 }), /larger|bigger|single|one creature/i);
+});
+
+test("the directive carries no count for a party it was told nothing about", () => {
+	// A caller that forgets to pass the party is budgeted as solo, which is the
+	// smallest encounter and therefore the safe failure.
+	const text = encounterDirective("standard");
+	assert.ok(!/undefined|null|NaN/.test(text), text);
+	assert.match(text, /\b1 character\b/i, text);
+});
 
 test("the directive tells the DM to start the fight in this response", () => {
 	const text = encounterDirective("standard");

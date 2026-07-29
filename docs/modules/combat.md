@@ -157,19 +157,30 @@ Hit chance is preferred to damage as the lever: an attack bonus saturates, while
 damage multiplier compounds. At ×2 a CR 2 ogre one-shot a level 3 character in 82% of
 simulated fights, which is what the one-blow cap prevents.
 
-Measured, 4000 fights per encounter:
+Measured, 4000 fights per row, with enemy counts taken from the encounter budget in
+[modules/encounters.md](encounters.md) — three archetypes, played solo and in a party:
 
 | | Casual | Standard | Hardcore | Merciless |
 |---|---|---|---|---|
-| Party win rate | 100% | 99–100% | 36–93% | 21–79% |
-| Solo win rate | 100% | 84% | 36% | 21% |
+| Party win rate | 100% | 98–100% | 41–94% | 12–79% |
+| Solo win rate | 100% | 91–99% | 45–84% | 28–73% |
 | One-shot rate | 0% | 0% | 0% | 0% |
+| One-turn rate | 0% | 0% | 0–5% | 0–35% |
 
-These supersede the figures quoted in ADR 0020, which were measured before enemy
-actions became per-creature rather than positional. That change made the party's
-position slightly better, most visibly against a single large monster — it could
-previously act more than once a round when a party member died and the share-out
-reindexed.
+These supersede the figures quoted in ADR 0020 twice over. That ADR's numbers predate
+enemy actions becoming per-creature rather than positional, and its solo column was an
+artifact of `balance-sim.mjs` fielding two enemies per character in its only solo row
+and one per character everywhere else — the solo penalty it recorded was the scenario
+table, not the engine. See [ADR 0022](../decisions/0022-encounters-are-sized-to-the-party.md).
+
+The spread inside each column is archetype, not party size: at one enemy per character
+Merciless is 78% against AC 15 and 12% against AC 18. Armour class is the quantity the
+dial does not touch, and it is why Hardcore and Merciless still miss their 50%/25%
+targets in both directions.
+
+The **one-turn** row is the sharpest remaining edge. The cap is on a blow, not a turn
+(ADR 0020 declined to cap a turn on purpose), so a Merciless party of three still loses
+a character's full hit points inside one player-turn in a third of hobgoblin fights.
 
 `describeDifficulty` renders the same table into the lines the settings window
 lists under the chips and the block pasted into the DM prompt — where it is also
@@ -178,12 +189,18 @@ told the modifiers are *already applied*, or it applies them a second time.
 An unrecognised difficulty gets Standard's modifiers rather than throwing, so a
 combat path that forgets to pass it plays balanced rather than crashing.
 
+**How many things attack is not part of this table.** It is sized to the party, not to
+the difficulty, and lives in `services/encounterPacing.js` — see
+[modules/encounters.md](encounters.md).
+
 ## Known gaps
 
 - **Trinket effects are not computed.** A Ring of the Veil works as well as the
   narrator remembers it.
 - **Difficulty modifiers are flat, not level-scaled.** +9 to enemy attacks matters
-  more at level 1 than at level 15.
+  more at level 1 than at level 15. Deliberately unbuilt: 102 of 127 stored characters
+  are level 1 and none exceeds level 3, so there is no measurable defect to fix
+  ([ADR 0022](../decisions/0022-encounters-are-sized-to-the-party.md)).
 - **The out-of-character and rest paths take no enemy round.** Only acting and timing
   out do. That is probably right, but it is not a considered decision.
 - **No advantage, cover, reach, opportunity attacks or resistances.**
@@ -198,10 +215,10 @@ combat path that forgets to pass it plays balanced rather than crashing.
 
 | Probe | What it answers | Cost |
 |---|---|---|
-| `test-integration/balance-sim.mjs` | Can a party actually win? Win and one-shot rates per difficulty, over thousands of fights through the real resolvers. | free — no model |
+| `test-integration/balance-sim.mjs` | Can a party actually win? Win and one-shot rates per difficulty, over thousands of fights through the real resolvers, at the enemy counts `encounterBudget` actually hands the DM. | free — no model |
 | `test-integration/idle-turn-probe.mjs` | Does letting the clock run out still cost you? Stages a fight, then does nothing. | slow — the timer clamps to a minute |
+| `test-integration/caster-party-probe.mjs` | Do three casters of different classes get to cast, on their own stats, against real armour classes and save DCs? | one DM call per turn |
 | `test-integration/combat-probe.mjs` | Does the roll use the real AC, does the DM narrate a miss as a miss, and does it leave the server's hit points alone? | one DM call per turn |
-| `test-integration/damage-probe.mjs` | Older, and **stale** — it imports `services/llmService.js`, which no longer exists. | — |
 
 
 ## Initiative, and what happens when somebody leaves
@@ -235,4 +252,4 @@ so it re-renders on both. The enemy list it draws comes from `state:update` only
 which the action handler emits on both the success and the parse-failure path — so an
 enemy killed on a turn whose narration failed to parse still disappears.
 
-_Last verified: 2026-07-28 against branch `Refactor` (8bd10b2)._
+_Last verified: 2026-07-28 against branch `Refactor` (6a2adfb)._

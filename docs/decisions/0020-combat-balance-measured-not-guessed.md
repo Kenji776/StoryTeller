@@ -1,6 +1,6 @@
 # 0020 — Combat balance is measured, and no single blow deletes a character
 
-Status: accepted
+Status: superseded by [0022](0022-encounters-are-sized-to-the-party.md)
 Supersedes: [0019](0019-difficulty-scales-the-opposition.md)
 
 ## Context
