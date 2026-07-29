@@ -1857,6 +1857,10 @@ textarea.locked {
 }
 
 /* === Observer mode ===
+   The Action Log deliberately stays visible: it is the shared event feed — dice
+   rolls, hit points, XP, turn skips, who joined — not a personal one. Hiding it
+   left a watcher seeing narration with no mechanics, which reads as the game
+   doing nothing. */
    A watcher has no character, so every control that acts on one is hidden rather than
    disabled: a greyed-out Save Sheet on a sheet they cannot have invites the question
    "why not?", and the honest answer is that this view is not for them. */
@@ -1869,8 +1873,7 @@ body.observing #importCharBtn,
 body.observing #exportCharBtn,
 body.observing #randomizeChar,
 body.observing #exportCharGameBtn,
-body.observing #gameCharacterSection,
-body.observing #actionLogSection {
+body.observing #gameCharacterSection {
 	display: none !important;
 }
 .observer-banner {
