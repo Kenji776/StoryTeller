@@ -10,13 +10,30 @@ why it is two stages.
 **Use a dedicated dev-mode server on its own port.** Not the one you play on.
 
 ```bash
-PORT=3099 DEV_MODE=TRUE node server/server.js
+PORT=3099 DEV_MODE=TRUE FEASIBILITY_MODE=judge node server/server.js
 ```
 
 Dev mode skips ElevenLabs synthesis and image generation and touches nothing in the
 DM turn pipeline. Without it a full sweep synthesises speech for every one of
 several thousand turns, which is a large bill for audio nobody hears. Its own port
 keeps the sweep from disturbing a live table.
+
+**`FEASIBILITY_MODE=judge` is not optional if you want a judgement score.** It is
+unset by default, and `actionGate` then runs in `observe` mode: it logs what it
+*would* have refused and lets everything through, never emitting `action:rejected`.
+On such a server no model can be observed to judge anything.
+
+The harness no longer silently scores that zero — before the script it submits one
+action naming a spell no level-1 character knows, which `hardChecks` refuses in pure
+code with no model call. Look for one of these lines early in the output:
+
+```
+gate is enforcing (probe refused: unknown_ability)
+gate is NOT enforcing — judgement cannot be measured on this server
+```
+
+If you see the second, the judgement dimension is reported `n/a` and its weight
+renormalises away, rather than being charged to every model equally.
 
 Keys come from `server/.env` via the operator vault — `OPENAI_API_KEY` and
 `ANTHROPIC_API_KEY` (or the legacy `CLAUDE_API_KEY`). Ollama needs none. A provider
@@ -30,7 +47,42 @@ node server/test-integration/bakeoff/bakeoff.mjs \
     --providers openai,anthropic --out server/logs/bakeoff-screen-hosted.json
 ```
 
-Run the local models **separately, at concurrency 1**:
+### Descending sweep (`--descend`)
+
+For a catalogue as large and as layered as OpenAI's, walk generations newest to oldest
+and stop once a whole generation is dead:
+
+```bash
+node server/test-integration/bakeoff/bakeoff.mjs \
+    --url http://localhost:3099 --actions 12 --concurrency 3 \
+    --providers openai --descend --out server/logs/screen-openai.json
+```
+
+Models are grouped into release "rungs" (`generations.js`) and ordered by the **dated
+snapshots the catalogue itself publishes** — not by version number, because version
+numbers lie about recency across families: `gpt-4.1` (April 2025) is newer than `gpt-4o`
+(November 2024), and the `o` series interleaves with both. Expect an order like:
+
+```
+chat-latest > gpt-5.6 > gpt-5.5 > gpt-5.4 > gpt-5.3 > gpt-5.2 > gpt-5.1 > gpt-5
+  > o4 > o3 > gpt-4.1 > o1 > gpt-4o > gpt-4-turbo > gpt-4 > gpt-3.5
+```
+
+The stopping rule is deliberately not "stop at the first failure": a single failing
+model only means the next generation down has to be proven too. The sweep stops when
+**every** judged model in one generation fails, and everything older is then recorded as
+`assumed failure` — a tier that is explicitly not a measured result. A model marked
+`not evaluated` (provider throttling) never counts toward the stopping rule, or a rate
+limit could silently truncate the sweep.
+
+Two generations with no ISO-dated snapshot are placed by hand in
+`generations.js` (`LEGACY_RELEASES`): `gpt-4`, `gpt-4-turbo` and `gpt-3.5` publish only a
+bare `-MMDD` tag whose year is implicit. Without those entries an undated rung is treated
+as *newest* — right for `gpt-5.6`, and badly wrong for `gpt-4`, which sorted to the top.
+
+### Local models
+
+Run them **separately, at concurrency 1**:
 
 ```bash
 node server/test-integration/bakeoff/bakeoff.mjs \

@@ -27,6 +27,7 @@ import dotenv from "dotenv";
 import { runGame } from "./runGame.mjs";
 import { getProvider } from "../../services/llm/registry.js";
 import { selectCandidates } from "../../services/bakeoff/candidates.js";
+import { orderRungsNewestFirst } from "../../services/bakeoff/generations.js";
 import { collectEvidence } from "../../services/bakeoff/journal.js";
 import { scoreRun } from "../../services/bakeoff/scoreRun.js";
 
@@ -53,6 +54,9 @@ const CONCURRENCY = Number(arg("concurrency", "4"));
 const OUT = path.resolve(arg("out", path.join(ROOT, "server", "logs", "bakeoff-results.json")));
 const ONLY = arg("models", "")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
 const ONLY_PROVIDERS = arg("providers", "")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
+// Walk generations newest to oldest and stop once a whole generation fails, instead of
+// paying for every model in the catalogue.
+const DESCEND = argv.includes("--descend");
 const LOG_DIR = path.join(ROOT, "server", "logs");
 
 /** How many times a model may be re-asked after the provider throttled us. */
@@ -93,6 +97,7 @@ function log(msg) {
  */
 async function discoverCandidates() {
 	const all = [];
+	const catalogue = [];
 	for (const [providerId, keyVars] of Object.entries(KEY_VARS)) {
 		if (ONLY_PROVIDERS.length && !ONLY_PROVIDERS.includes(providerId)) continue;
 		const provider = getProvider(providerId);
@@ -105,14 +110,85 @@ async function discoverCandidates() {
 			const listed = await provider.listModels({
 				config: { providerId, apiKey, model: null, baseUrl: provider.defaultBaseUrl ?? null },
 			});
-			const { selected, excluded } = selectCandidates(providerId, listed.map((m) => m.id));
+			const ids = listed.map((m) => m.id);
+			const { selected, excluded } = selectCandidates(providerId, ids);
 			log(`${providerId}: ${selected.length} candidates of ${listed.length} listed (${excluded.length} excluded)`);
 			all.push(...selected);
+			// Kept before `selectCandidates` strips the dated snapshots: those dates are the
+			// only honest evidence of release order, which the descending sweep needs.
+			catalogue.push(...ids);
 		} catch (err) {
 			log(`SKIP ${providerId}: ${err.kind ?? "error"} — ${err.message}`);
 		}
 	}
-	return ONLY.length ? all.filter((c) => ONLY.includes(c.model)) : all;
+	const candidates = ONLY.length ? all.filter((c) => ONLY.includes(c.model)) : all;
+	return { candidates, catalogue };
+}
+
+/**
+ * @description Reports whether a graded report counts as a failure for sweep purposes.
+ *   `not evaluated` deliberately does not: the provider refused us, which is not evidence
+ *   about the model and must never be allowed to terminate the sweep early.
+ * @param {object} report - A graded report.
+ * @returns {boolean} True when the model genuinely could not run the game.
+ */
+const isFailure = (report) => report?.verdict === "unusable";
+
+/**
+ * Walks generations newest to oldest, stopping once an entire generation fails.
+ *
+ * @description The premise is that nothing older than a completely dead generation will
+ *   do better, so once every model in one rung fails there is no point paying for the
+ *   rest. Everything below is recorded as `assumed failure` — explicitly *not* as a
+ *   measured result, because it was never run.
+ * @param {Array<{provider: string, model: string}>} candidates - Models to consider.
+ * @param {string[]} catalogue - Full provider catalogue, for release dates.
+ * @returns {Promise<object[]>} Reports for the rungs actually run, plus placeholder
+ *   entries for the rungs skipped by the stopping rule.
+ */
+async function descendingSweep(candidates, catalogue) {
+	const rungs = orderRungsNewestFirst(candidates, catalogue);
+	log(`descending sweep over ${rungs.length} generation(s): ${rungs.map((r) => r.rung).join(" > ")}`);
+
+	const reports = [];
+	let sawFailure = false;
+
+	for (let i = 0; i < rungs.length; i++) {
+		const rung = rungs[i];
+		log(`── generation ${rung.rung} (${rung.releasedAt ?? "undated"}): ${rung.models.map((m) => m.model).join(", ")}`);
+		const graded = await pool(rung.models, CONCURRENCY, evaluate);
+		reports.push(...graded.map((r) => ({ ...r, generation: rung.rung, releasedAt: rung.releasedAt })));
+
+		const judged = graded.filter((r) => r.verdict !== "not evaluated");
+		const failures = judged.filter(isFailure);
+		if (failures.length) sawFailure = true;
+
+		// Stop only when a whole generation is dead. That is what gives the rule its
+		// "test one rung before the failure" behaviour: the first failing model does not
+		// end the sweep, it just means the next generation down has to be proven too.
+		const wholeRungFailed = judged.length > 0 && failures.length === judged.length;
+		if (wholeRungFailed && sawFailure) {
+			const skipped = rungs.slice(i + 1);
+			const skippedModels = skipped.flatMap((r) => r.models);
+			log(`✋ every model in ${rung.rung} failed — assuming the ${skippedModels.length} older model(s) `
+				+ `in ${skipped.length} generation(s) would too, and stopping`);
+			for (const r of skipped) {
+				for (const m of r.models) {
+					reports.push({
+						provider: m.provider, model: m.model,
+						generation: r.rung, releasedAt: r.releasedAt,
+						turns: 0, dimensions: {}, score: 0, grade: "—", verdict: "assumed failure",
+						blockers: [`not run: every model in the newer ${rung.rung} generation failed, `
+							+ `so this older generation was assumed to fail too`],
+						latency: { medianMs: null, p90Ms: null },
+						run: { endedBy: "not-run" },
+					});
+				}
+			}
+			break;
+		}
+	}
+	return reports;
 }
 
 /**
@@ -244,11 +320,14 @@ async function main() {
 	const probe = await fetch(URL).catch((err) => { throw new Error(`${URL} is unreachable: ${err.message}`); });
 	if (!probe.ok) throw new Error(`${URL} answered ${probe.status}`);
 
-	const candidates = await discoverCandidates();
+	const { candidates, catalogue } = await discoverCandidates();
 	if (!candidates.length) throw new Error("no candidate models resolved — check keys and --models/--providers filters");
 
-	log(`${candidates.length} candidates | ${ACTIONS} actions each | concurrency ${CONCURRENCY} | out ${OUT}`);
-	const reports = await pool(candidates, CONCURRENCY, evaluate);
+	log(`${candidates.length} candidates | ${ACTIONS} actions each | concurrency ${CONCURRENCY} `
+		+ `| ${DESCEND ? "descending sweep" : "exhaustive"} | out ${OUT}`);
+	const reports = DESCEND
+		? await descendingSweep(candidates, catalogue)
+		: await pool(candidates, CONCURRENCY, evaluate);
 
 	const ranked = [...reports].sort((a, b) => b.score - a.score);
 	fs.writeFileSync(OUT, JSON.stringify({
