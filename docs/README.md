@@ -60,6 +60,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/ai-panel.md](modules/ai-panel.md) — the browser's AI settings and model picker
 - [modules/images.md](modules/images.md) — the image generation layer
 - [modules/image-server-contract.md](modules/image-server-contract.md) — what a self-hosted image server must expose
+- [modules/character-keys.md](modules/character-keys.md) — the character signing key, and what replacing it costs
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent
 - [modules/encounters.md](modules/encounters.md) — when a fight happens, and how big it is

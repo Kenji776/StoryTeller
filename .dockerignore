@@ -16,6 +16,8 @@ server/data/lobbies/
 server/data/credentials/
 server/data/images/
 server/data/galleries/
+# The key now lives inside `credentials/` and is covered by the rule above. This line stays for an
+# install that has not booted since the move, whose key is still at the old path.
 server/data/charkey.pem
 server/data/tts-config.json
 server/logs/

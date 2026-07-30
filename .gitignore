@@ -13,7 +13,11 @@ server/data/tts-config.json
 # Operator credential vault and provider policy. The vault is encrypted, but an
 # encrypted key is still a key — and this is ignored before the file can be
 # created, not after (GIT-5).
-server/data/credentials/
+# The contents, not the directory. Written as `server/data/credentials/` git does not descend into
+# it at all, and a negation for one file inside has no effect — which kept the folder's own README
+# out of every clone, so the guidance nobody could find was guidance that did not exist.
+server/data/credentials/*
+!server/data/credentials/README.md
 client/config/voices_cache.json
 # Key material. keyfile.age has sat untracked and unignored in the repo root since
 # before this was written; anything running `git add -A` would have committed it.

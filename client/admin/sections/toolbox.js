@@ -169,8 +169,90 @@ export function toolbox(ctx) {
 		),
 	);
 
-	return h("div", panel({
-		title: "Character files",
-		description: "Decode an exported .stchar, check its signature, edit it, and have the server sign the result.",
-	}, dropZone, editorPane));
+	return h("div",
+		panel({
+			title: "Character files",
+			description: "Decode an exported .stchar, check its signature, edit it, and have the server sign the result.",
+		}, dropZone, editorPane),
+		signingKeyPanel(),
+	);
+}
+
+/**
+ * The signing key, and the button that replaces it.
+ *
+ * @description Sits beside the character-file tools because it is the key those files are signed
+ *   with — a reader wondering why a signature stopped verifying is already looking at this screen.
+ *
+ *   The key is identified by fingerprint only. The server never sends key material and this could not
+ *   display it if it did.
+ *
+ *   Rotation exists because a leaked key cannot be un-leaked, and this one is a plaintext private key
+ *   on disk. The confirmation states what it costs in the terms a person will actually experience —
+ *   old exports stop importing, a host has to export again — rather than "this is irreversible".
+ * @returns {HTMLElement} The panel.
+ */
+function signingKeyPanel() {
+	const note = flash();
+	const fingerprint = h("code.mono", "checking…");
+
+	/**
+	 * @description Reads the current fingerprint and shows it.
+	 * @returns {Promise<void>} Resolves once displayed.
+	 */
+	async function refresh() {
+		try {
+			const res = await fetch("/api/admin/character-key");
+			const body = await res.json();
+			fingerprint.textContent = res.ok ? body.fingerprint : (body.error ?? "unavailable");
+		} catch {
+			fingerprint.textContent = "unavailable";
+		}
+	}
+
+	/**
+	 * @description Rotates the key and reports both fingerprints, so the change is visible rather
+	 *   than merely claimed.
+	 * @returns {Promise<void>} Resolves once done.
+	 */
+	async function rotate() {
+		note.show("Generating a new key…");
+		try {
+			const res = await fetch("/api/admin/character-key/rotate", { method: "POST" });
+			const body = await res.json();
+			if (!res.ok) return note.show(body.error ?? "Could not rotate the key.", "danger");
+			fingerprint.textContent = body.current;
+			note.show(`Replaced ${body.previous} with ${body.current}. Existing exports no longer import.`, "ok");
+		} catch (err) {
+			note.show(`Could not rotate the key: ${err.message}`, "danger");
+		}
+	}
+
+	refresh();
+
+	return panel({
+		title: "Character signing key",
+		description: "The RSA key this server signs exported characters with. Replace it if it has leaked.",
+	},
+	h("div.control-row", h("span.muted.small", "In use:"), fingerprint),
+	h("p.muted.small",
+		"Replacing it means every .stchar exported before now stops importing, and any host holding "
+		+ "one cannot open the DM tools until they export their character again. "),
+	h("p.muted.small",
+		"Games in progress are not affected at all — characters in a lobby carry no signature, so no "
+		+ "campaign, sheet, inventory or progress is touched."),
+	h("div.control-row", { style: { marginTop: "0.6rem" } },
+		button({
+			label: "Replace signing key",
+			variant: "danger",
+			small: true,
+			confirm: "Replace the character signing key?\n\n"
+				+ "• Every character file exported before now will stop importing.\n"
+				+ "• A host holding an old file cannot reach the DM tools until they export again.\n"
+				+ "• Games in progress are unaffected.\n\n"
+				+ "Re-exporting affected characters fixes them. This cannot be undone.",
+			onClick: rotate,
+		}),
+		note.el,
+	));
 }

@@ -168,7 +168,7 @@ after each restart regardless of the mount.
 
 ### Things that surprise people
 
-- **The image is large — around 800 MB.** Music and sound effects are copied in deliberately, so a
+- **The image is large — 641 MB unpacked, 526 MB to pull.** Music and sound effects are copied in deliberately, so a
   container can seed an empty volume on first start (see `docker-entrypoint.sh`). If you have
   already downloaded the asset packs locally, they are in the build context and go into the image.
   Add `client/music` and `client/sfx` to `.dockerignore` if you would rather keep it small and let
@@ -587,11 +587,14 @@ server/
   tools/                # One-off operator scripts
   data/
     lobbies/            # Persisted lobby JSON files
-    credentials/        # Encrypted key vault + provider policy
+    credentials/        # Everything secret, and a README about locking it down
+      README.md         #   what is in here, and the permissions for your platform
+      charkey.pem       #   RSA key signing character files (auto-generated)
+      credentials.enc   #   API keys, encrypted under STORYTELLER_SECRET
+      provider-policy.json  # who pays for what — no secrets, hand-editable
     images/             # Generated portraits and illustrations
     galleries/          # Per-lobby illustration galleries
     tts-config.json     # Self-hosted narration server address
-    charkey.pem         # RSA key for character file signing (auto-generated)
   .env                  # Environment variables (not committed)
   .env.example          # Template for environment variables
 docs/                   # Architecture, module docs, ADRs, testing, worklog
@@ -613,7 +616,8 @@ no network, no clock, no disk — and `docs/testing.md` explains the tiers.
 ## Notes
 
 - No API key? A local stub DM narrates so you can test the full flow.
-- **What persists:** lobbies (`server/data/lobbies/`), the encrypted key vault and provider policy (`server/data/credentials/`), portraits and galleries (`server/data/images/`, `galleries/`), the narration server address (`tts-config.json`), and the character signing key (`charkey.pem`). Set `STORYTELLER_SECRET` or the vault is memory-only.
+- **What persists:** lobbies (`server/data/lobbies/`), everything secret (`server/data/credentials/` — the encrypted vault, the provider policy, and `charkey.pem`), portraits and galleries (`server/data/images/`, `galleries/`), and the narration server address (`tts-config.json`). Set `STORYTELLER_SECRET` or the vault is memory-only.
+- **`server/data/credentials/` has its own [README](server/data/credentials/README.md)** covering what each file is, what losing it costs, and the permissions to set on Linux, macOS, Docker, Windows and a network share. The server warns at startup if that folder is readable beyond its owner, and never refuses to boot over it.
 - A host's own API key is held **in memory only**, never written to disk, and dropped when they disconnect or the lobby ends.
 - Music and SFX (`.mp3`) are gitignored — on first startup the server offers to download standard packs from GitHub releases, or add your own.
 - The admin panel needs `ADMIN_PASSWORD`. The host DM tools work independently of it, authenticating with the host's signed character file instead.

@@ -28,6 +28,24 @@ for how long they live.
 Every one of them takes `fsImpl`, the clock, and the logger as parameters, so the
 whole module is exercised without a disk, a clock, or a key (`CQ-5`, `TDD-8`).
 
+## `server/data/credentials/` is the secrets folder
+
+One directory holds everything secret, so there is one thing to lock down:
+
+| File | What |
+|---|---|
+| `credentials.enc` | The vault. AES-256-GCM under `STORYTELLER_SECRET`. |
+| `credentials.enc.locked-*` | A vault that would not open, set aside rather than overwritten. |
+| `provider-policy.json` | Who pays for what. **No secrets**, deliberately hand-editable. |
+| `charkey.pem` | The RSA key signing exported characters — see [`character-keys.md`](character-keys.md). |
+| `README.md` | What each file is, and the permissions to set. Tracked, and the reason
+  `.gitignore` excludes `server/data/credentials/*` rather than the directory: git does not descend
+  into an excluded directory, so a negation for one file inside it does nothing. |
+
+`provider-policy.json` living in a folder documented as secret is deliberate and
+mildly awkward: it holds nothing sensitive, but `chmod 700` on the folder still
+leaves it readable and editable by the owner, which is who edits it.
+
 ## The vault
 
 `server/data/credentials.enc` — AES-256-GCM over a scrypt-derived key. The

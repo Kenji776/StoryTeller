@@ -13,8 +13,13 @@ const KEY_PATH = "/data/charkey.pem";
  */
 function makeFs(seed = {}) {
 	const files = { ...seed };
+	const dirs = [];
 	return {
 		files,
+		dirs,
+		mkdirSync: (p) => { dirs.push(String(p).split("\\").join("/")); },
+		unlinkSync: (p) => { delete files[p]; },
+		statSync: () => ({ mode: 0o700 }),
 		existsSync: (p) => Object.hasOwn(files, p),
 		readFileSync: (p) => {
 			if (!Object.hasOwn(files, p)) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
@@ -190,4 +195,157 @@ test("rotating twice keeps working, and each rotation is a new key", () => {
 	assert.equal(first.current, second.previous);
 	assert.notEqual(second.previous, second.current);
 	assert.equal(fsImpl.files[KEY_PATH], third.privateKey);
+});
+
+// ── Moving into the secrets folder ───────────────────────────────────────────
+
+const LEGACY_PATH = "/data/charkey.pem";
+const SECRET_PATH = "/data/credentials/charkey.pem";
+
+/**
+ * @description Builds the key system at its new home, with the old one as the migration source.
+ * @param {object} fsImpl - The filesystem double.
+ * @param {object} [options] - `generateKeyPair` and `log` overrides.
+ * @returns {object} The key system.
+ */
+function atNewHome(fsImpl, { generateKeyPair = generatorOf([PAIR_B]), log = () => {} } = {}) {
+	return createCharacterKeys({ fsImpl, keyPath: SECRET_PATH, legacyKeyPath: LEGACY_PATH, generateKeyPair, log });
+}
+
+test("a key already in the secrets folder is used, and no migration happens", () => {
+	const fsImpl = makeFs({ [SECRET_PATH]: PAIR_A.privateKey });
+	const keys = atNewHome(fsImpl, { generateKeyPair: () => { throw new Error("must not generate"); } });
+
+	assert.equal(keys.privateKey(), PAIR_A.privateKey);
+	assert.equal(Object.hasOwn(fsImpl.files, LEGACY_PATH), false, "nothing was written to the old path");
+});
+
+test("a key at the old path is moved, not regenerated", () => {
+	// The whole point of the fallback. An install upgrading to this layout must keep its key, or every
+	// character its players exported silently stops importing.
+	const fsImpl = makeFs({ [LEGACY_PATH]: PAIR_A.privateKey });
+	const logged = [];
+	const keys = atNewHome(fsImpl, {
+		generateKeyPair: () => { throw new Error("must not generate — the old key was right there"); },
+		log: (m) => logged.push(m),
+	});
+
+	assert.equal(keys.privateKey(), PAIR_A.privateKey, "same key, so exports keep verifying");
+	assert.equal(fsImpl.files[SECRET_PATH], PAIR_A.privateKey, "now at the new path");
+	assert.equal(Object.hasOwn(fsImpl.files, LEGACY_PATH), false, "and gone from the old one");
+	assert.ok(logged.some((m) => /moved|migrat/i.test(m)), "a move worth knowing about is worth a log line");
+});
+
+test("an unreadable key at the old path is left where it is", () => {
+	// Deleting it would destroy the only copy of something an operator might yet recover by hand.
+	const fsImpl = makeFs({ [LEGACY_PATH]: "-----BEGIN PRIVATE KEY-----\nnonsense\n-----END PRIVATE KEY-----" });
+
+	assert.throws(() => atNewHome(fsImpl), /character signing key/i);
+	assert.ok(Object.hasOwn(fsImpl.files, LEGACY_PATH), "still there to be rescued");
+	assert.equal(Object.hasOwn(fsImpl.files, SECRET_PATH), false, "and nothing half-written at the new path");
+});
+
+test("with keys at both paths the secrets folder wins, and the stray is reported", () => {
+	const fsImpl = makeFs({ [SECRET_PATH]: PAIR_A.privateKey, [LEGACY_PATH]: PAIR_B.privateKey });
+	const logged = [];
+	const keys = atNewHome(fsImpl, { log: (m) => logged.push(m) });
+
+	assert.equal(keys.privateKey(), PAIR_A.privateKey);
+	assert.ok(Object.hasOwn(fsImpl.files, LEGACY_PATH), "left alone rather than deleted unasked");
+	assert.ok(logged.some((m) => /old|stray|leftover/i.test(m)), "but said out loud — a spare private key is a liability");
+});
+
+test("a first run creates the secrets folder and puts the key only there", () => {
+	const fsImpl = makeFs();
+	const keys = atNewHome(fsImpl);
+
+	assert.equal(fsImpl.files[SECRET_PATH], PAIR_B.privateKey);
+	assert.equal(Object.hasOwn(fsImpl.files, LEGACY_PATH), false);
+	assert.ok(fsImpl.dirs.includes("/data/credentials"), "the folder is created rather than assumed");
+	assert.ok(keys.publicKey().includes("BEGIN PUBLIC KEY"));
+});
+
+test("rotation writes to the new path, never back to the old one", () => {
+	const fsImpl = makeFs({ [LEGACY_PATH]: PAIR_A.privateKey });
+	const third = generateKeyPairSync("rsa", {
+		modulusLength: 2048,
+		publicKeyEncoding: { type: "spki", format: "pem" },
+		privateKeyEncoding: { type: "pkcs8", format: "pem" },
+	});
+	const keys = atNewHome(fsImpl, { generateKeyPair: generatorOf([third]) });
+
+	keys.rotate();
+
+	assert.equal(fsImpl.files[SECRET_PATH], third.privateKey);
+	assert.equal(Object.hasOwn(fsImpl.files, LEGACY_PATH), false);
+});
+
+test("omitting the legacy path is fine, so a caller need not know this history", () => {
+	const fsImpl = makeFs();
+	const keys = createCharacterKeys({ fsImpl, keyPath: SECRET_PATH, generateKeyPair: generatorOf([PAIR_B]) });
+	assert.equal(keys.privateKey(), PAIR_B.privateKey);
+});
+
+// ── Telling an operator their folder is readable by everyone ──────────────────
+
+/**
+ * @description Builds a filesystem double reporting a chosen directory mode.
+ * @param {number} mode - The POSIX mode bits to report.
+ * @returns {object} An fs double whose `statSync` reports that mode.
+ */
+function fsWithMode(mode) {
+	const fsImpl = makeFs({ [SECRET_PATH]: PAIR_A.privateKey });
+	fsImpl.statSync = () => ({ mode });
+	return fsImpl;
+}
+
+test("a folder only its owner can reach reports as fine", () => {
+	const keys = createCharacterKeys({ fsImpl: fsWithMode(0o40700), keyPath: SECRET_PATH });
+	const check = keys.checkPermissions({ platform: "linux" });
+
+	assert.equal(check.secure, true);
+	assert.equal(check.advice, "");
+});
+
+test("a world-readable folder is reported with the exact command to fix it", () => {
+	// The complaint has to carry the fix. "Secure your keys" is what every project says and is why
+	// nobody does it — an operator who does not know the command will not go looking for it.
+	const keys = createCharacterKeys({ fsImpl: fsWithMode(0o40755), keyPath: SECRET_PATH });
+	const check = keys.checkPermissions({ platform: "linux" });
+
+	assert.equal(check.secure, false);
+	assert.match(check.advice, /chmod 700/);
+	assert.match(check.advice, /credentials/, "and names the folder, not just the concept");
+});
+
+test("group-readable counts as readable — the group is not always just you", () => {
+	assert.equal(createCharacterKeys({ fsImpl: fsWithMode(0o40740), keyPath: SECRET_PATH })
+		.checkPermissions({ platform: "linux" }).secure, false);
+});
+
+test("nothing is claimed on Windows, where those bits mean nothing", () => {
+	// `statSync().mode` returns a synthesised value there, so judging it would produce a confident
+	// warning about a permission model that is not in use.
+	const check = createCharacterKeys({ fsImpl: fsWithMode(0o40777), keyPath: SECRET_PATH })
+		.checkPermissions({ platform: "win32" });
+
+	assert.equal(check.checked, false);
+	assert.equal(check.secure, null, "not false — unknown is not insecure");
+	assert.match(check.advice, /icacls|Windows/i, "but still points somewhere useful");
+});
+
+test("a filesystem that cannot be asked reports unknown rather than throwing", () => {
+	// Boot must not fail over a permission check. This is a toy: an install that refuses to start
+	// because it could not stat a directory is an install nobody plays.
+	const fsImpl = fsWithMode(0o40700);
+	fsImpl.statSync = () => { throw new Error("EPERM"); };
+	const check = createCharacterKeys({ fsImpl, keyPath: SECRET_PATH }).checkPermissions({ platform: "linux" });
+
+	assert.equal(check.checked, false);
+	assert.equal(check.secure, null);
+});
+
+test("the check describes the folder, not the key file, because the folder is what is chmodded", () => {
+	const keys = createCharacterKeys({ fsImpl: fsWithMode(0o40755), keyPath: SECRET_PATH });
+	assert.equal(keys.checkPermissions({ platform: "linux" }).path, "/data/credentials");
 });

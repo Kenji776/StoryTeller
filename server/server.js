@@ -143,10 +143,21 @@ const adminRoom = (lobbyId) => `admin:${lobbyId}`;
 // the current one. See `services/characterKeys.js`.
 const characterKeys = createCharacterKeys({
 	fsImpl: fs,
-	keyPath: path.join(__dirname, "data", "charkey.pem"),
+	// Lives with the credential vault, not loose in `data/` beside lobbies and images. `legacyKeyPath`
+	// is what stops an existing install from generating a fresh key and silently invalidating every
+	// character its players had exported: a key found at the old path is moved, never replaced.
+	keyPath: path.join(__dirname, "data", "credentials", "charkey.pem"),
+	legacyKeyPath: path.join(__dirname, "data", "charkey.pem"),
 	generateKeyPair: generateKeyPairSync,
 	log: (message) => console.log(message),
 });
+
+// Advisory, never fatal. A game that refuses to boot over a directory mode is a game nobody plays,
+// and a check people disable has achieved nothing — so it reports and gets out of the way.
+const keyFolderCheck = characterKeys.checkPermissions();
+if (keyFolderCheck.checked && !keyFolderCheck.secure) {
+	console.warn(`⚠️  ${keyFolderCheck.advice}`);
+}
 
 // ── Core server + store ──────────────────────────────────────────────────────
 
