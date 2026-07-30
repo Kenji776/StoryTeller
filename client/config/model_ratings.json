@@ -1,0 +1,179 @@
+{
+	"_comment": "GENERATED from bake-off results — do not hand-edit. Regenerate with `node server/test-integration/bakeoff/writeRatings.mjs`. Prices come from server/data/model-prices.json, which IS hand-maintained. Keys are provider/model, because a rating earned through one provider is not evidence about another.",
+	"generatedOn": "2026-07-30",
+	"generatedFrom": "server/logs/bakeoff-rescored.json",
+	"pricesVerifiedOn": null,
+	"stage": "screen",
+	"recommended": "openai/gpt-4o-mini",
+	"recommendedReason": "Best measured value: scored 100/100, cheapest of the models that scored as well ($0.49/M tokens blended), 2.9s median a turn.",
+	"models": {
+		"openai/gpt-5.4": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 6530,
+			"turns": 13,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.5": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 19096,
+			"turns": 18,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/chat-latest": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 3585,
+			"turns": 18,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.2-chat-latest": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 5053,
+			"turns": 16,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.2": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 5946,
+			"turns": 186,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-4o-mini": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 2864,
+			"turns": 18,
+			"lowSample": false,
+			"note": "Best measured value: scored 100/100, cheapest of the models that scored as well ($0.49/M tokens blended), 2.9s median a turn."
+		},
+		"openai/gpt-5.3-chat-latest": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 6376,
+			"turns": 14,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.6-luna": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 2683,
+			"turns": 19,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.6-sol": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 9699,
+			"turns": 16,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.4-mini": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 2990,
+			"turns": 15,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.1": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 11176,
+			"turns": 14,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.4-nano": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 3798,
+			"turns": 15,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-5.6-terra": {
+			"verdict": "recommended",
+			"score": 100,
+			"medianMs": 5316,
+			"turns": 17,
+			"lowSample": false,
+			"note": ""
+		},
+		"claude/claude-sonnet-4-6": {
+			"verdict": "recommended",
+			"score": 99,
+			"medianMs": 14957,
+			"turns": 25,
+			"lowSample": false,
+			"note": ""
+		},
+		"anthropic/claude-opus-5": {
+			"verdict": "unusable",
+			"score": 98,
+			"medianMs": 17118,
+			"turns": 16,
+			"lowSample": true,
+			"note": "only 94% of replies could be parsed as JSON — the game loop cannot run on this (1 of 16 replies — thin sample)"
+		},
+		"anthropic/claude-fable-5": {
+			"verdict": "recommended",
+			"score": 98,
+			"medianMs": 16282,
+			"turns": 16,
+			"lowSample": false,
+			"note": ""
+		},
+		"anthropic/claude-opus-4-7": {
+			"verdict": "not evaluated",
+			"score": 97,
+			"medianMs": 9718,
+			"turns": 5,
+			"lowSample": true,
+			"note": "the provider cut the run short after 5 reply(ies) (4 provider error(s)) — too little to judge the model on"
+		},
+		"anthropic/claude-opus-4-8": {
+			"verdict": "recommended",
+			"score": 96,
+			"medianMs": 12992,
+			"turns": 13,
+			"lowSample": false,
+			"note": ""
+		},
+		"anthropic/claude-sonnet-5": {
+			"verdict": "recommended",
+			"score": 90,
+			"medianMs": 9351,
+			"turns": 86,
+			"lowSample": false,
+			"note": ""
+		},
+		"openai/gpt-4o": {
+			"verdict": "recommended",
+			"score": 87,
+			"medianMs": 2716,
+			"turns": 99,
+			"lowSample": false,
+			"note": ""
+		},
+		"ollama/qwen2.5vl:7b": {
+			"verdict": "unusable",
+			"score": 87,
+			"medianMs": 8081,
+			"turns": 13,
+			"lowSample": true,
+			"note": "mean schema conformance 50% — the response schema is not being followed (over 13 replies — thin sample)"
+		}
+	}
+}

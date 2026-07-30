@@ -1,0 +1,9 @@
+{
+	"_comment": "USD per MILLION tokens, keyed provider/model. OPERATOR-MAINTAINED: the bake-off measures correctness and latency, but nothing in the API reports a price, so this table cannot be generated and is the one input that can silently go stale. It feeds `chooseBestValue`, which picks the model the game defaults to — so a wrong figure here changes what narrates every new lobby. An entry that is absent or has a null is treated as UNKNOWN, never as free: a model with no price loses a tie to one that has a price, and is only chosen if nothing priced scores as well. Add entries as you confirm them, and update pricesVerifiedOn when you do.",
+	"pricesVerifiedOn": null,
+	"_verificationNote": "pricesVerifiedOn is null because these figures were seeded from general knowledge rather than read off the providers' pricing pages. Only the two OpenAI entries below are stated with any confidence, and even those should be checked before anyone relies on the default. Every gpt-5.x and Claude entry is deliberately absent rather than guessed, which is why the current default falls to gpt-4o-mini: it is the cheapest model whose price is actually known AND which scored 100/100. Filling in gpt-5.4-nano or gpt-5.6-luna may well change the answer.",
+	"prices": {
+		"openai/gpt-4o-mini": { "input": 0.15, "output": 0.6 },
+		"openai/gpt-4o": { "input": 2.5, "output": 10.0 }
+	}
+}
