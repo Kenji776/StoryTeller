@@ -3,6 +3,32 @@ npm-debug.log
 .DS_Store
 .git
 .gitignore
+
+# Runtime state and secrets. `COPY . .` was pulling every one of these into the image:
+# 900 saved lobbies, 44 MB of generated portraits, the encrypted credential vault, and
+# `charkey.pem` — the RSA private key that signs character files, which is what
+# authenticates a host's DM tools. An image carrying that key lets anyone who pulls it
+# forge one, so it must never be baked in. All of it is volume-mounted at run time.
+#
+# The rule is the same one `.gitignore` already applies: state this repository does not
+# track is state the image has no business containing.
+server/data/lobbies/
+server/data/credentials/
+server/data/images/
+server/data/galleries/
+server/data/charkey.pem
+server/data/tts-config.json
+server/logs/
+
+# Only the bake-off harness reads this, and that never runs in a container.
+server/data/model-prices.json
+
+# Not needed to run the game. `server/data/testLLMResponses.json` is deliberately kept —
+# the canned test provider reads it, and that is production code under DEV_MODE.
+server/test-integration/
+**/*.test.js
+**/*.test.mjs
+docs/
 # Every .env, at any depth. The bare `.env` below matched only the context
 # root, so server/.env was being baked into the image -- and into every
 # tarball shipped to a deploy target -- with live API keys in plaintext.

@@ -117,10 +117,17 @@ server/data/galleries/
 # WIKI_TOKEN, and `portal.mjs`, `wiki.sh` and even `wiki.conf.example` name internal hosts. The
 # earlier rule ignored only `*.conf` and expected `wiki.conf.example` to be tracked; nothing here
 # ever was, and the example leaks an address too, so the whole directory is ignored instead.
-tools/
+# Leading slash for the same reason as `/modules/` below: unanchored, this also matched
+# `server/tools/`, whose scripts are tracked and are nothing to do with the operator's network.
+/tools/
 
 # Agent directive modules. `CLAUDE.md` loads these on demand and is itself tracked, but the
 # `homelab-` ones name hosts, subnets and SMB paths on that same private network. Ignored before a
 # commit rather than after (GIT-5): both directories had sat untracked and unignored, so any
 # `git add -A` would have published the network topology to a public repository.
-modules/
+#
+# Leading slash matters. Written as `modules/` this matched *any* directory of that name at any
+# depth — including `docs/modules/`, which silently made every new module doc uncommittable. The
+# eighteen already tracked there were unaffected, since ignore rules do not apply to tracked
+# files, so nothing looked wrong until a nineteenth was added.
+/modules/

@@ -5,8 +5,12 @@
 #     cp docker-compose.example.yml docker-compose.yml
 #     docker compose up -d --build
 #
-# There is no published image, so `build: .` compiles one from the Dockerfile in this
-# repository. Expect the first build to take a few minutes.
+# `build: .` compiles an image from the Dockerfile here; the first build takes a few minutes.
+# To use the published one instead, replace that line with:
+#
+#     image: kenji776/storyteller:latest      # or :1.0.0 to pin a version
+#
+# Neither contains credentials or game data — both come from `server/.env` and the volumes.
 #
 # Deliberately holds no secrets. Every key and password comes from `server/.env` via
 # `env_file`, which keeps one source of truth for both `npm start` and Docker, and keeps
@@ -36,14 +40,15 @@ services:
 
     # Anything not listed here lives inside the image and is destroyed on every rebuild.
     volumes:
-      # Saved games. Losing this loses every campaign.
-      - ./server/data/lobbies:/app/server/data/lobbies
-      # Encrypted API-key vault and the provider policy. Needs STORYTELLER_SECRET set, or
-      # the vault is memory-only and you re-enter keys after every restart.
-      - ./server/data/credentials:/app/server/data/credentials
-      # Generated portraits and story illustrations, and the galleries indexing them.
-      - ./server/data/images:/app/server/data/images
-      - ./server/data/galleries:/app/server/data/galleries
+      # The whole data directory, in one mount rather than four. It holds saved games, the
+      # encrypted credential vault, generated portraits and their galleries — and
+      # `charkey.pem`, the RSA key that signs exported character files. That key is the
+      # reason this is one mount: it is deliberately *not* in the image, so without
+      # persisting it the container generates a new one on every rebuild and every
+      # previously exported character stops verifying — which quietly breaks the host's
+      # DM tools. A clone already carries the two tracked files in here, so nothing is
+      # shadowed by mounting the directory whole.
+      - ./server/data:/app/server/data
       # Music and sound effects. Mounted so the packs downloaded on first run survive a
       # rebuild — without this every redeploy re-downloads them.
       - ./client/music:/app/client/music

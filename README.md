@@ -81,12 +81,20 @@ Other players on your local network can join at `http://<your-ip>:3013`.
 
 ## Docker (alternative to steps 4–5)
 
-**There is no published image.** Nothing is pushed to Docker Hub or GHCR, so you build it
-yourself from the `Dockerfile` in this repository. The build is self-contained — Node 20 Alpine,
-`npm install --production`, no compiler toolchain needed.
+A published image is on Docker Hub:
+
+```
+kenji776/storyteller:latest      # or :1.0.0 to pin a version
+```
+
+526 MB to download. You can also build it yourself from the `Dockerfile` here — the build is
+self-contained (Node 20 Alpine, `npm install --production`, no compiler toolchain).
 
 You need Docker Engine 20.10+ with the Compose plugin (`docker compose`, not the old
 `docker-compose`). Verify with `docker compose version`.
+
+**The image contains no credentials and no game data.** Keys, saved lobbies, portraits and the
+character-signing key are all supplied at run time through the environment and volumes below.
 
 ### 1. Create your `.env` first
 
@@ -106,13 +114,22 @@ keys out of it. `docker-compose.yml` itself is gitignored, so anything you add t
 
 Open it if you want to change the port or the volume locations. The defaults work as-is.
 
-### 3. Build and start
+### 3. Start it
+
+To use the published image, change `build: .` to `image: kenji776/storyteller:latest` in your
+compose file, then:
 
 ```bash
-docker compose up -d --build
+docker compose up -d
 ```
 
-First build takes a few minutes. Then:
+Or build from source instead — no edit needed, the example is set up for it:
+
+```bash
+docker compose up -d --build     # first build takes a few minutes
+```
+
+Either way:
 
 ```bash
 docker compose logs -f          # watch it boot; it reports which providers it found
@@ -133,15 +150,21 @@ The container is replaced; everything under the mounted volumes survives.
 ### What the volumes hold
 
 Anything **not** mounted lives inside the image and is destroyed on every rebuild. The example
-mounts all six:
+mounts three paths:
 
-| Volume | Why it matters |
+| Volume | Holds |
 |---|---|
-| `server/data/lobbies` | Saved games. Losing this loses every campaign. |
-| `server/data/credentials` | The encrypted key vault and provider policy. Needs `STORYTELLER_SECRET`, or the vault is memory-only and you re-enter keys after each restart. |
-| `server/data/images` | Generated portraits and illustrations. |
-| `server/data/galleries` | The per-lobby index of those images. |
-| `client/music`, `client/sfx` | Downloaded asset packs. Without these mounts, every rebuild re-downloads them. |
+| `server/data` | Saved games; the encrypted key vault and provider policy; generated portraits and their galleries; the narration server address; and `charkey.pem`. |
+| `client/music`, `client/sfx` | Downloaded asset packs. Without these, every rebuild re-downloads them. |
+
+`server/data` is mounted whole rather than as four separate paths because of `charkey.pem` —
+the RSA key that signs exported character files, and therefore what authenticates the host's
+DM tools. It is deliberately **not** in the image, so if it is not persisted the container
+generates a new one on every rebuild and every previously exported character silently stops
+verifying.
+
+The vault also needs `STORYTELLER_SECRET` set, or it is memory-only and you re-enter keys
+after each restart regardless of the mount.
 
 ### Things that surprise people
 
