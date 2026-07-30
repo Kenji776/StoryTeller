@@ -68,4 +68,4 @@ the panel is built as one template with markup interleaved; converting it is a
 larger change than this warranted, and it still would not have stopped the value
 being stored. Worth doing on its own terms later.
 
-_Last verified: 2026-07-29 against branch `Refactor`._
+_Last verified: 2026-07-29 against branch `feature/tactical-map`._

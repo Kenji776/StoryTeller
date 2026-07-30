@@ -57,4 +57,4 @@ and hand-editing a lobby's JSON. `client/settingsWiring.test.js` now fails when 
 accepts a setting nothing sends.
 
 
-_Last verified: 2026-07-30 against branch `Refactor`._
+_Last verified: 2026-07-30 against branch `feature/tactical-map`._

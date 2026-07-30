@@ -179,5 +179,5 @@ Deliberately out of scope, and each one a rabbit hole: opportunity attacks, flan
 elevation, difficult-terrain movement animation, multi-cell creatures beyond a `size` field, and
 doors.
 
-_Last verified: 2026-07-30 against branch `Refactor` — phases 1, 2, 4 and 5 are built, switchable from
+_Last verified: 2026-07-30 against branch `feature/tactical-map` — phases 1, 2, 4 and 5 are built, switchable from
 the game options window, and exercised by the simulation harness. Phase 6 is still design only._

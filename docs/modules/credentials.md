@@ -245,7 +245,7 @@ and an interval calling `sweep()`), the gateway that replaces `llmService.js`,
 the admin write path — which **must** carry the private-network guard described
 above — and the host-facing consent and limit UI.
 
-_Last verified: 2026-07-27 against branch `Refactor` (ec6c6a0)._
+_Last verified: 2026-07-27 against branch `feature/tactical-map` (ec6c6a0)._
 
 ## Assembling it
 
@@ -410,4 +410,4 @@ would spend a call to produce a superset we would then discard.
 own doc — see [`ai-panel.md`](ai-panel.md) — covering the readiness rows, the
 Start gate, the narrator model picker, and the `window.__aiPanel` bridge.
 
-_Last verified: 2026-07-29 against branch `Refactor`._
+_Last verified: 2026-07-29 against branch `feature/tactical-map`._

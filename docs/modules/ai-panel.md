@@ -123,4 +123,4 @@ bridge name it does not expose, or when it exposes a name this module does not
 export. `renderNarratorPanel` also logs to the console rather than returning
 quietly, so a blank panel explains itself.
 
-_Last verified: 2026-07-29 against branch `Refactor`._
+_Last verified: 2026-07-29 against branch `feature/tactical-map`._
