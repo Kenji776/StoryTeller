@@ -1911,3 +1911,20 @@ body.observing #gameCharacterSection {
 	color: #8d84a8;
 	font-weight: normal;
 }
+
+/* The narrator picker's controls, sized to sit in an `.lgo-row` without pushing the
+   label off the line. The row is a flex pair, so an unconstrained select stretches. */
+#aiNarratorPanel select,
+#aiNarratorPanel input[type="text"] {
+	font-size: 0.82em;
+	padding: 0.25em 0.4em;
+	max-width: 62%;
+}
+#aiNarratorPanel button {
+	font-size: 0.78em;
+	padding: 0.35em 0.9em;
+}
+#aiNarratorPanel .hint {
+	margin: 0.4em 0 0;
+	font-size: 0.78em;
+}

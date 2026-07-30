@@ -3,6 +3,10 @@
 // connection dropped saw a completely normal-looking UI that had simply stopped
 // updating. This banner exists so that failure is never silent.
 
+// Which lobby we have already asked `ai:state` for, so the request happens once rather than on
+// every state push.
+let aiStateAskedFor = null;
+
 const CONNECTION_STATES = {
 	online:       { text: "",                                  bg: "",         show: false },
 	reconnecting: { text: "⚠️ Connection lost — reconnecting…", bg: "#8a6d1f", show: true },
@@ -322,6 +326,14 @@ function registerSocketEvents() {
 	// === Socket events ===
 	socket.on("state:update", (state) => {
 		currentState = state;
+
+		// Asked for once per lobby. Until now `ai:state` was only requested after a failure, so the
+		// narrator panel would have had nothing to show until something had already gone wrong — and
+		// what it shows is exactly what a host needs *before* starting.
+		if (state?.lobbyId && aiStateAskedFor !== state.lobbyId) {
+			aiStateAskedFor = state.lobbyId;
+			socket.emit("ai:state:request", { lobbyId: state.lobbyId });
+		}
 
 		// The battlefield rides along on every state push as well as its own event, so a player who
 		// reloads mid-fight — or joins one already in progress — gets the map immediately instead of

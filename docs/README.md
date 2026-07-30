@@ -57,6 +57,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/tts.md](modules/tts.md) — the narration provider layer
 - [modules/admin-console.md](modules/admin-console.md) — the operator interface
 - [modules/credentials.md](modules/credentials.md) — who pays for a third-party call
+- [modules/ai-panel.md](modules/ai-panel.md) — the browser's AI settings and model picker
 - [modules/images.md](modules/images.md) — the image generation layer
 - [modules/items-and-loot.md](modules/items-and-loot.md) — inventory, equipment, treasure
 - [modules/combat.md](modules/combat.md) — who rolls what, and what the narrator may not invent

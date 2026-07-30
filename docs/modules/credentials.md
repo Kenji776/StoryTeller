@@ -398,17 +398,8 @@ would spend a call to produce a superset we would then discard.
 
 ## The browser
 
-`client/aiPanel.js` holds the logic — row building, the Start gate, and turning a
-form into a submission — because `options.html` is one long inline script with no
-test harness. It decides nothing: the server's verdict is presented, never
-re-derived. `index.html` and `options.html` both attach it to `window` rather than
-duplicating it, since both pages are classic scripts.
+`client/aiPanel.js` presents all of the above and decides none of it. It has its
+own doc — see [`ai-panel.md`](ai-panel.md) — covering the readiness rows, the
+Start gate, the narrator model picker, and the `window.__aiPanel` bridge.
 
-Two rules it encodes that are easy to get wrong:
-
-- **Unknown means not startable.** Before the first `ai:state` arrives there is no
-  verdict, and defaulting to enabled lets someone press a button the server then
-  refuses — which reads as a broken game rather than as missing configuration.
-- **A date input means the end of that day.** A host choosing "the 5th" wants the
-  key to last *through* the 5th; treating it as midnight would expire it as that
-  day begins.
+_Last verified: 2026-07-29 against branch `Refactor`._

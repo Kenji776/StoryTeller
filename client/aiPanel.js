@@ -169,3 +169,101 @@ export function heldSummary(entry) {
 	if (entry.expiresAt) parts.push(`expires ${readableDate(entry.expiresAt)}`);
 	return `${parts.join(" · ")}.`;
 }
+
+/**
+ * What a host may pick for the narrator, and where each provider's key comes from.
+ *
+ * @description Built because a game died on a provider and model that could not work together, and
+ *   the host had nowhere to look: the only model picker in the project lived in the admin console,
+ *   and the error told them to "pick a different model in AI Settings" — a screen that did not exist.
+ *
+ *   Three things it has to convey, and the middle one is the whole point of the panel:
+ *
+ *   - **What is running now**, so the question "what model is this?" has an answer.
+ *   - **Where each provider's key comes from** — this server's, the host's own, a local install that
+ *     needs none, or nowhere yet. A provider with no key is still *offered*, flagged: hiding it
+ *     would leave a host unable to discover that supplying their own key is possible.
+ *   - **Which models that provider takes**, including whatever the lobby is already running even if
+ *     the shipped catalogue has never heard of it. Otherwise opening the panel and pressing Apply
+ *     would quietly downgrade a host who had set something newer than the list, which is how a stale
+ *     list turns from unhelpful into destructive.
+ * @param {object} state - An `ai:state` payload.
+ * @param {object} lobby - Anything carrying `llmProvider` and `llmModel`; usually lobby state.
+ * @param {Array<{id: string, label: string, models: Array<object>}>} catalogue - Parsed model
+ *   catalogue, used where a provider's models cannot be listed live.
+ * @returns {{providers: Array<object>, current: {providerId: string|null, modelId: string|null},
+ *   modelsFor: Function, freeTextFor: Function}} The picker's model.
+ */
+export function modelChoices(state, lobby, catalogue = []) {
+	const services = Array.isArray(state?.services) ? state.services : [];
+	const chat = services.find((s) => s?.capability === "chat") ?? null;
+	const current = {
+		providerId: lobby?.llmProvider ?? null,
+		modelId: lobby?.llmModel ?? null,
+	};
+
+	/**
+	 * @description Looks up a provider's models, always including the one in force.
+	 * @param {string} providerId - The provider.
+	 * @returns {Array<{id: string, label: string}>} Models to offer.
+	 */
+	const modelsFor = (providerId) => {
+		const listed = (catalogue.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ ...m }));
+		const running = current.providerId === providerId && current.modelId
+			&& !listed.some((m) => m.id === current.modelId);
+		return running ? [...listed, { id: current.modelId, label: `${current.modelId} (in use)` }] : listed;
+	};
+
+	if (!chat) {
+		return { providers: [], current, modelsFor, freeTextFor: (id) => !catalogue.some((p) => p.id === id) };
+	}
+
+	// `options` carries only the providers that take a key, so the one actually serving the
+	// capability can be missing from it — a local install, for instance. It is added back, because a
+	// picker that omits what is running is worse than no picker.
+	const offered = [...(Array.isArray(chat.options) ? chat.options : [])];
+	if (chat.providerId && !offered.some((p) => p.id === chat.providerId)) {
+		offered.unshift({ id: chat.providerId, label: chat.providerLabel ?? chat.providerId, requiresApiKey: false });
+	}
+
+	// The host's own key, if they supplied one, names a specific provider.
+	const ownProviderId = state?.held?.chat?.providerId ?? null;
+
+	const providers = offered.map((provider) => {
+		// Each option's own `ready` flag is the authority on whether a key exists for it.
+		//
+		// The first version read `chat.providerId` instead — but that names the *first* provider that
+		// could serve the capability (`readiness.js` does `providers.find(p => p.ready)`), not the one
+		// this lobby uses. On a server holding both keys it marked Anthropic as needing one while the
+		// game had been narrating on Anthropic all day, and disabled Apply for the provider actually in
+		// use. A picker that lies about what works is worse than no picker.
+		const keySource = provider.id === ownProviderId ? "own"
+			: !provider.ready ? "none"
+				: provider.requiresApiKey === false ? "local"
+					: "server";
+
+		return {
+			id: provider.id,
+			label: provider.label ?? provider.id,
+			keySource,
+			selectable: keySource !== "none",
+			note: keySource === "server" ? "This server supplies the key."
+				: keySource === "own" ? "Using your own key."
+					: keySource === "local" ? "Runs locally — no key needed."
+						: "Needs an API key. Add yours below to use it.",
+		};
+	});
+
+	return {
+		providers,
+		current,
+		modelsFor,
+		/**
+		 * @description Whether a provider's models have to be typed rather than chosen.
+		 * @param {string} providerId - The provider.
+		 * @returns {boolean} True when nothing can enumerate them — a local install names its models
+		 *   whatever it likes, and a fixed list would be wrong more often than right.
+		 */
+		freeTextFor: (providerId) => !catalogue.some((p) => p.id === providerId),
+	};
+}

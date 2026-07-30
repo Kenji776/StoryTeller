@@ -348,6 +348,38 @@ function show(section) {
 const aiGate = { canStart: false, reason: "Checking the AI configuration…" };
 
 /**
+ * The last `ai:state` seen, and the narrator picker's unsaved selection.
+ *
+ * @description Held because the panel is redrawn from `state:update`, which knows nothing about keys,
+ *   while `ai:state` arrives separately and knows nothing about the lobby. The draft keeps a
+ *   half-made choice alive across those redraws; without it, picking a provider and then receiving any
+ *   state push would snap the panel back and lose the selection.
+ */
+let lastAiState = null;
+let narratorDraft = { providerId: null, modelId: null };
+
+/** Parsed model catalogue, fetched once. Empty until it arrives, which renders as a text field. */
+let modelCatalogue = [];
+
+// Fetched rather than bundled, for the same reason the admin console fetches it: a hardcoded list in
+// the browser is a list that drifts from the server's. Parsed defensively — a broken file leaves the
+// picker on free text, which still works, rather than taking the lobby screen down with it.
+fetch("/config/llm_models.json")
+	.then((res) => res.json())
+	.then((json) => {
+		const providers = Array.isArray(json?.providers) ? json.providers : [];
+		modelCatalogue = providers
+			.filter((p) => p?.id && Array.isArray(p.models))
+			.map((p) => ({
+				id: p.id,
+				label: p.label ?? p.id,
+				models: p.models.filter((m) => m?.id).map((m) => ({ id: m.id, label: m.label ?? m.id })),
+			}));
+		if (currentState) renderLobbyOptions(currentState);
+	})
+	.catch((err) => console.warn("Could not load the model catalogue:", err));
+
+/**
  * @description Records the server's readiness verdict and refreshes the lobby.
  * @param {object} state - An `ai:state` payload.
  * @returns {void}
@@ -522,7 +554,93 @@ function renderLobbyOptions(s) {
 			<div class="lgo-title">Campaign Settings</div>
 			${rows}
 		</div>
+		<div class="lgo-panel" id="aiNarratorPanel"></div>
 	`;
+	renderNarratorPanel(s);
+}
+
+/**
+ * The narrator's provider, model, and where its key comes from.
+ *
+ * @description Built because a game died on a provider and model that could not work together and the
+ *   host had nowhere to look. The only model picker in the project lived in the admin console, and the
+ *   failure told them to "pick a different model in AI Settings" — a screen that did not exist.
+ *   `panelRows` had been written and tested months before and was wired to nothing at all.
+ *
+ *   Reads `ai:state` for what keys exist and `state.llmProvider` / `llmModel` for what is running. The
+ *   decisions are `modelChoices`, which is unit tested; this only paints them and sends the change.
+ * @param {object} s - Lobby state from `state:update`.
+ * @returns {void}
+ */
+function renderNarratorPanel(s) {
+	const host = document.getElementById("aiNarratorPanel");
+	if (!host) return;
+
+	// A missing bridge function used to return quietly here, and quietly is how this panel shipped
+	// invisible: `index.html` built `window.__aiPanel` without `modelChoices`, every call fell through
+	// this guard, and nothing anywhere said so. `aiPanelBridge.test.js` now fails the build for it;
+	// this says it out loud in the one place a person would be looking when the panel is blank.
+	if (typeof window.__aiPanel?.modelChoices !== "function") {
+		console.error("[narrator] window.__aiPanel.modelChoices is missing — the model picker cannot render."
+			+ " Add it to the bridge in index.html.");
+		return;
+	}
+
+	const choices = window.__aiPanel.modelChoices(lastAiState, s, modelCatalogue);
+	const running = choices.current.providerId
+		? `${choices.current.providerId} · ${choices.current.modelId ?? "no model set"}`
+		: "not configured";
+
+	// Only the host may change it, and only before the game starts — the same window the rest of
+	// these settings live in. Everyone else is told what is running, which was the missing half.
+	const mayEdit = !!(me?.name && s.hostPlayer && me.name === s.hostPlayer);
+	if (!mayEdit || !choices.providers.length) {
+		host.innerHTML = `
+			<div class="lgo-title">Narrator</div>
+			<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${running}</span></div>
+		`;
+		return;
+	}
+
+	const chosenProvider = narratorDraft.providerId ?? choices.current.providerId ?? choices.providers[0].id;
+	const provider = choices.providers.find((p) => p.id === chosenProvider) ?? choices.providers[0];
+	const models = choices.modelsFor(provider.id);
+	const chosenModel = narratorDraft.modelId
+		?? (models.some((m) => m.id === choices.current.modelId) ? choices.current.modelId : models[0]?.id ?? "");
+
+	const providerOptions = choices.providers.map((p) =>
+		`<option value="${p.id}"${p.id === provider.id ? " selected" : ""}>${p.label}${p.selectable ? "" : " — needs a key"}</option>`).join("");
+
+	// A provider whose models cannot be enumerated gets a text box. A local install names its models
+	// whatever it likes, and a fixed list would be wrong more often than right.
+	const modelField = choices.freeTextFor(provider.id) || !models.length
+		? `<input id="narratorModel" type="text" value="${chosenModel}" placeholder="model name" />`
+		: `<select id="narratorModel">${models.map((m) =>
+			`<option value="${m.id}"${m.id === chosenModel ? " selected" : ""}>${m.label ?? m.id}</option>`).join("")}</select>`;
+
+	host.innerHTML = `
+		<div class="lgo-title">Narrator</div>
+		<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${running}</span></div>
+		<div class="lgo-row"><span class="lgo-key">Provider</span><select id="narratorProvider">${providerOptions}</select></div>
+		<div class="lgo-row"><span class="lgo-key">Model</span>${modelField}</div>
+		<p class="hint" id="narratorNote">${provider.note}</p>
+		<div class="lgo-row">
+			<button id="narratorApply" class="primary" ${provider.selectable ? "" : "disabled"}>Use this</button>
+		</div>
+	`;
+
+	document.getElementById("narratorProvider").addEventListener("change", (event) => {
+		// The model is cleared, not carried across: a model belonging to the old provider is exactly
+		// the pair the server now refuses, and offering it would invite the failure that started this.
+		narratorDraft = { providerId: event.target.value, modelId: null };
+		renderNarratorPanel(s);
+	});
+	document.getElementById("narratorApply").addEventListener("click", () => {
+		const model = document.getElementById("narratorModel")?.value?.trim();
+		if (!model) return showToast("Choose a model first.", "warning");
+		socket.emit("lobby:settings", { lobbyId, llmProvider: provider.id, llmModel: model });
+		narratorDraft = { providerId: null, modelId: null };
+	});
 }
 
 function renderPlayers(s) {
