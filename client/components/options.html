@@ -574,6 +574,34 @@
 	</div>
 </div>
 
+<div class="section">
+	<div class="section-title">Combat Style</div>
+
+	<div class="option-row">
+		<div class="option-label">
+			<span>Tactical battle map</span>
+			<small>Fights happen on a grid you can see and move on, instead of in description alone</small>
+		</div>
+		<div class="option-control">
+			<input type="checkbox" id="tacticalCombat" data-sound="Page Turn" />
+		</div>
+	</div>
+
+	<!-- The trade is real in both directions, so it is spelled out rather than left to the label.
+	     A host choosing this is choosing what kind of fight they want, not enabling a nicety. -->
+	<p class="hint" id="tacticalCombatNote">
+		<strong>On:</strong> every creature stands somewhere. A map opens when a fight starts, your
+		reachable squares are highlighted on your turn, and you click where to go before you act.
+		Cover, line of sight and reach are measured by the server — a wall really blocks a spell, and
+		you cannot strike something thirty feet away.
+		<br />
+		<strong>Off:</strong> combat is narrated. Faster, looser, and the Dungeon Master is free to
+		improvise, but "I take cover" or "I stay out of reach" is flavour rather than a rule.
+		<br />
+		Safe to change between fights. Switching it off mid-fight ends the current map.
+	</p>
+</div>
+
 <!-- ── TECHNICAL ─────────────────────────────────────────── -->
 
 <div class="section">
@@ -643,6 +671,7 @@ const elLocalTtsRow    = document.getElementById("localTtsRow");
 const elLocalTtsUrl    = document.getElementById("localTtsUrl");
 const elLocalTtsStatus = document.getElementById("localTtsStatus");
 const elIllustrationMode = document.getElementById("illustrationMode");
+const elTacticalCombat = document.getElementById("tacticalCombat");
 const elBrutality      = document.getElementById("brutalitySlider");
 const elBrutalityLabel = document.getElementById("brutalityLabel");
 const elStartingLevel      = document.getElementById("startingLevelSlider");
@@ -797,6 +826,9 @@ function emitSettings() {
 		llmProvider:     selectedProvider,
 		llmModel:        aiSelection.model,
 		illustrationMode: elIllustrationMode.value,
+		// A real boolean. The server accepts the string "true" as well, because a browser will
+		// happily send one, but sending the checkbox's own value keeps that leniency unused.
+		tacticalCombat:  elTacticalCombat.checked,
 	});
 }
 
@@ -813,6 +845,10 @@ function applyState(state) {
 	elMaxMissed.value    = state.maxMissedTurns ?? 5;
 	elMinutes.disabled   = !elEnabled.checked;
 	elMaxMissed.disabled = !elEnabled.checked;
+
+	// Read back rather than assumed. A lobby saved before this setting existed has no field at all,
+	// and the feature is off by default, so absent and false have to look the same here.
+	elTacticalCombat.checked = state.tacticalCombat === true;
 
 	// Speech engine. Switching it makes the current voice list wrong — those ids
 	// belong to the other engine — so the list is reloaded and the lobby's voice is
@@ -1116,6 +1152,7 @@ elEnabled.addEventListener("change", () => {
 });
 elMinutes.addEventListener("change", emitSettings);
 elMaxMissed.addEventListener("change", emitSettings);
+elTacticalCombat.addEventListener("change", emitSettings);
 elNarratorVoice.addEventListener("change", emitSettings);
 /**
  * Lists what the chosen difficulty does to the combat maths.

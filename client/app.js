@@ -596,6 +596,11 @@ function renderLobbyOptions(s) {
 		s.timerEnabled
 			? `<div class="lgo-row"><span class="lgo-key">Turn Timer</span><span class="lgo-val">⏱ ${s.timerMinutes} min &nbsp;·&nbsp; kick after ${s.maxMissedTurns} missed</span></div>`
 			: `<div class="lgo-row"><span class="lgo-key">Turn Timer</span><span class="lgo-val lgo-muted">Off</span></div>`,
+		// Shown to everyone, not only the host. Whether your "I back away" is a measured move or a
+		// turn of phrase is something a player needs to know before they spend their turn on it.
+		s.tacticalCombat === true
+			? `<div class="lgo-row"><span class="lgo-key">Combat</span><span class="lgo-val">🗺 On a battle map</span></div>`
+			: `<div class="lgo-row"><span class="lgo-key">Combat</span><span class="lgo-val lgo-muted">Narrated</span></div>`,
 	].filter(Boolean).join("");
 
 	el.innerHTML = `

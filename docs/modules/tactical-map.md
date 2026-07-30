@@ -74,8 +74,8 @@ stops the narration layer from quietly acquiring rules.
 
 The spatial rulebook and the generator are [tactical-geometry.md](tactical-geometry.md); the session
 that owns a lobby's map, the briefings and the monsters' tactics are
-[tactical-combat.md](tactical-combat.md). Phases 1, 2, 4 and 5 are built and wired into the turn
-pipeline behind the toggle, and playable in a browser.
+[tactical-combat.md](tactical-combat.md). Everything below is built and wired into the turn pipeline
+behind the toggle, except where a section says otherwise.
 
 ## The turn, with the map on
 
@@ -179,29 +179,31 @@ off path is byte-identical to today's.
 The corollary is that the prompt additions are the dangerous part. A map block injected when
 the toggle is off would change narration in every existing game, and it would do it quietly.
 
-## Phases
+The switch lives in the game options window under **Combat Style**, alongside the explanation of what
+each choice costs — a host picking this is choosing what kind of fight they want, not enabling a
+nicety. Safe to change between fights: the server deletes the arena when it is switched off, so no
+orphan map is persisted. `publicState` carries the flag, so the lobby's settings summary shows every
+player which kind of combat they are in, not just the host who chose it.
 
-Each phase ends green, committed, and useful on its own.
+For most of this feature's life that switch did not exist. The server accepted `tacticalCombat` from
+the day it was built and no page ever sent it, so the only ways in were `battle-sim.mjs --tactical`
+and hand-editing a lobby's JSON. `client/settingsWiring.test.js` now fails when `lobby:settings`
+accepts a setting nothing sends.
 
-1. **Geometry.** ✅ Done — [tactical-geometry.md](tactical-geometry.md). Pure, and knows nothing
-   about a lobby.
-2. **Generation.** ✅ Done — seeded arenas, archetypes as data, the connectivity invariant. Persistence lands with the pipeline in phase 4.
-3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
-   The first point at which the idea can be *looked at*, which is when this project's
-   defects have historically surfaced.
-4. **Movement and enforcement.** ✅ Done, both halves. Reach and range refuse as settled facts; the
-   reachable squares are tinted and clickable. Covered live by `tactical-probe.mjs` and
-   `menu-payload-probe.mjs`.
-5. **Proximity targeting and enemy intent.** ✅ Done — `enemyTactics.js`. Enemies close on the
-   nearest character and cannot strike from out of reach, on the intent vocabulary of
-   [ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). The narrator-supplied
-   order is accepted and re-validated; wiring it into the DM reply is the remaining piece.
-6. **Templates.** Cones, cubes and spheres; closes the area-spell gap.
+## What exists, and what does not
 
-Deliberately out of scope for now, and each one is a rabbit hole: opportunity attacks,
-flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
-beyond a `size` field, and doors.
+Built: the geometry ([tactical-geometry.md](tactical-geometry.md)), seeded arena generation, movement
+and reach enforcement, and enemy intent on the vocabulary of
+[ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md), narrator-supplied and
+re-validated. Rendering and the toggle are covered above; the live probes are `tactical-probe.mjs` and
+`menu-payload-probe.mjs`.
 
-_Last verified: 2026-07-29 against branch `Refactor` — phases 1, 2, 4 and 5 are built and exercised by
-the simulation harness. In a browser the feature is reachable only by editing the lobby record: no UI
-sends `tacticalCombat`. Phase 6 is still design only._
+Not built: **templates** — cones, cubes and spheres, which is what closes the area-spell gap where an
+area spell currently hits one target.
+
+Deliberately out of scope, and each one a rabbit hole: opportunity attacks, flanking bonuses,
+elevation, difficult-terrain movement animation, multi-cell creatures beyond a `size` field, and
+doors.
+
+_Last verified: 2026-07-30 against branch `Refactor` — phases 1, 2, 4 and 5 are built, switchable from
+the game options window, and exercised by the simulation harness. Phase 6 is still design only._
