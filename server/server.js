@@ -54,6 +54,7 @@ import { isTactical, ensureArena, syncTokens, clearArena, applyMove, reachCheck,
 import { narratorBlock, refusalBlock, moveMenu, intentRequest } from "./services/tactical/briefing.js";
 import { tacticsFor, applyOrders } from "./services/tactical/enemyTactics.js";
 import { cellLabel } from "./services/tactical/grid.js";
+import { reachableCells } from "./services/tactical/movement.js";
 import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
 // Shared with the browser, which populates the editable prompt box from the same
 // builder. Two implementations would drift, and the text the player edits has to be
@@ -517,10 +518,18 @@ function sendMoveMenu(lobbyId) {
 	const menu = moveMenu(s, current);
 	if (!menu) return;
 
+	// The squares themselves, not just the prose. A browser tints these green and lets one be
+	// clicked; sending them means the page never computes reach for itself, which is the same rule
+	// the agents are held to — one authority on distance, and it is not the client.
+	const reachable = [...reachableCells(s.map, current).keys()];
+	const standing = cellLabel(s.map?.tokens?.[current]?.cell);
+
 	// To that character's own sockets only. It is their options, not the table's, and a browser
 	// showing everybody's would be noise on a shared screen.
 	for (const [sid, rec] of Object.entries(s.sockets ?? {})) {
-		if (rec?.playerName === current) busIo.to(sid).emit("tactical:menu", { player: current, menu });
+		if (rec?.playerName === current) {
+			busIo.to(sid).emit("tactical:menu", { player: current, menu, reachable, standing });
+		}
 	}
 }
 

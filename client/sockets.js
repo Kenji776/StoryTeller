@@ -323,6 +323,15 @@ function registerSocketEvents() {
 	socket.on("state:update", (state) => {
 		currentState = state;
 
+		// The battlefield rides along on every state push as well as its own event, so a player who
+		// reloads mid-fight — or joins one already in progress — gets the map immediately instead of
+		// staring at nothing until the next move. `null` for any lobby without tactical combat, which
+		// leaves the section hidden.
+		if (window.tacticalMapView) {
+			window.tacticalMapView.setMap(state.map ?? null);
+			if (typeof redrawTacticalMap === "function") redrawTacticalMap();
+		}
+
 		// Keep music manager aware of the current campaign world
 		window.musicManager?.setWorldType(state.campaignSetting);
 
@@ -1302,4 +1311,35 @@ function registerSocketEvents() {
 	});
 
 	console.log("📡 GameApp socket events registered");
+}
+
+// ── The battle map ──────────────────────────────────────────────────────────
+// Both handlers are no-ops for a lobby without tactical combat: the server sends neither event,
+// and `state.map` is null, so the section stays hidden and nothing is drawn.
+
+socket.on("map:update", (map) => {
+	if (!window.tacticalMapView) return;
+	window.tacticalMapView.setMap(map);
+	redrawTacticalMap();
+});
+
+socket.on("tactical:menu", ({ player, reachable, standing }) => {
+	if (!window.tacticalMapView) return;
+	// Only ever sent to the character on the clock, so arrival is itself the signal that it is
+	// their turn — no need to compare names against the initiative order.
+	if (window.me?.name && player !== window.me.name) return;
+	window.tacticalMapView.setOptions({ reachable, standing });
+	redrawTacticalMap();
+});
+
+/**
+ * @description Repaints the map, working out whether this viewer may click.
+ * @returns {void} Observers and off-turn players get the picture without the interaction: the
+ *   battlefield is shared state, like the action log, but only the character on the clock moves.
+ */
+function redrawTacticalMap() {
+	if (typeof drawTacticalMap !== "function" || !window.tacticalMapView) return;
+	const mine = window.currentState?.initiative?.[window.currentState?.turnIndex] ?? null;
+	const canAct = !window.isObserver && !!window.me?.name && mine === window.me.name;
+	drawTacticalMap(window.tacticalMapView, canAct);
 }

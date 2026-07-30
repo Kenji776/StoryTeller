@@ -426,6 +426,14 @@
 			</div>
 		</div>
 
+		<!-- Only present while a lobby has tactical combat on and a fight in progress. Placed here
+		     rather than inside the character panel because the battlefield is shared state, like the
+		     action log — an observer watching a fight should see it too. -->
+		<div id="tacticalMapSection" class="hidden">
+		<h3>Battlefield <span id="tacticalMapHint" class="smalltext"></span></h3>
+		<canvas id="tacticalMapCanvas" role="img" aria-label="The battle map"></canvas>
+		</div>
+
 		<div id="actionLogSection">
 		<h3>Action Log</h3>
 		<div id="actionLog" class="log smalltext"></div>
@@ -796,9 +804,12 @@
 	<script type="module">
 		import { equipSlotFor, isConsumable } from "/itemSlots.js";
 		import { describeKnownSpells } from "/knownSpells.js";
+		import { createMapView } from "/tacticalMap.js";
 		window.equipSlotFor = equipSlotFor;
 		window.isConsumable = isConsumable;
 		window.describeKnownSpells = describeKnownSpells;
+		// One view per page. The renderer and the socket handlers both reach for it.
+		window.tacticalMapView = createMapView();
 	</script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>

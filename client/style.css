@@ -1890,3 +1890,24 @@ body.observing #gameCharacterSection {
 	color: #eacb83;
 	font-size: 0.9em;
 }
+
+/* === Battle map ===
+   Hidden until a lobby has tactical combat on and a fight in progress; `drawTacticalMap` removes
+   the class. Sits beside the action log rather than in the character panel because the battlefield
+   is shared state — an observer watching a fight should see it, and the action log's own history
+   is the precedent. */
+#tacticalMapSection {
+	margin-top: 1em;
+}
+#tacticalMapCanvas {
+	display: block;
+	border: 1px solid #2a2735;
+	border-radius: 4px;
+	background: #15131d;
+	max-width: 100%;
+	height: auto;
+}
+#tacticalMapHint {
+	color: #8d84a8;
+	font-weight: normal;
+}

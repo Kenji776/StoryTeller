@@ -521,3 +521,132 @@ function drawEnemyRoster(containerId, enemies = []) {
 	html += `</div>`;
 	container.innerHTML = html;
 }
+/**
+ * Draws the battle map, and lets a square be clicked.
+ *
+ * @description The client half of phase 4. The decisions live in `tacticalMap.js`; this only paints
+ *   them, which is why the model is testable and this is not.
+ *
+ *   Reachable squares are tinted green — faintly, so the room still reads as a room. That tint *is*
+ *   the legality conversation: an illegal move is never offered rather than refused with a message.
+ *   Which squares those are comes from the server, so the page never works out reach for itself.
+ * @param {object} view - A `createMapView()` instance.
+ * @param {boolean} canAct - Whether this viewer may click. False for observers and off-turn players.
+ * @returns {void}
+ */
+function drawTacticalMap(view, canAct) {
+	const section = document.getElementById("tacticalMapSection");
+	const canvas = document.getElementById("tacticalMapCanvas");
+	if (!section || !canvas) return;
+
+	const map = view.current?.();
+	if (!view.hasMap() || !map) {
+		section.classList.add("hidden");
+		return;
+	}
+	section.classList.remove("hidden");
+
+	const offered = new Set(view.offered());
+	const pending = view.pendingMove();
+	const hint = document.getElementById("tacticalMapHint");
+	if (hint) {
+		hint.textContent = !canAct ? ""
+			: pending ? `— moving to ${pending}; click it again to cancel`
+				: offered.size ? "— click a green square to move there" : "";
+	}
+
+	const cell = 30;
+	const pad = 18;
+	const width = map.width * cell + pad * 2;
+	const height = map.height * cell + pad * 2;
+	const ratio = window.devicePixelRatio || 1;
+	canvas.width = width * ratio;
+	canvas.height = height * ratio;
+	canvas.style.width = "100%";
+	canvas.style.maxWidth = `${width}px`;
+	canvas.style.height = "auto";
+
+	const ctx = canvas.getContext("2d");
+	ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+	ctx.clearRect(0, 0, width, height);
+
+	const label = (x, y) => `${String.fromCharCode(65 + x)}${y + 1}`;
+	const scenery = new Map();
+	for (const feature of map.features ?? []) {
+		for (const at of feature.cells ?? []) scenery.set(label(at[0], at[1]), feature.kind);
+	}
+	const landmarks = new Set((map.landmarks ?? []).flatMap((m) => (m.cells ?? []).map((c) => label(c[0], c[1]))));
+
+	for (let x = 0; x < map.width; x++) {
+		for (let y = 0; y < map.height; y++) {
+			const key = label(x, y);
+			const left = pad + x * cell;
+			const top = pad + y * cell;
+
+			ctx.fillStyle = "#15131d";
+			ctx.fillRect(left, top, cell, cell);
+
+			if (canAct && offered.has(key)) {
+				// Faint, and stronger for the square already chosen so the choice is visible at a
+				// glance without a second colour.
+				ctx.fillStyle = key === pending ? "rgba(96, 200, 120, 0.55)" : "rgba(96, 200, 120, 0.18)";
+				ctx.fillRect(left, top, cell, cell);
+			}
+
+			const kind = scenery.get(key);
+			if (kind === "rubble" || kind === "water") {
+				ctx.fillStyle = "#3b3a48";
+				for (let i = 4; i < cell; i += 7) for (let j = 4; j < cell; j += 7) ctx.fillRect(left + i, top + j, 2, 2);
+			} else if (kind === "low_wall") {
+				ctx.fillStyle = "#6b6478";
+				ctx.fillRect(left + 2, top + cell * 0.55, cell - 4, cell * 0.4);
+			} else if (kind) {
+				ctx.fillStyle = "#6b6478";
+				ctx.fillRect(left + 2, top + 2, cell - 4, cell - 4);
+			}
+
+			if (landmarks.has(key)) {
+				ctx.strokeStyle = "#8d84a8";
+				ctx.beginPath();
+				ctx.arc(left + cell / 2, top + cell / 2, cell * 0.28, 0, Math.PI * 2);
+				ctx.stroke();
+			}
+
+			ctx.strokeStyle = "#2a2735";
+			ctx.strokeRect(left + 0.5, top + 0.5, cell - 1, cell - 1);
+		}
+	}
+
+	ctx.font = "9px ui-monospace, monospace";
+	ctx.fillStyle = "#7b7490";
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	for (let x = 0; x < map.width; x++) ctx.fillText(String.fromCharCode(65 + x), pad + x * cell + cell / 2, pad / 2 + 2);
+	ctx.textAlign = "right";
+	for (let y = 0; y < map.height; y++) ctx.fillText(String(y + 1), pad - 5, pad + y * cell + cell / 2);
+
+	ctx.textAlign = "center";
+	ctx.font = "600 11px ui-monospace, monospace";
+	for (const [name, token] of Object.entries(map.tokens ?? {})) {
+		if (!Array.isArray(token?.cell)) continue;
+		const cx = pad + token.cell[0] * cell + cell / 2;
+		const cy = pad + token.cell[1] * cell + cell / 2;
+		ctx.fillStyle = token.faction === "party" ? "#4a7fc8" : "#b4503c";
+		ctx.beginPath();
+		ctx.arc(cx, cy, cell * 0.36, 0, Math.PI * 2);
+		ctx.fill();
+		ctx.fillStyle = "#f2f0f5";
+		ctx.fillText(name.replace(/^(Sister|Brother)\s+/, "")[0] ?? "?", cx, cy + 0.5);
+	}
+
+	canvas.style.cursor = canAct && offered.size ? "pointer" : "default";
+	canvas.onclick = !canAct ? null : (event) => {
+		const box = canvas.getBoundingClientRect();
+		// The canvas is scaled to its container, so a click has to be mapped back through that
+		// scale before it means anything in cell terms.
+		const scale = width / box.width;
+		const x = Math.floor(((event.clientX - box.left) * scale - pad) / cell);
+		const y = Math.floor(((event.clientY - box.top) * scale - pad) / cell);
+		if (view.clickCell([x, y])) drawTacticalMap(view, canAct);
+	};
+}

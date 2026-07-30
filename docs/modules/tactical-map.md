@@ -74,8 +74,8 @@ stops the narration layer from quietly acquiring rules.
 
 The spatial rulebook and the generator are [tactical-geometry.md](tactical-geometry.md); the session
 that owns a lobby's map, the briefings and the monsters' tactics are
-[tactical-combat.md](tactical-combat.md). Phases 1, 2, 5 and the server half of 4 are built and
-wired into the turn pipeline behind the toggle.
+[tactical-combat.md](tactical-combat.md). Phases 1, 2, 4 and 5 are built and wired into the turn
+pipeline behind the toggle, and playable in a browser.
 
 ## The turn, with the map on
 
@@ -106,24 +106,36 @@ feature changes how combat feels as much as this line does.
 
 ### Choosing a move, in a browser
 
-On your turn the cells `reachableCells` returns are tinted green — faintly, so the room still
-reads as a room — and clicking one sets the destination. The tint is the whole legality
-conversation: an illegal move is not refused with a message, it is simply not offered.
+✅ Built. On your turn the reachable squares are tinted green — faintly, so the room still reads as a
+room — and clicking one sets the destination. Clicking it again, or the square you already stand on,
+cancels. The tint is the whole legality conversation: an illegal move is not refused with a message,
+it is simply never offered.
 
-Server-side validation stays regardless. The tint is what a person sees; an agent names a cell
-in a sentence, and neither is trusted.
+**The browser computes none of it.** The squares arrive on `tactical:menu` beside the text menu the
+agents read, held to the same rule for the same reason — one authority on distance, and it is not the
+client. A page working out its own reach would eventually disagree with the server about a legal move,
+and the player would watch a click be refused for no visible reason. Server validation stays
+regardless: an agent names a square in a sentence, and neither input is trusted.
+
+The section sits beside the action log rather than in the character panel, because a battlefield is
+shared state — an observer sees the map, and gets no tint because `tactical:menu` only reaches the
+character on the clock.
+
+Two things worth knowing about the plumbing. `state:update` carries the map as well as `map:update`
+does, so reloading mid-fight or joining one in progress draws immediately rather than after the next
+move. And a redundant map push must **not** discard a pending click: `state:update` fires several
+times a turn, and treating each as a new arena silently wiped the square the player had just chosen,
+so their move never rode along with the action they typed afterwards. Only a genuinely different room
+clears it.
 
 ### Who moves the monsters
 
-The narrator picks an **intent** from a closed set of six verbs — `close`, `hold`, `ranged`,
-`seek_cover`, `withdraw`, `regroup` — and never a cell. The server turns intent into a route.
-Every enemy has a deterministic default that runs whenever the model says nothing or the
-provider falls over, so a fight never depends on a working language model.
-
-The reasoning, the vocabulary and the four rejected alternatives are
-[ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). The short version of
-the test it proposes: **if two competent Dungeon Masters could reasonably disagree, the model
-decides; if they would both reach for a tape measure, the server does.**
+The narrator picks an **intent** — one of `close`, `hold`, `ranged`, `seek_cover`, `withdraw`,
+`regroup` — and never a cell; the server turns it into a route. Every enemy has a deterministic
+default, so a fight never depends on a working language model. Reasoning and rejected alternatives:
+[ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md), whose test is **if two
+competent Dungeon Masters could reasonably disagree, the model decides; if they would both reach for
+a tape measure, the server does.**
 
 ## What each model is told
 
@@ -131,20 +143,10 @@ decides; if they would both reach for a tape measure, the server does.**
 is told plainly not to move anyone — the same instruction that already keeps it off enemy
 hit points. Movement that happened this turn is described *to* it, so the prose can carry it.
 
-**An acting player** gets a menu, precomputed:
-
-```
-You are at D6, behind a pillar — half cover, AC 16 → 18 against anything ranged.
-Movement: 5 cells (25 feet).
-In reach now:            Ghoul 1 (5 ft).
-In reach if you move:    Ghoul 2 — move to G7 (3 cells); Skeleton — move to J5 (5 cells).
-In spell range, in sight: Ghoul 1, Ghoul 2, Skeleton.
-Not in sight:            Ghoul 3 — the pillar at F5 blocks it.
-Cover you could reach:   H8 (half, 4 cells).
-Allies:                  Sister Almath at C5 on 7 hp, 1 cell away. Ghoul 2 is 4 cells from her.
-```
-
-Every line is an answer, not a question. The agent picks; it never measures.
+**An acting player** gets a menu in which every line is an answer rather than a question — where they
+stand, what cover it gives, what is in reach now, and which square to move to for what is not. The
+agent picks; it never measures. The real thing, and what rendering it caught, is in
+[tactical-combat.md](tactical-combat.md).
 
 ## Generation
 
@@ -181,9 +183,9 @@ Each phase ends green, committed, and useful on its own.
 3. **Visualisation, read-only.** The window renders a generated arena. Combat still abstract.
    The first point at which the idea can be *looked at*, which is when this project's
    defects have historically surfaced.
-4. **Movement and enforcement.** Server side ✅ done — `session.js` and `briefing.js` are wired
-   into `action:submit`, reach and range refuse as settled facts, and `tactical-probe.mjs` covers
-   it live. The green reachable tint and click-to-move are the remaining half.
+4. **Movement and enforcement.** ✅ Done, both halves. Reach and range refuse as settled facts; the
+   reachable squares are tinted and clickable. Covered live by `tactical-probe.mjs` and
+   `menu-payload-probe.mjs`.
 5. **Proximity targeting and enemy intent.** ✅ Done — `enemyTactics.js`. Enemies close on the
    nearest character and cannot strike from out of reach, on the intent vocabulary of
    [ADR 0027](../decisions/0027-enemies-are-given-intent-not-coordinates.md). The narrator-supplied
@@ -194,5 +196,5 @@ Deliberately out of scope for now, and each one is a rabbit hole: opportunity at
 flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
 beyond a `size` field, and doors.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2, 5 and the server
-half of 4 are built and wired. The client half and phase 6 are still design only._
+_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2, 4 and 5 built, wired
+and playable in a browser. Phase 6 is still design only._

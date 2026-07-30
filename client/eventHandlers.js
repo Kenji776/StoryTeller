@@ -282,7 +282,12 @@ async function handleSendAction() {
 	if (typeof clearRejectionNotice === "function") clearRejectionNotice();
 	// Stop the DM narration so the player's action can be read on its own channel
 	await stopDMNarration();
-	socket.emit("action:submit", { lobbyId, text });
+
+	// A square clicked on the battle map rides along with the action. Consumed rather than read, so
+	// it cannot attach itself to a second action and move the character again; `null` for every
+	// lobby without tactical combat, which is what leaves this path unchanged for them.
+	const move = window.tacticalMapView?.takeMove?.() ?? null;
+	socket.emit("action:submit", { lobbyId, text, move });
 }
 
 /**

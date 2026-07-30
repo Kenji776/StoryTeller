@@ -1882,6 +1882,369 @@
 				"durationSec": 3,
 				"generatedAt": "2026-07-28T03:44:44.740Z"
 			}
+		},
+		{
+			"name": "Hobgoblin Snarl",
+			"file": "hobgoblin_snarl_ms5800227qxc.mp3",
+			"tags": [
+				"hobgoblin",
+				"snarl"
+			],
+			"_generated": {
+				"prompt": "A sound effect of hobgoblin snarl",
+				"durationSec": 3,
+				"generatedAt": "2026-07-28T22:21:23.408Z"
+			}
+		},
+		{
+			"name": "Crushing Shoulder Blow",
+			"file": "crushing_shoulder_blow_ms592gwhbih2.mp3",
+			"tags": [
+				"crushing",
+				"shoulder",
+				"blow"
+			],
+			"_generated": {
+				"prompt": "A sound effect of crushing shoulder blow",
+				"durationSec": 3,
+				"generatedAt": "2026-07-28T22:51:18.165Z"
+			}
+		},
+		{
+			"name": "Armour Clanking",
+			"file": "armour_clanking_ms5gazvq63ic.mp3",
+			"tags": [
+				"armour",
+				"clanking"
+			],
+			"_generated": {
+				"prompt": "A sound effect of armour clanking",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T02:13:53.324Z"
+			}
+		},
+		{
+			"name": "Shutter Bang",
+			"file": "shutter_bang_ms5gb56nct3y.mp3",
+			"tags": [
+				"shutter",
+				"bang"
+			],
+			"_generated": {
+				"prompt": "A sound effect of shutter bang",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T02:14:00.195Z"
+			}
+		},
+		{
+			"name": "Sacred Flame Descends",
+			"file": "sacred_flame_descends_ms5gcph120x4.mp3",
+			"tags": [
+				"sacred",
+				"flame",
+				"descends"
+			],
+			"_generated": {
+				"prompt": "A sound effect of sacred flame descends",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T02:15:13.145Z"
+			}
+		},
+		{
+			"name": "Rain Pattering Cobblestones",
+			"file": "rain_pattering_cobblestones_ms5gkzkhy7w2.mp3",
+			"tags": [
+				"rain",
+				"pattering",
+				"cobblestones",
+				"stone"
+			],
+			"_generated": {
+				"prompt": "A sound effect of rain pattering cobblestones",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T02:21:39.477Z"
+			}
+		},
+		{
+			"name": "Sparks Scatter",
+			"file": "sparks_scatter_ms5gmdr45hwr.mp3",
+			"tags": [
+				"sparks",
+				"scatter"
+			],
+			"_generated": {
+				"prompt": "A sound effect of sparks scatter",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T02:22:44.516Z"
+			}
+		},
+		{
+			"name": "Gentle Breeze",
+			"file": "gentle_breeze_ms5j9y9gop5a.mp3",
+			"tags": [
+				"gentle",
+				"breeze"
+			],
+			"_generated": {
+				"prompt": "A sound effect of gentle breeze",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T03:37:03.416Z"
+			}
+		},
+		{
+			"name": "Growling Sounds",
+			"file": "growling_sounds_ms5jdal0t9gz.mp3",
+			"tags": [
+				"growling",
+				"sounds",
+				"growl"
+			],
+			"_generated": {
+				"prompt": "A sound effect of growling sounds",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T03:39:39.352Z"
+			}
+		},
+		{
+			"name": "Town Bustle",
+			"file": "town_bustle_ms5kcz2sxru6.mp3",
+			"tags": [
+				"town",
+				"bustle"
+			],
+			"_generated": {
+				"prompt": "A sound effect of town bustle",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T04:07:24.056Z"
+			}
+		},
+		{
+			"name": "Dirt Crumbling",
+			"file": "dirt_crumbling_ms5m8c1epi1m.mp3",
+			"tags": [
+				"dirt",
+				"crumbling"
+			],
+			"_generated": {
+				"prompt": "A sound effect of dirt crumbling",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T04:59:46.807Z"
+			}
+		},
+		{
+			"name": "Ragged Plea",
+			"file": "ragged_plea_ms5mgqipf3sq.mp3",
+			"tags": [
+				"ragged",
+				"plea"
+			],
+			"_generated": {
+				"prompt": "A sound effect of ragged plea",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T05:06:18.824Z"
+			}
+		},
+		{
+			"name": "Rod Swinging",
+			"file": "rod_swinging_ms5ous6afmuu.mp3",
+			"tags": [
+				"rod",
+				"swinging"
+			],
+			"_generated": {
+				"prompt": "A sound effect of rod swinging",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T06:13:13.388Z"
+			}
+		},
+		{
+			"name": "Fizzling Smoke",
+			"file": "fizzling_smoke_ms5p0xa6zk4j.mp3",
+			"tags": [
+				"fizzling",
+				"smoke"
+			],
+			"_generated": {
+				"prompt": "A sound effect of fizzling smoke",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T06:17:59.943Z"
+			}
+		},
+		{
+			"name": "Empty Belt Fumbling",
+			"file": "empty_belt_fumbling_ms5p2mkhkbm4.mp3",
+			"tags": [
+				"empty",
+				"belt",
+				"fumbling"
+			],
+			"_generated": {
+				"prompt": "A sound effect of empty belt fumbling",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T06:19:19.369Z"
+			}
+		},
+		{
+			"name": "Flesh Tearing",
+			"file": "flesh_tearing_ms5p3x5ywoal.mp3",
+			"tags": [
+				"flesh",
+				"tearing"
+			],
+			"_generated": {
+				"prompt": "A sound effect of flesh tearing",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T06:20:19.764Z"
+			}
+		},
+		{
+			"name": "Rat Squeak",
+			"file": "rat_squeak_ms5q1yt0bmto.mp3",
+			"tags": [
+				"rat",
+				"squeak",
+				"conjuration"
+			],
+			"_generated": {
+				"prompt": "A sound effect of rat squeak",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T06:46:48.187Z"
+			}
+		},
+		{
+			"name": "Radiant Sizzle",
+			"file": "radiant_sizzle_ms5r04m3922o.mp3",
+			"tags": [
+				"radiant",
+				"sizzle"
+			],
+			"_generated": {
+				"prompt": "A sound effect of radiant sizzle",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T07:13:22.019Z"
+			}
+		},
+		{
+			"name": "Greatsword Raised",
+			"file": "greatsword_raised_ms5r18y2deyc.mp3",
+			"tags": [
+				"greatsword",
+				"raised",
+				"sword"
+			],
+			"_generated": {
+				"prompt": "A sound effect of greatsword raised",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T07:14:14.288Z"
+			}
+		},
+		{
+			"name": "Skeletal Shriek",
+			"file": "skeletal_shriek_ms5rght1h0i3.mp3",
+			"tags": [
+				"skeletal",
+				"shriek"
+			],
+			"_generated": {
+				"prompt": "A sound effect of skeletal shriek",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T07:26:05.610Z"
+			}
+		},
+		{
+			"name": "Grief-stricken Gasp",
+			"file": "grief_stricken_gasp_ms5roy2g1igp.mp3",
+			"tags": [
+				"grief",
+				"stricken",
+				"gasp"
+			],
+			"_generated": {
+				"prompt": "A sound effect of grief-stricken gasp",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T07:32:39.936Z"
+			}
+		},
+		{
+			"name": "Angry Shouting",
+			"file": "angry_shouting_ms6lrs1pw1lu.mp3",
+			"tags": [
+				"angry",
+				"shouting",
+				"shout"
+			],
+			"_generated": {
+				"prompt": "A sound effect of angry shouting",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T21:34:40.578Z"
+			}
+		},
+		{
+			"name": "Guard Cries Out",
+			"file": "guard_cries_out_ms6lv9pzjwh7.mp3",
+			"tags": [
+				"guard",
+				"cries",
+				"out",
+				"shout"
+			],
+			"_generated": {
+				"prompt": "A sound effect of guard cries out",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T21:37:23.450Z"
+			}
+		},
+		{
+			"name": "Stasis Snapping",
+			"file": "stasis_snapping_ms6mogx0p636.mp3",
+			"tags": [
+				"stasis",
+				"snapping"
+			],
+			"_generated": {
+				"prompt": "A sound effect of stasis snapping",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T22:00:05.800Z"
+			}
+		},
+		{
+			"name": "Villager Gasps",
+			"file": "villager_gasps_ms6muulhi37w.mp3",
+			"tags": [
+				"villager",
+				"gasps"
+			],
+			"_generated": {
+				"prompt": "A sound effect of villager gasps",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T22:05:03.465Z"
+			}
+		},
+		{
+			"name": "Miss",
+			"file": "miss_ms6nnjny1wzk.mp3",
+			"tags": [
+				"miss"
+			],
+			"_generated": {
+				"prompt": "A sound effect of miss",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T22:27:22.322Z"
+			}
+		},
+		{
+			"name": "Rusted Blades Scraping",
+			"file": "rusted_blades_scraping_ms6qh8dpb195.mp3",
+			"tags": [
+				"rusted",
+				"blades",
+				"scraping"
+			],
+			"_generated": {
+				"prompt": "A sound effect of rusted blades scraping",
+				"durationSec": 3,
+				"generatedAt": "2026-07-29T23:46:26.609Z"
+			}
 		}
 	]
 }
