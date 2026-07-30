@@ -1,0 +1,60 @@
+# StoryTeller — example Docker Compose file
+#
+# Copy this to `docker-compose.yml` (which is gitignored) and adjust:
+#
+#     cp docker-compose.example.yml docker-compose.yml
+#     docker compose up -d --build
+#
+# There is no published image, so `build: .` compiles one from the Dockerfile in this
+# repository. Expect the first build to take a few minutes.
+#
+# Deliberately holds no secrets. Every key and password comes from `server/.env` via
+# `env_file`, which keeps one source of truth for both `npm start` and Docker, and keeps
+# credentials out of a file you might commit or paste. Do not move them in here.
+
+services:
+  storyteller:
+    build: .
+    container_name: storyteller
+    restart: unless-stopped
+
+    # Reads the same file `npm start` does — API keys, STORYTELLER_SECRET, ADMIN_PASSWORD,
+    # everything. Compose fails loudly if it is missing, which is better than a container
+    # that starts with no Dungeon Master.
+    env_file:
+      - ./server/.env
+
+    # These override anything of the same name in the file above.
+    environment:
+      NODE_ENV: production
+      PORT: 3013
+
+    # Must match PORT above. Change both together, or the game answers on a port nothing
+    # is forwarding to.
+    ports:
+      - "3013:3013"
+
+    # Anything not listed here lives inside the image and is destroyed on every rebuild.
+    volumes:
+      # Saved games. Losing this loses every campaign.
+      - ./server/data/lobbies:/app/server/data/lobbies
+      # Encrypted API-key vault and the provider policy. Needs STORYTELLER_SECRET set, or
+      # the vault is memory-only and you re-enter keys after every restart.
+      - ./server/data/credentials:/app/server/data/credentials
+      # Generated portraits and story illustrations, and the galleries indexing them.
+      - ./server/data/images:/app/server/data/images
+      - ./server/data/galleries:/app/server/data/galleries
+      # Music and sound effects. Mounted so the packs downloaded on first run survive a
+      # rebuild — without this every redeploy re-downloads them.
+      - ./client/music:/app/client/music
+      - ./client/sfx:/app/client/sfx
+
+    # If you self-host narration or image generation on another machine on your LAN, the
+    # container reaches it fine through the bridge network above — nothing more is needed.
+    #
+    # Host networking is an alternative, and the only option if a self-hosted service is
+    # bound to the host's own loopback address:
+    #
+    #   network_mode: host      # then delete the `ports:` block; PORT is used directly
+    #
+    # Linux only. On Docker Desktop for Mac or Windows it does not do what you want.

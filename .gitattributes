@@ -1,0 +1,15 @@
+# Line endings for the files where CRLF actually breaks something.
+#
+# Deliberately narrow. A blanket `* text=auto` would renormalise the whole repository in
+# one commit, which buries real changes; these three are the cases where a Windows clone
+# would otherwise produce something that does not run.
+
+# A shell script checked out with CRLF fails inside the container as
+# "/bin/sh^M: bad interpreter" — the shebang is read with the carriage return attached.
+# docker-entrypoint.sh is the one that matters: it seeds the music and SFX volumes before
+# the server starts, so a broken one takes the container down at launch.
+*.sh text eol=lf
+
+# Both are read by the Docker daemon rather than by Windows tooling.
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf

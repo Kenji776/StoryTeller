@@ -38,9 +38,16 @@ server/logs/
 # OS
 .DS_Store
 Thumbs.db
-docker-entrypoint.sh
+
+# Docker. `Dockerfile` and `docker-entrypoint.sh` used to be ignored alongside the
+# compose file, and they contain no secrets — only build steps and the volume-seeding
+# script. Without them a clone could not build the image at all, so the README's Docker
+# instructions were impossible to follow. They are tracked; see `docker-compose.example.yml`.
+#
+# The working `docker-compose.yml` stays ignored because it carries API keys, the vault
+# secret and the admin password as environment values. Copy the example instead — it reads
+# `server/.env` and holds no secrets of its own.
 docker-compose.yml
-Dockerfile
 .sfdx/tools/sobjects/standardObjects/Account.cls
 .sfdx/tools/sobjects/standardObjects/AccountHistory.cls
 .sfdx/tools/sobjects/standardObjects/Asset.cls

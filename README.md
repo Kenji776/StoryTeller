@@ -40,7 +40,15 @@ Open `server/.env` in a text editor. At minimum, set one of these:
 
 You can configure several and switch provider and model per-lobby in the game options.
 
-**Keys in `.env` are imported into an encrypted vault on first run** and are then managed from the admin panel — you do not have to keep editing `.env` to change them. Set `STORYTELLER_SECRET` to a long random string so that vault persists; without it the server keeps keys in memory only and says so at boot. It never falls back to writing them in plaintext.
+**Keys in `.env` are imported into an encrypted vault on first run** and are then managed from the admin panel — you do not have to keep editing `.env` to change them.
+
+Set `STORYTELLER_SECRET` or that vault is memory-only, and every key is gone on restart:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+```
+
+Keep it somewhere safe. Changing it later makes the existing vault unreadable — the server refuses to overwrite a vault it cannot open, so a typo costs you access rather than your keys. It never falls back to storing them in plaintext.
 
 Optional but recommended:
 - **`STORYTELLER_SECRET`** — encrypts the credential vault so keys survive a restart
@@ -71,15 +79,85 @@ Navigate to `http://localhost:3013` in your browser (adjust the port if you chan
 
 Other players on your local network can join at `http://<your-ip>:3013`.
 
-### Docker (alternative)
+## Docker (alternative to steps 4–5)
 
-If you prefer Docker:
+**There is no published image.** Nothing is pushed to Docker Hub or GHCR, so you build it
+yourself from the `Dockerfile` in this repository. The build is self-contained — Node 20 Alpine,
+`npm install --production`, no compiler toolchain needed.
+
+You need Docker Engine 20.10+ with the Compose plugin (`docker compose`, not the old
+`docker-compose`). Verify with `docker compose version`.
+
+### 1. Create your `.env` first
+
+Docker reads the same `server/.env` as `npm start`, so do step 3 above before continuing. The
+image never contains it — `.dockerignore` excludes `**/.env` at every depth, so keys are supplied
+at run time and are not baked into a layer you might later push somewhere.
+
+### 2. Copy the example compose file
 
 ```bash
-docker compose up -d
+cp docker-compose.example.yml docker-compose.yml
 ```
 
-`docker-compose.yml` is **not** in the repository — it is gitignored, because the working one carries API keys, the vault secret and the admin password. Write your own from the environment table below, and mount volumes for anything that must survive a rebuild: `server/data/lobbies`, `server/data/credentials`, `server/data/images`, `server/data/galleries`, `client/music`, `client/sfx`. Everything not mounted lives inside the image and is lost on each redeploy.
+`docker-compose.example.yml` is tracked and holds no secrets. It pulls everything from
+`server/.env` through `env_file`, which is why it is safe to commit and why you should keep your
+keys out of it. `docker-compose.yml` itself is gitignored, so anything you add there stays local.
+
+Open it if you want to change the port or the volume locations. The defaults work as-is.
+
+### 3. Build and start
+
+```bash
+docker compose up -d --build
+```
+
+First build takes a few minutes. Then:
+
+```bash
+docker compose logs -f          # watch it boot; it reports which providers it found
+docker compose ps               # confirm it is up
+```
+
+The game is at `http://localhost:3013`, or `http://<host-ip>:3013` from other machines.
+
+### Updating
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+The container is replaced; everything under the mounted volumes survives.
+
+### What the volumes hold
+
+Anything **not** mounted lives inside the image and is destroyed on every rebuild. The example
+mounts all six:
+
+| Volume | Why it matters |
+|---|---|
+| `server/data/lobbies` | Saved games. Losing this loses every campaign. |
+| `server/data/credentials` | The encrypted key vault and provider policy. Needs `STORYTELLER_SECRET`, or the vault is memory-only and you re-enter keys after each restart. |
+| `server/data/images` | Generated portraits and illustrations. |
+| `server/data/galleries` | The per-lobby index of those images. |
+| `client/music`, `client/sfx` | Downloaded asset packs. Without these mounts, every rebuild re-downloads them. |
+
+### Things that surprise people
+
+- **The image is large — around 800 MB.** Music and sound effects are copied in deliberately, so a
+  container can seed an empty volume on first start (see `docker-entrypoint.sh`). If you have
+  already downloaded the asset packs locally, they are in the build context and go into the image.
+  Add `client/music` and `client/sfx` to `.dockerignore` if you would rather keep it small and let
+  the running container download them into the volume instead.
+- **`PORT` appears twice**, in `environment:` and in `ports:`. Change both together or the game
+  listens on a port nothing forwards to. The `environment:` value wins over `server/.env`.
+- **Self-hosted narration or image servers on your LAN work fine** through the default bridge
+  network. You only need `network_mode: host` if such a service is bound to the host's own
+  loopback address — and that is Linux-only; on Docker Desktop it will not behave as expected.
+  If you switch to it, delete the `ports:` block.
+- **No API keys?** It still starts. A stub Dungeon Master narrates, so you can confirm the whole
+  stack works before spending anything.
 
 ## Environment Variables
 
@@ -516,5 +594,5 @@ no network, no clock, no disk — and `docs/testing.md` explains the tiers.
 - A host's own API key is held **in memory only**, never written to disk, and dropped when they disconnect or the lobby ends.
 - Music and SFX (`.mp3`) are gitignored — on first startup the server offers to download standard packs from GitHub releases, or add your own.
 - The admin panel needs `ADMIN_PASSWORD`. The host DM tools work independently of it, authenticating with the host's signed character file instead.
-- `docker-compose.yml` is gitignored because it carries API keys, the vault secret and the admin password as environment values. Write your own, or keep secrets in an `env_file:` pointing at an untracked file.
+- `docker-compose.yml` is gitignored so your local one can hold whatever it needs. Start from `docker-compose.example.yml`, which is tracked and keeps every secret in `server/.env` — see [Docker](#docker-alternative-to-steps-45).
 - The tactical battle map is off by default and changes nothing when off — no generation, no prompt additions, no map. Existing games play exactly as before.
