@@ -51,8 +51,8 @@ import { isLLMFailure } from "./services/llmFailure.js";
 // The tactical map. Every export here is inert unless the lobby set `tacticalCombat`,
 // so importing it changes nothing for a lobby that did not ask for it.
 import { isTactical, ensureArena, syncTokens, clearArena, applyMove, reachCheck, TACTICAL_SETTING } from "./services/tactical/session.js";
-import { narratorBlock, refusalBlock, moveMenu } from "./services/tactical/briefing.js";
-import { tacticsFor } from "./services/tactical/enemyTactics.js";
+import { narratorBlock, refusalBlock, moveMenu, intentRequest } from "./services/tactical/briefing.js";
+import { tacticsFor, applyOrders } from "./services/tactical/enemyTactics.js";
 import { cellLabel } from "./services/tactical/grid.js";
 import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
 // Shared with the browser, which populates the editable prompt box from the same
@@ -1725,6 +1725,12 @@ io.on("connection", (socket) => {
 			const battlefield = isTactical(s) ? narratorBlock(s, { moved }) : null;
 			if (battlefield) msgs.push({ role: "system", content: battlefield });
 
+			// And the one thing the narrator is asked to *decide* about the map: what each creature
+			// intends. Orders stand until changed, so this rides the reply it was already making
+			// rather than costing a second call — see ADR 0027.
+			const orders = isTactical(s) ? intentRequest(s) : null;
+			if (orders) msgs.push({ role: "system", content: orders });
+
 			// A refusal is as much a resolved fact as a hit, and it has to be handed over the same
 			// way. Leaving it out let the narrator see the intent, find no resolution beside it,
 			// and write "the blade cleaves clean through" for a swing the server had denied at 35
@@ -1895,6 +1901,15 @@ io.on("connection", (socket) => {
 					if (isTactical(s)) {
 						ensureArena(s);
 						syncTokens(s);
+
+						// Orders are recorded after the roster settles, so an order naming a creature
+						// this same reply introduced still finds it on the map.
+						const given = applyOrders(s, dmObj.enemy_intents);
+						if (given.accepted) log(`🎖️ ${given.accepted} enemy order(s) taken from the narrator`);
+						// Refusals are logged rather than swallowed: a narrator that keeps inventing
+						// verbs is a prompt problem, and a prompt problem nobody counts is invisible.
+						for (const why of given.refused) log(`🚷 order refused — ${why}`);
+
 						busIo.to(room(lobbyId)).emit("map:update", s.map ?? null);
 					}
 

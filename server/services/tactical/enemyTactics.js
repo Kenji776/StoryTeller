@@ -22,7 +22,7 @@
  */
 
 import { isTactical } from "./session.js";
-import { cellLabel, distanceFeet } from "./grid.js";
+import { cellLabel, parseCellLabel, distanceFeet } from "./grid.js";
 import { reachableCells, pathTo } from "./movement.js";
 import { coverBetween, hasLineOfSight } from "./sight.js";
 
@@ -283,4 +283,53 @@ export function tacticsFor(lobby) {
 			return distanceFeet(map, me.cell, them.cell) <= (Number(me.reachFeet) || 5);
 		},
 	};
+}
+
+/**
+ * Records the narrator's orders on the creatures they name.
+ *
+ * @description The server side of [ADR 0027](../../../docs/decisions/0027-enemies-are-given-intent-not-coordinates.md).
+ *   An order is a standing one — it rides the reply the narrator was already making and holds until
+ *   changed, which is what keeps this from costing a second model call per turn. Saying nothing is
+ *   therefore not the same as saying "hold": it leaves whatever was already there.
+ *
+ *   Everything is validated here rather than trusted, and a refusal is *reported* rather than dropped
+ *   in silence. A narrator that keeps inventing verbs is a prompt problem, and a prompt problem is
+ *   invisible unless somebody counts.
+ *
+ *   The rule that matters most: an order may not carry a square. A model that starts smuggling
+ *   coordinates into the target field must not have them honoured, or the split this whole feature
+ *   rests on quietly stops holding.
+ * @param {object} lobby - The lobby record; tokens are mutated for accepted orders.
+ * @param {Array<{enemy: string, intent: string, target?: string}>} orders - From the DM reply.
+ * @returns {{accepted: number, refused: string[]}} How many stuck, and why the rest did not.
+ */
+export function applyOrders(lobby, orders) {
+	const report = { accepted: 0, refused: [] };
+	if (!isTactical(lobby) || !lobby.map) return report;
+	const map = lobby.map;
+
+	for (const order of Array.isArray(orders) ? orders : []) {
+		const who = typeof order?.enemy === "string" ? order.enemy : null;
+		const verb = typeof order?.intent === "string" ? order.intent.trim().toLowerCase() : null;
+		const target = typeof order?.target === "string" && order.target.trim() ? order.target.trim() : null;
+
+		const token = who ? map.tokens[who] : null;
+		if (!token) { report.refused.push(`${who ?? "(unnamed)"}: not on the map`); continue; }
+		// Only the opposition takes orders. Offering the characters would let the narrator play them.
+		if (token.faction === "party") { report.refused.push(`${who}: characters do not take orders`); continue; }
+		if (!INTENTS.includes(verb)) { report.refused.push(`${who}: "${order?.intent}" is not an intent`); continue; }
+
+		const needsTarget = verb !== "hold" && verb !== "withdraw";
+		if (needsTarget) {
+			if (!target) { report.refused.push(`${who}: ${verb} needs a target`); continue; }
+			// A cell label in the target field is the failure mode worth catching by name.
+			if (parseCellLabel(target)) { report.refused.push(`${who}: ${target} is a square, not a creature`); continue; }
+			if (!map.tokens[target]) { report.refused.push(`${who}: ${target} is not on the map`); continue; }
+		}
+
+		token.order = { verb, target: needsTarget ? target : null };
+		report.accepted++;
+	}
+	return report;
 }

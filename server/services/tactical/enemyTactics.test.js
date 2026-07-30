@@ -17,7 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { INTENTS, defaultIntent, resolveIntent, moveEnemy, tacticsFor } from "./enemyTactics.js";
+import { INTENTS, defaultIntent, resolveIntent, moveEnemy, tacticsFor, applyOrders } from "./enemyTactics.js";
 import { TACTICAL_SETTING } from "./session.js";
 import { cellLabel, distanceFeet } from "./grid.js";
 import { coverBetween } from "./sight.js";
@@ -276,4 +276,104 @@ test("closing then striking works in the order the round runs them", () => {
 	assert.equal(tactics.canStrike(lobby.enemies.Ghoul, { name: "Near" }), false);
 	tactics.beforeStrike(lobby.enemies.Ghoul);
 	assert.equal(tactics.canStrike(lobby.enemies.Ghoul, { name: "Near" }), true);
+});
+
+// ── Taking orders from the narrator ─────────────────────────────────────────
+
+test("a valid order is recorded on the creature it names", () => {
+	const lobby = field();
+	const report = applyOrders(lobby, [{ enemy: "Ghoul", intent: "withdraw" }]);
+	assert.deepEqual(lobby.map.tokens.Ghoul.order, { verb: "withdraw", target: null });
+	assert.equal(report.accepted, 1);
+});
+
+test("an order carrying a target keeps it", () => {
+	const lobby = field();
+	applyOrders(lobby, [{ enemy: "Ghoul", intent: "seek_cover", target: "Far" }]);
+	assert.deepEqual(lobby.map.tokens.Ghoul.order, { verb: "seek_cover", target: "Far" });
+});
+
+test("an invented verb is refused and recorded as refused", () => {
+	// Reported rather than silently dropped: a narrator that keeps inventing verbs is a prompt
+	// problem, and it is invisible unless somebody counts.
+	const lobby = field();
+	const report = applyOrders(lobby, [{ enemy: "Ghoul", intent: "eviscerate", target: "Near" }]);
+	assert.equal(lobby.map.tokens.Ghoul.order, undefined);
+	assert.equal(report.accepted, 0);
+	assert.equal(report.refused.length, 1);
+	assert.match(report.refused[0], /eviscerate/);
+});
+
+test("an order for a creature that is not on the map is refused", () => {
+	const lobby = field();
+	const report = applyOrders(lobby, [{ enemy: "Wyvern", intent: "close", target: "Near" }]);
+	assert.equal(report.accepted, 0);
+	assert.match(report.refused[0], /Wyvern/);
+});
+
+test("an order aimed at a character who is not on the map is refused", () => {
+	// The narrator writes these a round early, so it names the dead surprisingly often.
+	const lobby = field();
+	const report = applyOrders(lobby, [{ enemy: "Ghoul", intent: "close", target: "Ghost" }]);
+	assert.equal(report.accepted, 0);
+	assert.equal(lobby.map.tokens.Ghoul.order, undefined);
+});
+
+test("an order that names a square is refused outright", () => {
+	// The one rule that keeps ADR 0027's split intact. A model that starts smuggling coordinates
+	// into the target field must not have them honoured.
+	const lobby = field();
+	const report = applyOrders(lobby, [{ enemy: "Ghoul", intent: "close", target: "K3" }]);
+	assert.equal(report.accepted, 0);
+	assert.equal(lobby.map.tokens.Ghoul.order, undefined);
+});
+
+test("orders may not be given to the party", () => {
+	// Otherwise the narrator plays the characters, which is nobody's idea of a good table.
+	const lobby = field();
+	const report = applyOrders(lobby, [{ enemy: "Near", intent: "withdraw" }]);
+	assert.equal(report.accepted, 0);
+	assert.equal(lobby.map.tokens.Near.order, undefined);
+});
+
+test("an order replaces the previous one rather than stacking", () => {
+	const lobby = field();
+	applyOrders(lobby, [{ enemy: "Ghoul", intent: "withdraw" }]);
+	applyOrders(lobby, [{ enemy: "Ghoul", intent: "hold" }]);
+	assert.equal(lobby.map.tokens.Ghoul.order.verb, "hold");
+});
+
+test("saying nothing leaves standing orders alone", () => {
+	// Orders stand until changed, which is what lets them ride the reply the narrator was already
+	// making instead of costing a second call.
+	const lobby = field();
+	applyOrders(lobby, [{ enemy: "Ghoul", intent: "withdraw" }]);
+	applyOrders(lobby, []);
+	assert.equal(lobby.map.tokens.Ghoul.order.verb, "withdraw");
+});
+
+test("malformed input is refused rather than thrown", () => {
+	const lobby = field();
+	for (const bad of [null, undefined, "close", 7, [null], [{}], [{ enemy: "Ghoul" }]]) {
+		assert.equal(applyOrders(lobby, bad).accepted, 0, JSON.stringify(bad));
+	}
+});
+
+test("orders do nothing at all when the feature is off", () => {
+	const lobby = field();
+	lobby[TACTICAL_SETTING] = false;
+	const before = JSON.stringify(lobby);
+	assert.equal(applyOrders(lobby, [{ enemy: "Ghoul", intent: "withdraw" }]).accepted, 0);
+	assert.equal(JSON.stringify(lobby), before);
+});
+
+test("an accepted order actually changes what the creature does", () => {
+	// The end-to-end assertion: an order is worthless if `moveEnemy` ignores it. Default would close
+	// on Near; withdraw must send it the other way.
+	const lobby = field();
+	lobby.map.tokens.Near.cell = [9, 2];
+	applyOrders(lobby, [{ enemy: "Ghoul", intent: "withdraw" }]);
+	const before = distanceFeet(lobby.map, lobby.map.tokens.Ghoul.cell, lobby.map.tokens.Near.cell);
+	moveEnemy(lobby, "Ghoul");
+	assert.ok(distanceFeet(lobby.map, lobby.map.tokens.Ghoul.cell, lobby.map.tokens.Near.cell) > before);
 });

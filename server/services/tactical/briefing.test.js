@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { narratorBlock, moveMenu, refusalBlock } from "./briefing.js";
+import { narratorBlock, moveMenu, refusalBlock, intentRequest } from "./briefing.js";
 import { TACTICAL_SETTING, ensureArena } from "./session.js";
 import { canReach } from "./movement.js";
 import { cellLabel, parseCellLabel } from "./grid.js";
@@ -252,4 +252,53 @@ test("a refusal with nobody named still says something safe", () => {
 	const block = refusalBlock(null, null, null);
 	assert.ok(block.length > 0);
 	assert.doesNotMatch(block, /undefined|null/);
+});
+
+// ── Asking the narrator for orders ──────────────────────────────────────────
+
+test("the request names every verb the server will accept", () => {
+	// A closed set, quoted in full, because a verb the narrator invents is discarded — and a model
+	// told only "choose an intent" invents constantly.
+	const block = intentRequest(staged());
+	for (const verb of ["close", "hold", "ranged", "seek_cover", "withdraw", "regroup"]) {
+		assert.match(block, new RegExp(verb), verb);
+	}
+});
+
+test("the request names the creatures awaiting orders", () => {
+	const block = intentRequest(staged());
+	assert.match(block, /Ghoul 1/);
+	assert.match(block, /Ghoul 2/);
+});
+
+test("the request does not name the party as things to give orders to", () => {
+	// Only the enemies take orders. Offering the characters would invite the narrator to play them.
+	const block = intentRequest(staged());
+	const orders = block.slice(block.indexOf("awaiting orders"));
+	assert.doesNotMatch(orders, /Dorn Hammerfall/);
+});
+
+test("the request states the field name the parser reads", () => {
+	assert.match(intentRequest(staged()), /enemy_intents/);
+});
+
+test("the request forbids squares and distances explicitly", () => {
+	// The one rule that keeps ADR 0027's split intact: the model chooses who, never where.
+	const block = intentRequest(staged());
+	assert.match(block, /never|do not/i);
+	assert.match(block, /square|cell|coordinate|distance/i);
+});
+
+test("no request when the feature is off or there is no fight", () => {
+	const off = staged();
+	off[TACTICAL_SETTING] = false;
+	assert.equal(intentRequest(off), null);
+
+	const noFoes = staged();
+	noFoes.map.tokens = { "Dorn Hammerfall": noFoes.map.tokens["Dorn Hammerfall"] };
+	assert.equal(intentRequest(noFoes), null, "nobody to give orders to");
+});
+
+test("the request is short enough to send every turn", () => {
+	assert.ok(intentRequest(staged()).split("\n").length <= 8);
 });

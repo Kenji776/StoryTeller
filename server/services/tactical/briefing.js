@@ -23,6 +23,9 @@ import { isTactical, RANGE_FEET } from "./session.js";
 import { cellLabel, distanceFeet, distanceCells } from "./grid.js";
 import { reachableCells, movementBudgetFeet } from "./movement.js";
 import { hasLineOfSight, coverBetween, coverACBonus } from "./sight.js";
+// The vocabulary lives with the tactics that execute it, so the block cannot drift from what the
+// server will actually accept.
+import { INTENTS } from "./enemyTactics.js";
 
 /** How many allies and enemies a menu will name before it stops, to keep the prompt affordable. */
 const MENU_LIMIT = 4;
@@ -243,4 +246,44 @@ export function refusalBlock(actorName, targetName, reason) {
 	return `IMPOSSIBLE ACTION — settled fact. ${who} could not reach ${whom}${explained}. `
 		+ `No attack was made and no damage was dealt. Describe the attempt failing for that reason. `
 		+ `Do not describe a hit, a graze, or ${whom} being wounded or killed.`;
+}
+
+/**
+ * Asks the narrator what each creature intends, and only that.
+ *
+ * @description The half of [ADR 0027](../../../docs/decisions/0027-enemies-are-given-intent-not-coordinates.md)
+ *   that faces the model. Enemy movement is the first combat decision in this project that goes *to*
+ *   the narrator rather than away from it, because it has no right answer — whether a ghoul lunges at
+ *   the wounded cleric or holds the archway is characterisation, not arithmetic.
+ *
+ *   Three things this block has to do, and each is a lesson from somewhere else in the codebase:
+ *
+ *   - **Quote the whole verb set.** An unrecognised verb is discarded, and a model told merely to
+ *     "choose an intent" invents them freely.
+ *   - **Name the creatures**, so an order can be matched to one. Only the enemies: offering the
+ *     characters would invite the narrator to play them.
+ *   - **Forbid squares and distances outright.** This is the line that keeps the split intact. The
+ *     model chooses *who*; the server works out *where*, and a model handed a grid asserts range it
+ *     has not measured.
+ *
+ *   Orders stand until changed, so this rides the reply the narrator was already making — no second
+ *   call, and no turn latency added to a fight.
+ * @param {object} lobby - The lobby record.
+ * @returns {string|null} The block, or `null` when the feature is off, there is no map, or there are
+ *   no enemies left to command.
+ */
+export function intentRequest(lobby) {
+	if (!isTactical(lobby) || !lobby.map) return null;
+	const { foes } = sides(lobby.map);
+	if (!foes.length) return null;
+
+	return [
+		"ENEMY ORDERS — you decide what each creature intends. The server decides whether it can.",
+		`Verbs, and nothing else: ${INTENTS.join(", ")}.`,
+		`Creatures awaiting orders: ${foes.map((foe) => foe.name).join(", ")}.`,
+		'Return them as "enemy_intents": [{"enemy": "Ghoul 1", "intent": "close", "target": "Sister Almath"}].',
+		"hold and withdraw need no target. An order stands until you change it, so send only what changed.",
+		"Never give a square, a cell, a coordinate or a distance — those are not yours to choose, and an "
+			+ "order carrying one is discarded.",
+	].join("\n");
 }
