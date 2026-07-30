@@ -31,6 +31,16 @@ server/test-integration/
 **/*.test.js
 **/*.test.mjs
 docs/
+
+# Audio. Carrying it made the image 641 MB — the same files twice, once here and once in the
+# seed copy the Dockerfile makes. The server downloads these packs from GitHub releases on
+# first run in a few seconds, into the mounted volume where they persist, which is the path a
+# fresh clone already takes.
+#
+# Remove these two lines for an image that needs no network on first start. The Dockerfile's
+# seed step is written to work either way.
+client/music/
+client/sfx/
 # Every .env, at any depth. The bare `.env` below matched only the context
 # root, so server/.env was being baked into the image -- and into every
 # tarball shipped to a deploy target -- with live API keys in plaintext.

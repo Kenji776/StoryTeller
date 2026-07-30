@@ -31,6 +31,7 @@ import { configure as configureAssets, ensureMusic, ensureMenuMusic, ensureSfx, 
 import { parseDMJson } from "./helpers/parseDMJson.js";
 import { registerAdminAuth } from "./routes/adminAuth.js";
 import { createCharacterKeys } from "./services/characterKeys.js";
+import { listMoodTracks } from "./helpers/musicLibrary.js";
 import { registerAdminEvents } from "./routes/adminEvents.js";
 import { createProviderAdminRoutes } from "./routes/providerAdmin.js";
 import { createAiSetup } from "./routes/aiSetup.js";
@@ -475,14 +476,16 @@ app.get("/api/menu-music", (req, res) => {
 // Game music listing — returns mp3 filenames for a given world + mood folder
 const GAME_MUSIC_DIR = path.join(__dirname, "..", "client", "music", "game");
 app.get("/api/game-music/:world/:mood", (req, res) => {
-	try {
-		const { world, mood } = req.params;
-		// Sanitise path segments to prevent directory traversal
-		if (/[./\\]/.test(world) || /[./\\]/.test(mood)) return res.json([]);
-		const dir = path.join(GAME_MUSIC_DIR, world, mood);
-		if (!fs.existsSync(dir)) return res.json([]);
-		res.json(fs.readdirSync(dir).filter(f => f.endsWith(".mp3")));
-	} catch { res.json([]); }
+	// Reads a mood folder if there is one and falls back to mood-prefixed files in the world folder,
+	// which is the layout the downloaded asset pack actually produces. Only the first was handled, so
+	// music downloaded on every fresh install and then never played. Traversal check moved into the
+	// helper with the path building. See `helpers/musicLibrary.js`.
+	res.json(listMoodTracks({
+		fsImpl: fs,
+		gameMusicDir: GAME_MUSIC_DIR,
+		world: req.params.world,
+		mood: req.params.mood,
+	}));
 });
 
 // Character images

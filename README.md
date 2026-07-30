@@ -33,29 +33,46 @@ Copy the example environment file and fill in your API keys:
 cp server/.env.example server/.env
 ```
 
-Open `server/.env` in a text editor. At minimum, set one of these:
+Open `server/.env` in a text editor and **replace the placeholder values** with real keys. At minimum
+one of:
 
 - **`OPENAI_API_KEY`** — OpenAI models (GPT-5, GPT-4o, GPT-4o-mini…)
 - **`ANTHROPIC_API_KEY`** — Anthropic models (Claude Opus, Sonnet, Haiku). `CLAUDE_API_KEY` is still accepted.
 
-You can configure several and switch provider and model per-lobby in the game options.
+Placeholders left in place are ignored rather than stored, and the server says which ones it skipped
+at startup. That matters because it used to store them: providers were then marked as paid for by
+this server, the boot log announced the game as ready, and the first turn failed on authentication.
+
+You can configure several and switch provider and model per-lobby in the game options. You can also
+leave every key blank — a host can supply their own for one lobby, and a stub Dungeon Master narrates
+without any at all.
 
 **Keys in `.env` are imported into an encrypted vault on first run** and are then managed from the admin panel — you do not have to keep editing `.env` to change them.
 
-Set `STORYTELLER_SECRET` or that vault is memory-only, and every key is gone on restart:
+`STORYTELLER_SECRET` and `ADMIN_PASSWORD` are both **commented out** in the example, and both are
+worth setting. Uncomment and fill them:
 
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
-```
+- **`STORYTELLER_SECRET`** — encrypts the vault so keys survive a restart. Without it the vault runs
+  in memory and says so at boot. Generate one:
 
-Keep it somewhere safe. Changing it later makes the existing vault unreadable — the server refuses to overwrite a vault it cannot open, so a typo costs you access rather than your keys. It never falls back to storing them in plaintext.
+  ```bash
+  node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+  ```
 
-Optional but recommended:
-- **`STORYTELLER_SECRET`** — encrypts the credential vault so keys survive a restart
-- **`ADMIN_PASSWORD`** — enables the admin panel at `/admin/`
+  Keep it somewhere safe. Changing it later makes the existing vault unreadable — the server refuses
+  to overwrite a vault it cannot open, so a typo costs you access rather than your keys. It never
+  falls back to storing keys in plaintext.
+
+- **`ADMIN_PASSWORD`** — enables the admin panel at `/admin/`. Unset, the panel is disabled, which is
+  the right default until you have chosen a password. No default ships: a shipped one is a known
+  password on every install that never changed it.
+
+Also optional:
 - **`ELEVEN_API_KEY`** — voice narration via ElevenLabs
 - **`LOCAL_TTS_URL`** — a self-hosted narration server instead (free; seeds the first run only)
-- **`DEV_MODE=TRUE`** — skip narration and image generation during development to save API calls
+- **`DEV_MODE=TRUE`** — suppress narration and image generation while developing, to save API spend.
+  The example ships `FALSE`, because someone setting this up to *play* should not find two features
+  silently switched off.
 
 See the full [Environment Variables](#environment-variables) table below for all options.
 
@@ -87,8 +104,8 @@ A published image is on Docker Hub:
 kenji776/storyteller:latest      # or :1.0.0 to pin a version
 ```
 
-526 MB to download. You can also build it yourself from the `Dockerfile` here — the build is
-self-contained (Node 20 Alpine, `npm install --production`, no compiler toolchain).
+61 MB to pull, 174 MB unpacked. You can also build it yourself from the `Dockerfile` here — the
+build is self-contained (Node 20 Alpine, `npm install --production`, no compiler toolchain).
 
 You need Docker Engine 20.10+ with the Compose plugin (`docker compose`, not the old
 `docker-compose`). Verify with `docker compose version`.
@@ -168,11 +185,12 @@ after each restart regardless of the mount.
 
 ### Things that surprise people
 
-- **The image is large — 641 MB unpacked, 526 MB to pull.** Music and sound effects are copied in deliberately, so a
-  container can seed an empty volume on first start (see `docker-entrypoint.sh`). If you have
-  already downloaded the asset packs locally, they are in the build context and go into the image.
-  Add `client/music` and `client/sfx` to `.dockerignore` if you would rather keep it small and let
-  the running container download them into the volume instead.
+- **The container downloads its music and sound effects on first start**, about five seconds, into
+  the mounted volumes where they persist. They are not in the image: carrying them made it 641 MB
+  — the same audio twice, once in `client/` and once in the seed copy — against 174 MB without.
+  If you would rather the image needed no network at all, delete the `client/music/` and
+  `client/sfx/` lines from `.dockerignore` and rebuild; the seeding step in `docker-entrypoint.sh`
+  works either way.
 - **`PORT` appears twice**, in `environment:` and in `ports:`. Change both together or the game
   listens on a port nothing forwards to. The `environment:` value wins over `server/.env`.
 - **Self-hosted narration or image servers on your LAN work fine** through the default bridge
@@ -192,7 +210,7 @@ All configuration lives in `server/.env` (copy from `server/.env.example`):
 | `ANTHROPIC_API_KEY` | No | Anthropic key. `CLAUDE_API_KEY` is accepted as an alias. |
 | `ELEVEN_API_KEY` | No | ElevenLabs key for narration. `ELEVENLABS_API_KEY` also accepted. |
 | `LOCAL_IMAGE_API_KEY` | No | Key for a self-hosted image server, if it wants one. |
-| `STORYTELLER_SECRET` | No | Encrypts the credential vault (`server/data/credentials/`). Without it the vault is memory-only and keys do not survive a restart. |
+| `STORYTELLER_SECRET` | No | Encrypts the credential vault (`server/data/credentials/`). Without it the vault is memory-only and keys do not survive a restart. A value that looks like a placeholder is ignored, with a warning. |
 | `STORYTELLER_SECRET_FILE` | No | Path to a file holding that secret, for Docker/systemd secret mounts. |
 | `OPENAI_MODEL` | No | Legacy fallback for `DEFAULT_LLM_MODEL`. |
 | `DEFAULT_LLM_PROVIDER` | No | `openai`, `anthropic`, `google`, `ollama`, or `openai-compatible`. `claude` is accepted and stored as `anthropic`. Falls back to `openai`. |
@@ -201,8 +219,8 @@ All configuration lives in `server/.env` (copy from `server/.env.example`):
 | `PORT` | No | Server port (default: `3000`; the example `.env` uses `3013`). |
 | `ELEVEN_VOICE_ID` | No | Default ElevenLabs voice ID. |
 | `LOCAL_TTS_URL` | No | Seeds the self-hosted narration server address on first run. After that the host sets it per lobby in the settings window and it is stored in `server/data/tts-config.json`. |
-| `DEV_MODE` | No | `TRUE` skips narration and image generation, and unlocks the canned-response test provider. |
-| `ADMIN_PASSWORD` | No | Password for the admin panel (see [Admin Panel](#admin-panel)). |
+| `DEV_MODE` | No | `TRUE` suppresses narration and image generation, and unlocks the canned-response test provider. Ships `FALSE`. |
+| `ADMIN_PASSWORD` | No | Password for the admin panel (see [Admin Panel](#admin-panel)). Unset disables the panel; no default ships. |
 | `FEASIBILITY_MODE` | No | `judge` lets the action gate actually refuse impossible actions. Unset means observe-only: it logs what it would have refused and allows everything. |
 | `APP_VERSION` | No | Reported by `/api/features`; the deploy script bumps it. |
 | `HISTORY_SUMMARIZE_THRESHOLD` | No | Unsummarized messages before auto-summarization triggers (default: `20`). |

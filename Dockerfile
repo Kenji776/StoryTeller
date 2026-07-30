@@ -18,11 +18,21 @@ RUN npm install --production
 # Copy the rest of your project
 COPY . .
 
-# Store a seed copy of the music outside the volume mount path.
-# The entrypoint copies this to /app/client/music on first start when the
-# host volume directory is empty, making the files visible on the host.
-RUN cp -r /app/client/music /app/music-seed && \
-    cp -r /app/client/sfx /app/sfx-seed
+# A seed copy of the audio, outside the volume mount path. The entrypoint copies it into
+# /app/client/music on first start when the mounted directory is empty, so the files end up
+# visible on the host.
+#
+# Tolerant of the assets being absent, which is the default: `.dockerignore` excludes
+# client/music and client/sfx, because carrying them made the image 641 MB — the same audio
+# twice, once in client/ and once here. Without them the image is a fraction of that and the
+# server downloads the packs on first run instead, which takes a few seconds and is the same
+# path a fresh clone already takes.
+#
+# Delete those two lines from `.dockerignore` to get an image that needs no network on first
+# start; this step then seeds from them exactly as before.
+RUN mkdir -p /app/music-seed /app/sfx-seed && \
+    (cp -r /app/client/music/. /app/music-seed/ 2>/dev/null || true) && \
+    (cp -r /app/client/sfx/. /app/sfx-seed/ 2>/dev/null || true)
 
 # Optional metadata (just documentation, not functional)
 LABEL maintainer="Kenji776 <dev@kenji776-labs.org>"
