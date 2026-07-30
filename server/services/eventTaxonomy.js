@@ -68,6 +68,11 @@ export const EVENT_CLASSES = {
 	// the mood on every state:update, so a replayed change would only restart a
 	// track that is already playing correctly.
 	"music:change": EPHEMERAL,
+	// The tactical arena. publicState() carries `map`, so a client that missed a push
+	// has it again on the next state:update. Replaying superseded ones would draw
+	// creatures where they no longer stand — and because a changed map discards the
+	// square a player has clicked, it would silently drop a queued move as well.
+	"tactical:map": EPHEMERAL,
 	// The roll feed and its log line are purely visual; the outcome that matters
 	// reaches the client through the narration and history instead. A duplicated
 	// roll reads as a second roll, which is worse than a missing feed entry.

@@ -1463,7 +1463,7 @@ io.on("connection", (socket) => {
 					}
 				}
 				store.persist(lobbyId);
-				busIo.to(room(lobbyId)).emit("map:update", s.map ?? null);
+				busIo.to(room(lobbyId)).emit("tactical:map", s.map ?? null);
 			}
 
 			// The player's blow, rolled against the target's real armour class before the
@@ -1927,7 +1927,7 @@ io.on("connection", (socket) => {
 						// verbs is a prompt problem, and a prompt problem nobody counts is invisible.
 						for (const why of given.refused) log(`🚷 order refused — ${why}`);
 
-						busIo.to(room(lobbyId)).emit("map:update", s.map ?? null);
+						busIo.to(room(lobbyId)).emit("tactical:map", s.map ?? null);
 					}
 
 					const living = Object.values(store.index[lobbyId]?.players || {})
@@ -1943,7 +1943,7 @@ io.on("connection", (socket) => {
 					// the next encounter a room laid out for the last one.
 					if (isTactical(s)) {
 						clearArena(s);
-						busIo.to(room(lobbyId)).emit("map:update", null);
+						busIo.to(room(lobbyId)).emit("tactical:map", null);
 					}
 				}
 

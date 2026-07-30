@@ -172,3 +172,12 @@ test("player:action is durable because publicState does not carry it", () => {
 	// misses one has a permanent hole in its log with no way to refetch it.
 	assert.equal(classifyEvent("player:action"), DURABLE);
 });
+
+test("the battle map is never replayed, because a stale arena is worse than none", () => {
+	// `publicState` carries `map`, so a client that missed a push gets the arena on the next
+	// `state:update` regardless. Replaying superseded ones would draw creatures where they no longer
+	// stand, and — because clearing or changing the map discards the square a player has clicked —
+	// would silently drop a queued move. Left to the DURABLE default it would do both.
+	assert.equal(classifyEvent("tactical:map"), EPHEMERAL);
+	assert.equal(isReplayable("tactical:map"), false);
+});

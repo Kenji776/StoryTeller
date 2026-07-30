@@ -157,11 +157,17 @@ what measuring it caught are in [tactical-geometry.md](tactical-geometry.md).
 
 ## Rendering
 
-A separate window at `/map/:lobbyId`, opened from the game view, subscribing to `map:update`.
-Canvas over a JSON snapshot; no new dependency. Kept out of the main document deliberately —
-the toggle has to change nothing about the existing UI, and a panel wired into the game view
-would not. Observers see it too: it is the shared state of a fight, not a personal sheet, the
-same reasoning that keeps the action log visible to watchers.
+A canvas over a JSON snapshot; no new dependency. Observers see it too: it is the shared state of a
+fight, not a personal sheet, the same reasoning that keeps the action log visible to watchers.
+
+**It renders in the game view, not in a window** — `#tacticalMapSection` in `index.html`. This section
+described a separate window at `/map/:lobbyId`; that was the intent and was never built. The reasoning
+still holds: a panel here competes for vertical space with the log and cannot be moved to a second
+screen.
+
+`tactical:map` carries it, **not** `map:update` — that name belongs to the older map feature in
+`services/mapService.js`, and sharing it meant sharing the room and losing the player's pending click.
+`services/tactical/channel.test.js` explains the collision and holds the two apart.
 
 ## Toggle discipline
 
@@ -196,5 +202,6 @@ Deliberately out of scope for now, and each one is a rabbit hole: opportunity at
 flanking bonuses, elevation, difficult-terrain movement animation, multi-cell creatures
 beyond a `size` field, and doors.
 
-_Last verified: 2026-07-29 against branch `feature/tactical-map` — phases 1, 2, 4 and 5 built, wired
-and playable in a browser. Phase 6 is still design only._
+_Last verified: 2026-07-29 against branch `Refactor` — phases 1, 2, 4 and 5 are built and exercised by
+the simulation harness. In a browser the feature is reachable only by editing the lobby record: no UI
+sends `tacticalCombat`. Phase 6 is still design only._

@@ -1328,8 +1328,13 @@ function registerSocketEvents() {
 // ── The battle map ──────────────────────────────────────────────────────────
 // Both handlers are no-ops for a lobby without tactical combat: the server sends neither event,
 // and `state.map` is null, so the section stays hidden and nothing is drawn.
+//
+// `tactical:map`, not `map:update`. The older map feature in `services/mapService.js` owns that name
+// and pushes a characters-and-terrain payload on every DM reply, which this handler read as "no map"
+// and which therefore discarded the square the player had clicked. `channel.test.js` keeps the two
+// apart from both ends.
 
-socket.on("map:update", (map) => {
+socket.on("tactical:map", (map) => {
 	if (!window.tacticalMapView) return;
 	window.tacticalMapView.setMap(map);
 	redrawTacticalMap();
