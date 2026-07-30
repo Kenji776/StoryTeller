@@ -227,7 +227,16 @@ export function scoreRun(evidence) {
 			: "every state event carried the fields the appliers read");
 
 	const badSubmitted = Number(gate.badSubmitted) || 0;
-	if (badSubmitted === 0) {
+	// `FEASIBILITY_MODE` defaults to "observe", where `actionGate` logs what it *would*
+	// have refused and lets everything through, never emitting `action:rejected`. On such
+	// a server no model can be seen to judge anything, and scoring that zero reports a
+	// configuration artifact as a model property — identically for every model, which is
+	// exactly how it was caught. The driver proves the mode with a hard-check probe
+	// rather than inferring it, so a genuinely permissive model is still charged.
+	if (gate.enforcing === false) {
+		dimensions.judgement = dimension("judgement", 0,
+			"not measured: the server's feasibility gate was not enforcing (FEASIBILITY_MODE=observe or off)", false);
+	} else if (badSubmitted === 0) {
 		dimensions.judgement = dimension("judgement", 0, "no implausible actions were submitted to judge", false);
 	} else {
 		const recall = (Number(gate.badRejected) || 0) / badSubmitted;

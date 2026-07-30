@@ -147,6 +147,36 @@ test("false rejections of plausible actions are penalised harder than misses", (
 		`refusing real actions must cost more: ${overzealous.dimensions.judgement.score} vs ${missed.dimensions.judgement.score}`);
 });
 
+test("judgement is not measured when the server's feasibility gate is not enforcing", () => {
+	// FEASIBILITY_MODE defaults to "observe", where the gate logs "would reject" and
+	// lets everything through. Scoring that as a model failing its judgement would be
+	// a configuration artifact reported as a model property — and it would read
+	// identically for every model, which is how it was noticed.
+	const r = scoreRun(perfectEvidence({
+		gate: { enforcing: false, badSubmitted: 2, badRejected: 0, plausibleSubmitted: 10, plausibleRejected: 0 },
+	}));
+	assert.equal(r.dimensions.judgement.applicable, false);
+	assert.match(r.dimensions.judgement.detail, /not enforc/i);
+	assert.ok(r.score >= 98, `an unmeasurable dimension must not be charged: got ${r.score}`);
+});
+
+test("a permissive model is still charged when the gate demonstrably was enforcing", () => {
+	// The gate proved it enforces by refusing the hard-check probe, so allowing every
+	// absurd action afterwards is the model's own doing.
+	const r = scoreRun(perfectEvidence({
+		gate: { enforcing: true, badSubmitted: 2, badRejected: 0, plausibleSubmitted: 10, plausibleRejected: 0, hardChecks: 1 },
+	}));
+	assert.equal(r.dimensions.judgement.applicable, true);
+	assert.equal(r.dimensions.judgement.score, 0);
+});
+
+test("an absent enforcing flag is treated as enforcing, so older runs still score", () => {
+	const r = scoreRun(perfectEvidence({
+		gate: { badSubmitted: 2, badRejected: 2, plausibleSubmitted: 10, plausibleRejected: 0 },
+	}));
+	assert.equal(r.dimensions.judgement.applicable, true);
+});
+
 test("leaked markdown or JSON in the narration costs narration hygiene", () => {
 	const inspections = Array.from({ length: 4 }, () => perfect({ markdownInText: true }));
 	const r = scoreRun(perfectEvidence({ inspections, latencies: Array(4).fill(500), ops: { requested: 4, completed: 4, stalls: 0, providerErrors: 0 } }));

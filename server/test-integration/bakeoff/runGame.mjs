@@ -74,6 +74,22 @@ const PARTY = [
 /** A safe action used to retry after a refusal, so a rejected turn still resolves. */
 const RETRY_ACTION = "I take a careful look around and stay ready.";
 
+/**
+ * An action `actionFeasibility.hardChecks` must refuse in pure code, with no model
+ * call, because no level-1 character knows this spell.
+ *
+ * @description Used once per run to establish whether the server's gate is enforcing
+ * at all. `FEASIBILITY_MODE` defaults to `observe`, where the gate logs what it would
+ * have refused and allows everything, so on a default server no model can be observed
+ * to judge anything. Without this probe that produced a uniform zero on the judgement
+ * dimension for every model, which looks like a finding and is a misconfiguration.
+ *
+ * A hard check is the right probe precisely because it does not consult the model: it
+ * separates "the gate is off" from "this model is permissive", which is otherwise
+ * indistinguishable from a client.
+ */
+const GATE_PROBE = "I cast Meteor Swarm and obliterate the horizon.";
+
 /** @description Sleeps. @param {number} ms - Duration. @returns {Promise<void>} */
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -147,7 +163,7 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 	const result = {
 		lobbyId: null, code: null, endedBy: "budget", error: null,
 		ops: { requested, completed: 0, stalls: 0, providerErrors: 0 },
-		gate: { badSubmitted: 0, badRejected: 0, plausibleSubmitted: 0, plausibleRejected: 0, hardChecks: 0 },
+		gate: { enforcing: null, badSubmitted: 0, badRejected: 0, plausibleSubmitted: 0, plausibleRejected: 0, hardChecks: 0 },
 	};
 
 	const players = PARTY.map((spec) => {
@@ -255,6 +271,22 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 			return result;
 		}
 
+		// ── Is the gate even switched on? ──
+		// Done before the script so the answer is known for the whole run. A refused
+		// action does not consume the turn, so this costs one pure-code gate call and
+		// leaves the same player on the clock for their real first action.
+		{
+			const onClock = await waitForTurn({ host, players, exclude: null, timeoutMs: turnTimeoutMs });
+			if (onClock) {
+				const probe = await submitAndSettle({ actor: onClock, host, text: GATE_PROBE, timeoutMs: turnTimeoutMs });
+				result.gate.enforcing = probe.kind === "rejected";
+				if (probe.kind === "rejected") log(`gate is enforcing (probe refused: ${probe.code})`);
+				else log("gate is NOT enforcing — judgement cannot be measured on this server");
+				// The probe was allowed through, so it became a real turn and produced
+				// narration. Nothing to undo; the loop below simply starts one beat later.
+			}
+		}
+
 		// ── Turns ──
 		let lastActed = null;
 		let consecutiveStalls = 0;
@@ -264,25 +296,15 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 			if (consecutiveStalls >= 3) { result.endedBy = "stall"; break; }
 
 			// Poll the tracked turn: the server emits turn:update only on changes.
-			let current = null;
-			const turnDeadline = Date.now() + turnTimeoutMs;
-			while (Date.now() < turnDeadline) {
-				current = host.currentTurn;
-				if (current && current !== lastActed) break;
-				await sleep(400);
-			}
-			if (!current || current === lastActed) {
+			const actor = await waitForTurn({ host, players, exclude: lastActed, timeoutMs: turnTimeoutMs });
+			if (!actor) {
 				result.ops.stalls++;
 				consecutiveStalls++;
 				lastActed = null;
 				continue;
 			}
 			consecutiveStalls = 0;
-			lastActed = current;
-
-			const actor = players.find((p) => p.name === current);
-			if (!actor) { result.ops.stalls++; continue; }
-			if (actor.dead) { await sleep(1500); continue; }
+			lastActed = actor.name;
 
 			const resolved = await takeTurn({ actor, host, step, result, turnTimeoutMs });
 			if (resolved) result.ops.completed++;
@@ -300,6 +322,35 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 		await sleep(1200);
 		teardown();
 	}
+}
+
+/**
+ * Waits until somebody new is on the clock and returns them.
+ *
+ * @description Polls the tracked turn rather than awaiting `turn:update`, because the
+ *   server emits that event only on turn *changes* and never for the opening turn — an
+ *   await would hang there forever. Skips a dead player rather than acting for them:
+ *   the server moves past them on its own.
+ * @param {object} args - Arguments.
+ * @param {object} args.host - The host, whose snapshot carries the initiative order.
+ * @param {object[]} args.players - Every simulated player.
+ * @param {string|null} args.exclude - A name already played, so the same turn is not
+ *   taken twice; the loop otherwise races ahead of `turn:update` and fires several
+ *   actions as one player.
+ * @param {number} args.timeoutMs - How long to wait before reporting a stall.
+ * @returns {Promise<object|null>} The player on the clock, or null on timeout.
+ */
+async function waitForTurn({ host, players, exclude, timeoutMs }) {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const current = host.currentTurn;
+		if (current && current !== exclude) {
+			const actor = players.find((p) => p.name === current);
+			if (actor && !actor.dead) return actor;
+		}
+		await sleep(400);
+	}
+	return null;
 }
 
 /**
