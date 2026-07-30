@@ -119,3 +119,26 @@ test("an undrilled character is not given the drill", () => {
 	const prompt = systemPrompt(PLAYER, viewFromState(stateWithCaster(), "Ovid Marrow"));
 	assert.doesNotMatch(prompt, /free round/i);
 });
+
+test("a tactical menu is handed to the agent verbatim", () => {
+	// It arrives precomputed from the server precisely so the agent never does geometry. Rewording
+	// it here would put this file in the business of describing distances, which is the one thing
+	// the whole design keeps away from the model side.
+	const menu = "You are at D6 — half cover.\nIn reach if you move: Ghoul 2 — move to G7, 15 feet.";
+	const prompt = systemPrompt(PLAYER, viewFromState(stateWithCaster(), "Ovid Marrow"), { tactical: menu });
+	assert.ok(prompt.includes(menu), "the menu must appear unaltered");
+});
+
+test("a drilled agent with a map is told to name the square it moves to", () => {
+	// Thirteen refusals in fourteen actions came from agents swinging at creatures across the room.
+	// Naming the cell is also what makes the answer extractable: it repeats an option it was given.
+	const menu = "You are at D6 — no cover.\nIn reach if you move: Ghoul 2 — move to G7, 15 feet.";
+	const prompt = systemPrompt(PLAYER, viewFromState(stateWithCaster(), "Ovid Marrow"), { tactical: menu });
+	assert.match(prompt, /name the square|say the square|move to/i);
+	assert.match(prompt, /out of reach|too far|cannot reach/i);
+});
+
+test("without a map nothing about squares is mentioned", () => {
+	const prompt = systemPrompt(PLAYER, viewFromState(stateWithCaster(), "Ovid Marrow"));
+	assert.doesNotMatch(prompt, /square|cell|feet away/i);
+});

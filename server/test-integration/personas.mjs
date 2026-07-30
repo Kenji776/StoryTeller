@@ -169,7 +169,7 @@ export function viewFromState(state, name) {
  * @param {object} view - The result of `viewFromState`.
  * @returns {string} The system prompt.
  */
-export function systemPrompt(player, view, { drilled = false } = {}) {
+export function systemPrompt(player, view, { drilled = false, tactical = null } = {}) {
 	const persona = PERSONAS[player.name] ?? { temperament: "Practical and brave.", priorities: "Act sensibly." };
 
 	return [
@@ -188,6 +188,12 @@ export function systemPrompt(player, view, { drilled = false } = {}) {
 		view.enemies.length ? `Enemies present: ${view.enemies.join("; ")}` : "",
 		"",
 		drilled ? TACTICAL_DRILL : "",
+		// Verbatim. The server computed every distance in it so that nothing here has to, and
+		// rewording it would put this file in the business of describing geometry.
+		tactical ? "" : "",
+		tactical ? "THE BATTLEFIELD, AS IT STANDS:" : "",
+		tactical || "",
+		tactical ? MAP_DRILL : "",
 		"",
 		"It is your turn. Say what you do, in ONE first-person sentence starting with \"I\".",
 		"React to what just happened — do not repeat what you did last turn.",
@@ -255,7 +261,7 @@ export function chatBrief(chat, selfName) {
  * @returns {Promise<string>} A single first-person sentence. Never rejects: a
  *   persona failure must not end the run, so it degrades to a neutral action.
  */
-export async function decideAction({ player, story, state, chat, apiKey, log, drilled = false, fetchImpl = fetch }) {
+export async function decideAction({ player, story, state, chat, apiKey, log, drilled = false, tactical = null, fetchImpl = fetch }) {
 	const view = viewFromState(state, player.name);
 	const recent = (story ?? []).slice(-MEMORY_BEATS).join("\n\n") || "The adventure is just beginning.";
 	const table = chatBrief(chat, player.name);
@@ -269,7 +275,7 @@ export async function decideAction({ player, story, state, chat, apiKey, log, dr
 				max_tokens: 80,
 				temperature: 0.9,   // personas should not converge on identical phrasing
 				messages: [
-					{ role: "system", content: systemPrompt(player, view, { drilled }) },
+					{ role: "system", content: systemPrompt(player, view, { drilled, tactical }) },
 					{ role: "user", content: `What has happened recently:\n\n${recent}${table}\n\nWhat do you do?` },
 				],
 			}),
@@ -285,3 +291,21 @@ export async function decideAction({ player, story, state, chat, apiKey, log, dr
 		return "I stay alert and ready myself for whatever comes next.";
 	}
 }
+
+/**
+ * What an agent is told once a battle map exists.
+ *
+ * @description Paired with the menu the server sends, which already contains every distance. The
+ *   instruction it adds is the one thing the menu cannot say for itself: **name the square**.
+ *
+ *   Without it, a simulation produced thirteen refusals in fourteen actions — agents swinging at
+ *   creatures on the far side of the room, because nothing had told them a map existed or that
+ *   moving was available. Naming the square is also what makes the reply extractable, since the
+ *   agent is repeating an option it was handed rather than inventing a coordinate.
+ */
+export const MAP_DRILL = [
+	"You stand on a battle map, and reach is enforced: an attack on something out of reach simply",
+	"fails and wastes your turn. If your target is not already in reach, say the square you move to —",
+	"exactly as the list above writes it, such as \"I move to G7 and attack Ghoul 2\".",
+	"Only squares that list offers are legal.",
+].join(" ");

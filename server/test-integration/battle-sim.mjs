@@ -177,6 +177,9 @@ for (const seat of seats) {
 		}
 	});
 	seat.socket.on("turn:update", (payload) => { seat.currentTurn = payload?.current ?? null; });
+	// The server computes this and sends it to whoever is on the clock. Passing it through verbatim
+	// is the whole point: the agent is handed answers rather than a geometry problem.
+	seat.socket.on("tactical:menu", ({ menu }) => { seat.menu = menu; });
 	seat.socket.on("narration", ({ content }) => {
 		const text = String(content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 		if (text) seat.story.push(text);
@@ -246,6 +249,7 @@ while (actions < MAX_ACTIONS) {
 			player: { name: seat.spec.name, spec: seat.spec },
 			story: seat.story, state: seat.state, chat: [],
 			apiKey: process.env.OPENAI_API_KEY, drilled: true, log: () => {},
+			tactical: TACTICAL ? seat.menu ?? null : null,
 		});
 	} catch { sentence = "I attack the nearest enemy with my weapon."; }
 

@@ -51,7 +51,8 @@ import { isLLMFailure } from "./services/llmFailure.js";
 // The tactical map. Every export here is inert unless the lobby set `tacticalCombat`,
 // so importing it changes nothing for a lobby that did not ask for it.
 import { isTactical, ensureArena, syncTokens, clearArena, applyMove, reachCheck, TACTICAL_SETTING } from "./services/tactical/session.js";
-import { narratorBlock, refusalBlock } from "./services/tactical/briefing.js";
+import { narratorBlock, refusalBlock, moveMenu } from "./services/tactical/briefing.js";
+import { tacticsFor } from "./services/tactical/enemyTactics.js";
 import { cellLabel } from "./services/tactical/grid.js";
 import { isOutOfCharacter, buildRulesPrompt } from "./services/oocQuestion.js";
 // Shared with the browser, which populates the editable prompt box from the same
@@ -495,6 +496,35 @@ const {
 } = timerSystem;
 
 /**
+ * Sends the acting character their tactical options.
+ *
+ * @description `moveMenu` existed, was tested, and reached nobody. A paired simulation showed what
+ *   that costs: thirteen refusals in fourteen actions, because the agents kept swinging at creatures
+ *   across the room. They had no idea a map existed, where they stood on it, or that moving was a
+ *   thing they could do — so the map *penalised* them rather than giving them anything.
+ *
+ *   Exactly the shape of an earlier defect, where the persona brief never mentioned spells and two
+ *   casters went fifteen actions without casting. A capability nobody is told about is not a feature.
+ * @param {string} lobbyId - The lobby.
+ * @returns {void} Nothing happens when the feature is off, there is no map, or nobody holds the turn.
+ */
+function sendMoveMenu(lobbyId) {
+	const s = store.index[lobbyId];
+	if (!isTactical(s) || !s?.map) return;
+
+	const current = store.turnInfo(lobbyId)?.current;
+	if (!current) return;
+	const menu = moveMenu(s, current);
+	if (!menu) return;
+
+	// To that character's own sockets only. It is their options, not the table's, and a browser
+	// showing everybody's would be noise on a shared screen.
+	for (const [sid, rec] of Object.entries(s.sockets ?? {})) {
+		if (rec?.playerName === current) busIo.to(sid).emit("tactical:menu", { player: current, menu });
+	}
+}
+
+/**
  * Feasibility gate. Defaults to "observe": it forms a verdict and logs it but
  * rejects nothing, so a session's real judgements can be reviewed before it starts
  * telling players no. Set FEASIBILITY_MODE=hard or =judge to enforce.
@@ -860,6 +890,7 @@ io.on("connection", (socket) => {
 		store.insertIntoInitiative(lobbyId, charName);
 		const { current, order } = resolveActiveTurn(lobbyId);
 		busIo.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+			sendMoveMenu(lobbyId);
 
 		if (current) startTurnTimer(lobbyId, 2 * 60 * 1000);
 
@@ -908,6 +939,7 @@ io.on("connection", (socket) => {
 			socket.emit("join:confirmed", { lobbyId, lobbyCode, state: store.publicState(lobbyId) });
 
 			busIo.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+			sendMoveMenu(lobbyId);
 			busIo.to(room(lobbyId)).emit("state:update", store.publicState(lobbyId));
 			busIo.to(room(lobbyId)).emit("player:joined", { player: cleanName });
 			broadcastLobbies();
@@ -1202,6 +1234,7 @@ io.on("connection", (socket) => {
 				busIo.to(room(lobbyId)).emit("narration", { content: `<p><strong>⚔️ Initiative</strong><br>${summary}</p>` });
 				const { current, order, round } = store.turnInfo(lobbyId);
 				busIo.to(room(lobbyId)).emit("turn:update", { current, order, round });
+				sendMoveMenu(lobbyId);
 				log(`🎲 Initiative for ${lobbyId}: ${initiativeRolls.map((r) => `${r.name}=${r.total}`).join(", ")}`);
 			}
 
@@ -1603,7 +1636,19 @@ io.on("connection", (socket) => {
 			// would let it describe a clean dodge while hit points fell.
 			// Shared with the turn-timer path, which had no enemy round at all — so
 			// letting the clock run out was mechanically safer than taking a turn.
-			const enemyTurn = takeEnemyRound(s);
+			// `tacticsFor` returns null unless this lobby has a map, and a null `tactics` leaves
+			// the round exactly as it was: round-robin targets, every enemy swinging regardless of
+			// distance. With a map it becomes proximity targeting, and an enemy that closed but
+			// fell short does not get to strike — which is what makes standing in front of the
+			// cleric mean something.
+			const enemyTurn = takeEnemyRound(s, { tactics: tacticsFor(s) });
+			for (const step of enemyTurn.moves ?? []) {
+				moved.push(step);
+				log(`👣 ${step.name} ${step.verb} → ${cellLabel(step.to)} (${step.costFeet} ft)`);
+			}
+			for (const stalled of enemyTurn.outOfReach ?? []) {
+				log(`🚶 ${stalled.enemy} closed on ${stalled.target} but could not reach them`);
+			}
 
 			// Whether a fight ever happens was the narrator's whim, and it declined: one
 			// 120-turn game set combat_over on all 36 of its DM turns and never once
@@ -1942,6 +1987,7 @@ io.on("connection", (socket) => {
 				store.nextTurn(lobbyId);
 				resolveActiveTurn(lobbyId);
 				busIo.to(room(lobbyId)).emit("turn:update", store.turnInfo(lobbyId));
+			sendMoveMenu(lobbyId);
 				scheduleTimerAfterNarration(lobbyId);
 			}
 
