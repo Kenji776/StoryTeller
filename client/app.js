@@ -358,8 +358,40 @@ const aiGate = { canStart: false, reason: "Checking the AI configuration…" };
 let lastAiState = null;
 let narratorDraft = { providerId: null, modelId: null };
 
+/**
+ * Marks appended to a model's name in the narrator dropdown.
+ *
+ * Text rather than colour, because a native `<select>` draws its options as plain strings
+ * on most platforms — a CSS class would be invisible at the exact moment a host is
+ * choosing. `untested` gets nothing: no evidence is not a claim.
+ */
+const NARRATOR_MODEL_MARK = Object.freeze({
+	recommended: "★ recommended",
+	works: "✓ known to work",
+	caution: "⚠ use with caution",
+	avoid: "✕ known not to work",
+});
+
 /** Parsed model catalogue, fetched once. Empty until it arrives, which renders as a text field. */
 let modelCatalogue = [];
+
+/**
+ * What the bake-off found out about each model, fetched once.
+ *
+ * Null until it arrives, and null is a working state: every model then reports `untested`
+ * and the picker simply shows no badges. A failed fetch must not empty the dropdown.
+ */
+let modelRatings = null;
+
+// Same reasoning as the catalogue above: fetched rather than bundled, so refreshing the
+// badges after a bake-off sweep is a data change rather than a release.
+fetch("/config/model_ratings.json")
+	.then((res) => res.json())
+	.then((json) => {
+		modelRatings = json;
+		if (currentState) renderLobbyOptions(currentState);
+	})
+	.catch(() => { /* no badges, working picker — see modelRatings above */ });
 
 // Fetched rather than bundled, for the same reason the admin console fetches it: a hardcoded list in
 // the browser is a list that drifts from the server's. Parsed defensively — a broken file leaves the
@@ -603,7 +635,7 @@ function renderNarratorPanel(s) {
 		return;
 	}
 
-	const choices = window.__aiPanel.modelChoices(lastAiState, s, modelCatalogue);
+	const choices = window.__aiPanel.modelChoices(lastAiState, s, modelCatalogue, modelRatings);
 	// Everything interpolated below goes through this. The model id is a free-text field for providers
 	// whose models cannot be listed, and this panel renders on every player's screen, not just the
 	// host's — so what one host types is markup in everyone's browser unless it is escaped.
@@ -626,8 +658,14 @@ function renderNarratorPanel(s) {
 	const chosenProvider = narratorDraft.providerId ?? choices.current.providerId ?? choices.providers[0].id;
 	const provider = choices.providers.find((p) => p.id === chosenProvider) ?? choices.providers[0];
 	const models = choices.modelsFor(provider.id);
+	// What is already running wins, then the host's draft, then the recommendation. That last
+	// fallback used to be `models[0]`, which is whatever order the provider's catalogue happened
+	// to arrive in — and could therefore land a new lobby on a model the bake-off has already
+	// proven cannot run the game.
 	const chosenModel = narratorDraft.modelId
-		?? (models.some((m) => m.id === choices.current.modelId) ? choices.current.modelId : models[0]?.id ?? "");
+		?? (models.some((m) => m.id === choices.current.modelId) ? choices.current.modelId : null)
+		?? choices.recommendedFor(provider.id)
+		?? "";
 
 	const providerOptions = choices.providers.map((p) =>
 		`<option value="${esc(p.id)}"${p.id === provider.id ? " selected" : ""}>${esc(p.label)}${p.selectable ? "" : " — needs a key"}</option>`).join("");
@@ -636,14 +674,31 @@ function renderNarratorPanel(s) {
 	// whatever it likes, and a fixed list would be wrong more often than right.
 	const modelField = choices.freeTextFor(provider.id) || !models.length
 		? `<input id="narratorModel" type="text" value="${esc(chosenModel)}" placeholder="model name" />`
-		: `<select id="narratorModel">${models.map((m) =>
-			`<option value="${esc(m.id)}"${m.id === chosenModel ? " selected" : ""}>${esc(m.label ?? m.id)}</option>`).join("")}</select>`;
+		: `<select id="narratorModel">${models.map((m) => {
+			// The mark goes in the option text, not just a CSS class: a native <select> renders
+			// options as plain strings on most platforms, so styling alone would be invisible
+			// exactly where a host is choosing.
+			const mark = NARRATOR_MODEL_MARK[m.rating?.flag] ?? "";
+			return `<option value="${esc(m.id)}"${m.id === chosenModel ? " selected" : ""}>`
+				+ `${esc(m.label ?? m.id)}${mark ? ` ${esc(mark)}` : ""}</option>`;
+		}).join("")}</select>`;
+
+	// What the currently-selected model is known for, spelled out under the dropdown. The badge in
+	// the option list is a hint; this is where the evidence goes.
+	const chosenRating = models.find((m) => m.id === chosenModel)?.rating ?? null;
+	const ratingNote = chosenRating && chosenRating.flag !== "untested"
+		? `<p class="model-rating model-rating--${esc(chosenRating.flag)}">`
+			+ `<strong>${esc(chosenRating.label)}.</strong> ${esc(chosenRating.note)}`
+			+ (chosenRating.score !== null ? ` <span class="model-rating__score">Scored ${esc(String(chosenRating.score))}/100 over ${esc(String(chosenRating.turns ?? "?"))} replies.</span>` : "")
+			+ "</p>"
+		: "";
 
 	host.innerHTML = `
 		<div class="lgo-title">Narrator</div>
 		<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${esc(running)}</span></div>
 		<div class="lgo-row"><span class="lgo-key">Provider</span><select id="narratorProvider">${providerOptions}</select></div>
 		<div class="lgo-row"><span class="lgo-key">Model</span>${modelField}</div>
+		${ratingNote}
 		<p class="hint" id="narratorNote">${esc(provider.note)}</p>
 		<div class="lgo-row">
 			<button id="narratorApply" class="primary" ${provider.selectable ? "" : "disabled"}>Use this</button>

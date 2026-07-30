@@ -13,6 +13,8 @@
  * how a Start button ends up enabled for a game the server will refuse.
  */
 
+import { parseRatings, annotateModels, pickRecommended } from "./modelRatings.js";
+
 /** The order services are shown in, regardless of what order they arrive. */
 const DISPLAY_ORDER = Object.freeze(["chat", "speech", "image"]);
 
@@ -187,14 +189,22 @@ export function heldSummary(entry) {
  *     the shipped catalogue has never heard of it. Otherwise opening the panel and pressing Apply
  *     would quietly downgrade a host who had set something newer than the list, which is how a stale
  *     list turns from unhelpful into destructive.
+ *   - **Which of them are known to work.** Several models a provider happily lists cannot run
+ *     this game at all, and the bake-off knows which. A host had no way to find that out
+ *     except by losing an evening, so every model carries a badge and the dropdown offers the
+ *     good ones first.
  * @param {object} state - An `ai:state` payload.
  * @param {object} lobby - Anything carrying `llmProvider` and `llmModel`; usually lobby state.
  * @param {Array<{id: string, label: string, models: Array<object>}>} catalogue - Parsed model
  *   catalogue, used where a provider's models cannot be listed live.
+ * @param {object} [ratings] - Raw `model_ratings.json`. Parsed here rather than by the caller,
+ *   so a page needs no extra bridge function to use it. Absent or malformed means every model
+ *   reports `untested`: the ratings arrive over the network, and a failed fetch must leave a
+ *   working picker that claims nothing rather than an empty one.
  * @returns {{providers: Array<object>, current: {providerId: string|null, modelId: string|null},
- *   modelsFor: Function, freeTextFor: Function}} The picker's model.
+ *   modelsFor: Function, freeTextFor: Function, recommendedFor: Function}} The picker's model.
  */
-export function modelChoices(state, lobby, catalogue = []) {
+export function modelChoices(state, lobby, catalogue = [], ratings = null) {
 	const services = Array.isArray(state?.services) ? state.services : [];
 	const chat = services.find((s) => s?.capability === "chat") ?? null;
 	const current = {
@@ -202,20 +212,35 @@ export function modelChoices(state, lobby, catalogue = []) {
 		modelId: lobby?.llmModel ?? null,
 	};
 
+	const rated = parseRatings(ratings);
+
 	/**
-	 * @description Looks up a provider's models, always including the one in force.
+	 * @description Looks up a provider's models, always including the one in force, each
+	 *   carrying what the bake-off found out about it.
 	 * @param {string} providerId - The provider.
-	 * @returns {Array<{id: string, label: string}>} Models to offer.
+	 * @returns {Array<{id: string, label: string, rating: object}>} Models to offer, best
+	 *   first and known failures last, so a host scanning a long dropdown meets the good
+	 *   ones before the broken ones.
 	 */
 	const modelsFor = (providerId) => {
 		const listed = (catalogue.find((p) => p.id === providerId)?.models ?? []).map((m) => ({ ...m }));
 		const running = current.providerId === providerId && current.modelId
 			&& !listed.some((m) => m.id === current.modelId);
-		return running ? [...listed, { id: current.modelId, label: `${current.modelId} (in use)` }] : listed;
+		// The running model is appended even when unrated, because a stale catalogue must not
+		// quietly downgrade a host who set something newer than the list.
+		const all = running ? [...listed, { id: current.modelId, label: `${current.modelId} (in use)` }] : listed;
+		return annotateModels(rated, providerId, all, { sort: true });
 	};
 
+	/**
+	 * @description Which model this provider's dropdown should land on.
+	 * @param {string} providerId - The provider.
+	 * @returns {string|null} The model id to preselect, or null when it offers nothing.
+	 */
+	const recommendedFor = (providerId) => pickRecommended(rated, providerId, modelsFor(providerId));
+
 	if (!chat) {
-		return { providers: [], current, modelsFor, freeTextFor: (id) => !catalogue.some((p) => p.id === id) };
+		return { providers: [], current, modelsFor, recommendedFor, freeTextFor: (id) => !catalogue.some((p) => p.id === id) };
 	}
 
 	// `options` carries only the providers that take a key, so the one actually serving the
@@ -258,6 +283,7 @@ export function modelChoices(state, lobby, catalogue = []) {
 		providers,
 		current,
 		modelsFor,
+		recommendedFor,
 		/**
 		 * @description Whether a provider's models have to be typed rather than chosen.
 		 * @param {string} providerId - The provider.

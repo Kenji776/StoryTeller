@@ -1952,3 +1952,41 @@ body.observing #gameCharacterSection {
 	accent-color: #7a50c8;
 	cursor: pointer;
 }
+
+/* ── Narrator model ratings ───────────────────────────────────────────────────
+   What the bake-off found out about the selected model, shown under the picker.
+   The dropdown itself marks options with text rather than colour, because a
+   native <select> draws its options as plain strings on most platforms; this is
+   where the evidence goes once one is chosen. Colours follow the tones already
+   used for equip/unequip state above. */
+.model-rating {
+	margin: 6px 0 2px;
+	padding: 6px 10px;
+	font-size: 0.82em;
+	line-height: 1.45;
+	border-left: 3px solid #5b8fbf;
+	background: rgba(100, 180, 255, 0.08);
+	border-radius: 2px;
+}
+.model-rating strong {
+	color: #f0dca7;
+}
+.model-rating__score {
+	opacity: 0.72;
+}
+.model-rating--recommended {
+	border-left-color: #5bbf5b;
+	background: rgba(100, 220, 100, 0.1);
+}
+.model-rating--works {
+	border-left-color: #5bbf5b;
+	background: rgba(100, 220, 100, 0.06);
+}
+.model-rating--caution {
+	border-left-color: #d3a85c;
+	background: rgba(220, 170, 90, 0.1);
+}
+.model-rating--avoid {
+	border-left-color: #bf5b5b;
+	background: rgba(220, 100, 100, 0.1);
+}

@@ -549,3 +549,99 @@ test("values that are not strings become the empty string, never \"undefined\"",
 		assert.ok(!/undefined|null|\[object/.test(escaped), `${String(value)} leaked its type into the page`);
 	}
 });
+
+// ── Model ratings in the picker ──────────────────────────────────────────────
+
+/**
+ * A ratings document shaped as `client/config/model_ratings.json` carries it.
+ *
+ * @description Deliberately mixes a recommended model, a working one, a proven failure and
+ * a thin-sample caution, because the picker has to tell all four apart.
+ */
+const RATINGS = {
+	recommended: "openai/gpt-4o-mini",
+	models: {
+		"openai/gpt-4o-mini": { verdict: "recommended", score: 100, medianMs: 2900, turns: 18 },
+		"openai/gpt-4o": { verdict: "recommended", score: 87, medianMs: 2700, turns: 99 },
+		"openai/gpt-3.5-turbo": { verdict: "unusable", score: 20, medianMs: 900, turns: 40 },
+		"anthropic/claude-opus-5": { verdict: "unusable", score: 98, turns: 16, lowSample: true, note: "dropped the JSON envelope on 1 of 16 turns" },
+	},
+};
+
+const RATED_CATALOGUE = [
+	{ id: "openai", label: "OpenAI", models: [
+		{ id: "gpt-3.5-turbo", label: "GPT-3.5" },
+		{ id: "gpt-4o", label: "GPT-4o" },
+		{ id: "gpt-4o-mini", label: "GPT-4o Mini" },
+		{ id: "gpt-6-unreleased", label: "GPT-6" },
+	] },
+	{ id: "anthropic", label: "Anthropic", models: [{ id: "claude-opus-5", label: "Claude Opus 5" }] },
+];
+
+test("every model offered carries a rating, so the picker can badge all of them", () => {
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE, RATINGS);
+	for (const model of choices.modelsFor("openai")) {
+		assert.ok(model.rating, `${model.id} has no rating`);
+		assert.equal(typeof model.rating.flag, "string");
+	}
+});
+
+test("the recommended model is badged as such, and the known failure as avoid", () => {
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE, RATINGS);
+	const byId = Object.fromEntries(choices.modelsFor("openai").map((m) => [m.id, m.rating.flag]));
+	assert.equal(byId["gpt-4o-mini"], "recommended");
+	assert.equal(byId["gpt-4o"], "works");
+	assert.equal(byId["gpt-3.5-turbo"], "avoid");
+	assert.equal(byId["gpt-6-unreleased"], "untested", "a model released since the sweep makes no claim");
+});
+
+test("a thin-sample failure is a caution rather than a flat avoid", () => {
+	const choices = modelChoices(withChat({}), { llmProvider: "anthropic", llmModel: "claude-opus-5" }, RATED_CATALOGUE, RATINGS);
+	const opus = choices.modelsFor("anthropic").find((m) => m.id === "claude-opus-5");
+	assert.equal(opus.rating.flag, "caution");
+	assert.match(opus.rating.note, /1 of 16/);
+});
+
+test("the best models are offered first, and known failures last", () => {
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE, RATINGS);
+	const order = choices.modelsFor("openai").map((m) => m.id);
+	assert.deepEqual(order, ["gpt-4o-mini", "gpt-4o", "gpt-6-unreleased", "gpt-3.5-turbo"]);
+});
+
+test("the picker recommends the best model a provider offers", () => {
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE, RATINGS);
+	assert.equal(choices.recommendedFor("openai"), "gpt-4o-mini");
+	// Never the globally recommended model from a provider that cannot serve it.
+	assert.equal(choices.recommendedFor("anthropic"), "claude-opus-5");
+});
+
+test("the model already in force is still offered even when it is unrated", () => {
+	// A stale catalogue must not quietly downgrade a host who set something newer, which is
+	// the behaviour the panel already guaranteed and ratings must not break.
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-7-preview" }, RATED_CATALOGUE, RATINGS);
+	const inUse = choices.modelsFor("openai").find((m) => m.id === "gpt-7-preview");
+	assert.ok(inUse, "the running model vanished from the picker");
+	assert.equal(inUse.rating.flag, "untested");
+});
+
+test("with no ratings supplied the picker still works and claims nothing", () => {
+	// Ratings are fetched over the network; a failed fetch must not empty the dropdown.
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE);
+	const models = choices.modelsFor("openai");
+	assert.equal(models.length, 4);
+	for (const model of models) assert.equal(model.rating.flag, "untested");
+	assert.equal(choices.recommendedFor("openai"), "gpt-3.5-turbo", "falls back to catalogue order");
+});
+
+test("a malformed ratings document is ignored rather than breaking the picker", () => {
+	for (const bad of [null, 42, "ratings", [], { models: 7 }]) {
+		const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE, bad);
+		assert.equal(choices.modelsFor("openai").length, 4, `input ${JSON.stringify(bad)} emptied the picker`);
+	}
+});
+
+test("recommendedFor tolerates a provider with nothing to offer", () => {
+	const choices = modelChoices(withChat({}), { llmProvider: "openai", llmModel: "gpt-4o" }, RATED_CATALOGUE, RATINGS);
+	assert.equal(choices.recommendedFor("google"), null);
+	assert.equal(choices.recommendedFor(undefined), null);
+});
