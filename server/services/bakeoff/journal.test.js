@@ -138,6 +138,45 @@ test("provider errors are counted and do not become inspections", () => {
 	assert.equal(ev.inspections.length, 2, "a call that never returned text has no reply to inspect");
 });
 
+test("provider-side failures are classified, so they are not read as model incompetence", () => {
+	// Grading a model F because we exhausted our own rate limit would be a verdict about
+	// our concurrency setting, not about the model.
+	const ev = collectEvidence([
+		entry(DM_SYSTEM, { response: null, error: "OpenAI is receiving too many requests from this key. Wait a moment and try again." }),
+		entry(DM_SYSTEM, { response: null, error: "Anthropic is overloaded (529)." }),
+		entry(DM_SYSTEM, { response: null, error: "The API key was rejected." }),
+	]);
+	assert.equal(ev.ops.providerErrors, 3);
+	assert.equal(ev.ops.rateLimited, 1);
+	assert.equal(ev.ops.providerUnavailable, 1);
+	assert.equal(ev.ops.authFailed, 1);
+});
+
+test("a run with no successful reply and only provider faults is marked inconclusive", () => {
+	const ev = collectEvidence([
+		entry(DM_SYSTEM, { response: null, error: "too many requests" }),
+		entry(DM_SYSTEM, { response: null, error: "too many requests" }),
+	]);
+	assert.equal(ev.ops.inconclusive, true, "nothing was learned about the model here");
+});
+
+test("a run with real replies is not inconclusive even if some calls were rate limited", () => {
+	const ev = collectEvidence([
+		entry(DM_SYSTEM),
+		entry(DM_SYSTEM, { response: null, error: "too many requests" }),
+		entry(DM_SYSTEM),
+	]);
+	assert.equal(ev.ops.inconclusive, false);
+	assert.equal(ev.ops.rateLimited, 1);
+});
+
+test("a clean run reports no provider faults and is not inconclusive", () => {
+	const ev = collectEvidence([entry(DM_SYSTEM), entry(DM_SYSTEM)]);
+	assert.equal(ev.ops.providerErrors, 0);
+	assert.equal(ev.ops.rateLimited, 0);
+	assert.equal(ev.ops.inconclusive, false);
+});
+
 test("identity is taken from the DM turns actually observed", () => {
 	const ev = collectEvidence([entry(DM_SYSTEM, { provider: "anthropic", model: "claude-opus-5" })]);
 	assert.equal(ev.provider, "anthropic");

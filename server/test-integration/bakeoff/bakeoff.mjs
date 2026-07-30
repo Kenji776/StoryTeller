@@ -55,6 +55,15 @@ const ONLY = arg("models", "")?.split(",").map((s) => s.trim()).filter(Boolean) 
 const ONLY_PROVIDERS = arg("providers", "")?.split(",").map((s) => s.trim()).filter(Boolean) ?? [];
 const LOG_DIR = path.join(ROOT, "server", "logs");
 
+/** How many times a model may be re-asked after the provider throttled us. */
+const MAX_ATTEMPTS = Number(arg("attempts", "3"));
+
+/** Base backoff between attempts; multiplied by the attempt number. */
+const RETRY_BACKOFF_MS = Number(arg("backoff", "45")) * 1000;
+
+/** @description Sleeps. @param {number} ms - Duration. @returns {Promise<void>} */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /** Which env var holds each provider's key. `CLAUDE_API_KEY` is the legacy name. */
 const KEY_VARS = {
 	openai: ["OPENAI_API_KEY"],
@@ -130,14 +139,42 @@ function readJournal(lobbyId) {
  * @param {{provider: string, model: string}} candidate - What to evaluate.
  * @returns {Promise<object>} The report, with the run record attached as evidence.
  */
-async function evaluate(candidate) {
+async function evaluate(candidate, _index, attempt = 1) {
 	const label = `${candidate.provider}/${candidate.model}`;
 	const startedAt = Date.now();
-	log(`▶ ${label}`);
+	log(`▶ ${label}${attempt > 1 ? ` (retry ${attempt}/${MAX_ATTEMPTS})` : ""}`);
 	try {
 		const run = await runGame({ url: URL, ...candidate, actions: ACTIONS, log });
 		const journal = readJournal(run.lobbyId);
 		const evidence = collectEvidence(journal);
+
+		// A run the provider refused says nothing about the model. Back off and ask again
+		// rather than recording a verdict we would not stand behind — this is the failure
+		// mode a sweep at too much concurrency creates for itself, and grading it would
+		// report our own concurrency setting as a property of the model.
+		const throttled = evidence.ops.rateLimited > 0 || evidence.ops.providerUnavailable > 0;
+		if (evidence.ops.inconclusive && throttled && attempt < MAX_ATTEMPTS) {
+			const backoffMs = RETRY_BACKOFF_MS * attempt;
+			log(`… ${label} was throttled by the provider — backing off ${backoffMs / 1000}s and retrying`);
+			await sleep(backoffMs);
+			return evaluate(candidate, _index, attempt + 1);
+		}
+		if (evidence.ops.inconclusive) {
+			log(`? ${label} → INCONCLUSIVE (${evidence.ops.providerErrors} provider error(s), no reply to grade)`);
+			return {
+				provider: candidate.provider, model: candidate.model,
+				turns: 0, dimensions: {}, score: 0, grade: "—", verdict: "not evaluated",
+				blockers: [`the provider never let the model answer: `
+					+ `${evidence.ops.rateLimited} rate-limited, ${evidence.ops.providerUnavailable} unavailable, `
+					+ `${evidence.ops.authFailed} auth — this is not a verdict about the model`],
+				latency: { medianMs: null, p90Ms: null },
+				run: {
+					lobbyId: run.lobbyId, endedBy: run.endedBy, error: run.error,
+					calls: evidence.calls, attempts: attempt,
+					wallClockSec: Math.round((Date.now() - startedAt) / 1000),
+				},
+			};
+		}
 
 		// A run cut short by a total party kill did what it was asked; charging it for
 		// the turns it never reached would mark a model down for running a lethal game.

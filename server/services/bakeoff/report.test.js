@@ -36,7 +36,7 @@ test("models are grouped by verdict, best tier first", () => {
 		report({ verdict: "marginal", model: "c" }),
 		report({ verdict: "usable", model: "d" }),
 	]);
-	assert.deepEqual(Object.keys(groups), ["recommended", "usable", "marginal", "unusable"]);
+	assert.deepEqual(Object.keys(groups), ["recommended", "usable", "marginal", "unusable", "not evaluated"]);
 	assert.deepEqual(groups.recommended.map((r) => r.model), ["b"]);
 	assert.deepEqual(groups.unusable.map((r) => r.model), ["a"]);
 });
@@ -51,6 +51,28 @@ test("every input appears in exactly one group", () => {
 test("an unrecognised verdict is bucketed as unusable rather than vanishing", () => {
 	const groups = groupByVerdict([report({ verdict: "excellent", model: "weird" })]);
 	assert.deepEqual(groups.unusable.map((r) => r.model), ["weird"]);
+});
+
+test("a model the provider never let us ask is kept apart from one that failed", () => {
+	// Collapsing these would report our own rate limit as the model's incompetence.
+	const groups = groupByVerdict([
+		report({ verdict: "not evaluated", model: "throttled" }),
+		report({ verdict: "unusable", model: "genuinely-bad" }),
+	]);
+	assert.deepEqual(groups["not evaluated"].map((r) => r.model), ["throttled"]);
+	assert.deepEqual(groups.unusable.map((r) => r.model), ["genuinely-bad"]);
+});
+
+test("the not-evaluated tier renders with its reason and is not called a failure", () => {
+	const md = renderReport({
+		stage: "screen",
+		reports: [report({
+			verdict: "not evaluated", grade: "—", score: 0, turns: 0,
+			blockers: ["the provider never let the model answer: 4 rate-limited"],
+		})],
+	});
+	assert.ok(md.includes("the provider never let the model answer: 4 rate-limited"));
+	assert.match(md, /not evaluated/);
 });
 
 test("within a tier, models are ordered by score descending", () => {

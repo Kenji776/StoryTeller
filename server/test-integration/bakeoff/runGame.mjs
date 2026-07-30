@@ -19,6 +19,7 @@
 
 import { io } from "socket.io-client";
 import { buildActionScript, ACTION_CATEGORIES } from "../../services/bakeoff/actionScript.js";
+import { createOnceOnly } from "../../services/bakeoff/onceOnly.js";
 
 /** Rejection codes decided in pure code, before any model is consulted. */
 const HARD_CHECK_CODES = new Set(["empty", "too_long", "no_character", "cannot_act", "no_slots", "unknown_ability"]);
@@ -138,6 +139,40 @@ function waitFor(socket, event, ms) {
 }
 
 /**
+ * Waits for a narration frame that actually carries prose.
+ *
+ * @description The `narration` event does not mean "the narrator spoke". The server
+ *   emits it more than once per beat, including an empty `{content: null, status: 204}`
+ *   twin from the TTS path, so matching the first frame returns before the model has
+ *   answered. That is what made the opening check useless: the harness proceeded to
+ *   submit turns while the opening call was still in flight, and a genuinely dead
+ *   narrator looked like a live one.
+ * @param {object} socket - A socket.io client.
+ * @param {number} ms - Timeout in milliseconds.
+ * @returns {Promise<{ok: boolean, text?: string, reason?: string}>} `ok` only when real
+ *   prose arrived that is not a published model failure.
+ */
+function waitForNarration(socket, ms) {
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => { socket.off("narration", handler); resolve({ ok: false, reason: "timeout" }); }, ms);
+		/**
+		 * @description Ignores empty twins; distinguishes prose from a published failure.
+		 * @param {object} payload - The frame.
+		 * @returns {void}
+		 */
+		function handler(payload) {
+			const text = (payload?.content || "").trim();
+			if (!text) return;                        // the null/204 twin — keep waiting
+			clearTimeout(timer);
+			socket.off("narration", handler);
+			if (/LLM unavailable|failed to respond|\[Error/i.test(text)) resolve({ ok: false, reason: "llm-failure", text });
+			else resolve({ ok: true, text });
+		}
+		socket.on("narration", handler);
+	});
+}
+
+/**
  * Plays one game and reports how it went.
  *
  * @description Every counter returned here is something the pure scorer cannot
@@ -149,15 +184,17 @@ function waitFor(socket, event, ms) {
  * @param {string} options.provider - Provider id to configure the lobby with.
  * @param {string} options.model - Model id to configure the lobby with.
  * @param {number} options.actions - Total player actions to attempt across the party.
- * @param {number} [options.turnTimeoutMs=180000] - How long one turn may take before
- *   it is treated as a stall. Generous, because a reasoning model can spend a minute
- *   thinking before a word appears.
+ * @param {number} [options.turnTimeoutMs=110000] - How long one turn may take before it
+ *   is written off. Deliberately pinned just above the server's own `LLM_TIMEOUT_MS`
+ *   (60s by default): once the server has given up on the call, no reply is coming, and
+ *   waiting three minutes to discover that made every failure three times as slow as it
+ *   needed to be. Raise it if `LLM_TIMEOUT_MS` is raised.
  * @param {Function} [options.log] - Progress sink, called with one string.
  * @returns {Promise<object>} `{ lobbyId, code, ops, gate, endedBy, error }`.
  * @throws {Error} Only if the server cannot be reached to create a lobby at all;
  *   every later failure is reported in the result so the model still gets graded.
  */
-export async function runGame({ url, provider, model, actions, turnTimeoutMs = 180_000, log = () => {} }) {
+export async function runGame({ url, provider, model, actions, turnTimeoutMs = 110_000, log = () => {} }) {
 	const script = buildActionScript(actions);
 	const requested = script.length;
 	const result = {
@@ -168,7 +205,9 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 
 	const players = PARTY.map((spec) => {
 		const socket = io(url, { transports: ["websocket"], reconnection: true, reconnectionDelay: 300 });
-		return { spec, socket, name: spec.name, lobbyId: null, dead: false, state: null, currentTurn: null };
+		// Durable events are re-delivered by the bus, so every handler that *answers* one
+		// must claim it first or it answers the same prompt repeatedly.
+		return { spec, socket, name: spec.name, lobbyId: null, dead: false, state: null, currentTurn: null, once: createOnceOnly() };
 	});
 	const [host] = players;
 
@@ -192,15 +231,21 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 			// answered at once rather than at reading speed.
 			p.socket.on("narration:start", () => { if (p.lobbyId) p.socket.emit("narration:done", { lobbyId: p.lobbyId }); });
 
-			// A rest vote stalls the table until everyone answers.
-			p.socket.on("rest:vote:start", () => {
+			// A rest vote stalls the table until everyone answers. Also durable.
+			p.socket.on("rest:vote:start", (payload, meta) => {
+				if (!p.once.claim("rest:vote:start", meta, payload)) return;
 				setTimeout(() => p.socket.emit("rest:vote", { lobbyId: p.lobbyId, vote: "yes" }), 300);
 			});
 
 			// When the DM demands a check, action:submit returns early and nothing
 			// schedules a turn timer, so an unanswered roll stalls the game forever.
-			p.socket.on("roll:required", ({ player, sides, stats, mods, dc }) => {
+			p.socket.on("roll:required", (payload, meta) => {
+				const { player, sides, stats, mods, dc } = payload ?? {};
 				if (player !== p.name) return;
+				// `roll:required` is DURABLE, so the bus re-delivers it. Answering every
+				// delivery resubmitted the same roll — one run turned 12 actions into 191
+				// DM calls that way, which inflates the very transcript being graded.
+				if (!p.once.claim("roll:required", meta, payload)) return;
 				const raw = Math.floor(Math.random() * (Number(sides) || 20)) + 1;
 				const mine = p.state?.players?.[p.name]?.stats || {};
 				let total = raw;
@@ -264,10 +309,16 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 		}
 
 		host.socket.emit("game:start", { lobbyId: host.lobbyId });
-		const opening = await waitFor(host.socket, "narration", 180_000);
-		if (!opening) {
-			result.endedBy = "no-opening";
-			result.error = "the model never produced an opening scene";
+		const opening = await waitForNarration(host.socket, Math.max(turnTimeoutMs, 120_000));
+		if (!opening.ok) {
+			// Stop rather than play on against a dead narrator. A model failure is
+			// published as ordinary narration and the turn clock keeps running, so a run
+			// with a bad key or an unreachable provider otherwise plays every turn to
+			// "completion" with an error string as its entire story, and reports a sweep.
+			result.endedBy = opening.reason === "llm-failure" ? "llm-failure" : "no-opening";
+			result.error = opening.reason === "llm-failure"
+				? `the narrator answered with a failure: ${String(opening.text).slice(0, 200)}`
+				: "the model never produced an opening scene";
 			return result;
 		}
 
@@ -308,7 +359,9 @@ export async function runGame({ url, provider, model, actions, turnTimeoutMs = 1
 
 			const resolved = await takeTurn({ actor, host, step, result, turnTimeoutMs });
 			if (resolved) result.ops.completed++;
-			else { result.ops.stalls++; consecutiveStalls++; }
+			// `takeTurn` has already charged the failure to providerErrors, so this only
+			// tracks how many consecutive turns failed — enough of them ends the run.
+			else consecutiveStalls++;
 		}
 
 		if (players.every((p) => p.dead)) result.endedBy = "tpk";
@@ -389,7 +442,10 @@ async function takeTurn({ actor, host, step, result, turnTimeoutMs }) {
 		return false;
 	}
 
-	if (outcome.kind === "failure") { result.ops.providerErrors++; return false; }
+	// A turn that never settled is a provider failure, not a table stall: the server's
+	// own LLM timeout has already elapsed by this point, so nothing is coming. Counting
+	// it under `stalls` as well would charge reliability twice for one event.
+	if (outcome.kind === "failure" || outcome.kind === "timeout") { result.ops.providerErrors++; return false; }
 	return outcome.kind === "narration";
 }
 

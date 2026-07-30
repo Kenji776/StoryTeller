@@ -10,8 +10,14 @@
  * Pure and synchronous.
  */
 
-/** Verdict tiers, best first. */
-export const TIERS = ["recommended", "usable", "marginal", "unusable"];
+/**
+ * Verdict tiers, best first.
+ *
+ * `not evaluated` is last and is deliberately **not** a quality tier. A model the
+ * provider throttled or refused never got to answer, and folding it in with the models
+ * that answered badly would report our own concurrency setting as their incompetence.
+ */
+export const TIERS = ["recommended", "usable", "marginal", "unusable", "not evaluated"];
 
 /** What each tier means operationally, printed once as the report's key. */
 const TIER_MEANING = {
@@ -19,6 +25,7 @@ const TIER_MEANING = {
 	usable: "playable, with rough edges",
 	marginal: "works, but costs or misbehaves enough to hurt",
 	unusable: "cannot run the game loop",
+	"not evaluated": "the provider never let it answer — no verdict, retry needed",
 };
 
 /** Dimension print order, so every model's block reads the same way. */

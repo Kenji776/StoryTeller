@@ -57,6 +57,21 @@ const KEYS_FOR_KIND = { [CALL_KINDS.OPENING]: OPENING_KEYS };
 const GRADED_KINDS = new Set([CALL_KINDS.DM_TURN, CALL_KINDS.OPENING]);
 
 /**
+ * Provider-side failures, matched against the gateway's own `userMessage()` copy.
+ *
+ * @description These must be told apart from a model behaving badly. A sweep run at too
+ * much concurrency exhausts the account's rate limit, and every affected run then looks
+ * like a model that cannot answer — grading it F would report our own concurrency
+ * setting as a property of the model. The distinction is what makes a run *inconclusive*
+ * rather than *failed*.
+ */
+const FAULT_PATTERNS = [
+	["rateLimited", /too many requests|rate limit|429/i],
+	["providerUnavailable", /overloaded|unavailable|try again later|5\d\d\b|529/i],
+	["authFailed", /key was rejected|unauthorized|invalid.*key|forbidden|401|403/i],
+];
+
+/**
  * @description Concatenates every system message in a call, because the DM prompt
  *   is assembled from several and the marker may sit in any of them.
  * @param {*} entry - A journal entry, or anything.
@@ -110,7 +125,7 @@ export function collectEvidence(entries) {
 		inspections: [],
 		latencies: [],
 		calls,
-		ops: { providerErrors: 0 },
+		ops: { providerErrors: 0, rateLimited: 0, providerUnavailable: 0, authFailed: 0, inconclusive: false },
 	};
 	if (!Array.isArray(entries)) return evidence;
 
@@ -127,12 +142,20 @@ export function collectEvidence(entries) {
 		// operational fault instead and scored under reliability.
 		if (entry.error || typeof entry.response !== "string") {
 			evidence.ops.providerErrors++;
+			const message = String(entry.error ?? "");
+			for (const [kind, pattern] of FAULT_PATTERNS) {
+				if (pattern.test(message)) { evidence.ops[kind]++; break; }
+			}
 			continue;
 		}
 
 		evidence.inspections.push(inspectDMReply(entry.response, { requiredKeys: KEYS_FOR_KIND[kind] }));
 		if (Number.isFinite(entry.durationMs)) evidence.latencies.push(entry.durationMs);
 	}
+
+	// Nothing was learned about the model when it never got to answer. Saying so is the
+	// difference between "this model cannot run the game" and "we could not ask it".
+	evidence.ops.inconclusive = evidence.inspections.length === 0 && evidence.ops.providerErrors > 0;
 
 	return evidence;
 }
