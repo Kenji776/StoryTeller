@@ -18,7 +18,7 @@
 import { readFile } from "node:fs/promises";
 import { io } from "socket.io-client";
 
-import { modelChoices } from "../../client/aiPanel.js";
+import { modelChoices, keyFormFor, credentialSubmission } from "../../client/aiPanel.js";
 
 const args = process.argv.slice(2);
 const urlAt = args.indexOf("--url");
@@ -119,6 +119,73 @@ for (const option of chat?.options ?? []) {
 if (choices.current.providerId && choices.current.modelId && !choices.freeTextFor(choices.current.providerId)) {
 	const offered = choices.modelsFor(choices.current.providerId).some((m) => m.id === choices.current.modelId);
 	expect(offered, `the model in force (${choices.current.modelId}) is not among the models offered for ${choices.current.providerId}`);
+}
+
+// ── Bringing your own key ────────────────────────────────────────────────────
+
+// The picker lists providers this server holds no key for so a host can discover that their own key
+// is an option. That promise is only payable if the form actually appears for those providers, and
+// the form refuses to render without the server's own consent wording.
+const capabilities = await (await fetch(`${BASE}/api/capabilities`)).json();
+expect(typeof capabilities.consentTerms === "string" && capabilities.consentTerms.length > 0,
+	"/api/capabilities carries no consentTerms — the key form will render a loading notice forever");
+
+console.log("\nwhat supplying your own key would ask for:");
+for (const provider of choices.providers) {
+	const form = keyFormFor(aiState, provider.id);
+	const asks = [form.requiresKey ? "key" : null, form.requiresBaseUrl ? "address" : null].filter(Boolean);
+	console.log(`  ${provider.label.padEnd(26)} ${form.needed ? `asks for ${asks.join(" + ") || "nothing"}` : "asks nothing"}`
+		+ `${form.keyUrl ? ` · ${form.keyUrl}` : ""}`);
+
+	// The two halves have to agree: a provider the picker calls unusable must be one the form can fix,
+	// and a provider that works must not be asked about.
+	if (provider.keySource === "none") {
+		expect(form.needed, `${provider.id} is unselectable but the key form offers no way to fix that`);
+		expect(form.requiresKey || form.requiresBaseUrl,
+			`${provider.id} needs setup but the form asks for neither a key nor an address`);
+	}
+	if (provider.keySource === "server") {
+		expect(!form.needed, `${provider.id} is served by this server's key, yet the form still asks for one`);
+	}
+}
+
+// ── The round trip ───────────────────────────────────────────────────────────
+
+// Everything above checks what the panel would *show*. This checks that pressing Save works: the
+// payload `credentialSubmission` builds is one `ai:credential:set` accepts, and the state that comes
+// back turns the provider selectable. The key is deliberately fake and this lobby is disposable — it
+// never reaches a provider, and nothing here may ever carry a real credential (TDD-14).
+const byok = choices.providers.find((p) => keyFormFor(aiState, p.id).needed && keyFormFor(aiState, p.id).requiresKey);
+
+if (!byok) {
+	console.log("\nno provider on this server wants a host key — round trip not exercised");
+} else {
+	const submission = credentialSubmission({
+		lobbyId, capability: "chat", providerId: byok.id,
+		apiKey: "test-token-DO-NOT-USE", consent: true,
+	});
+	expect(!Object.values(submission).includes(undefined), "the submission carries an undefined field");
+
+	const saved = await new Promise((resolve) => {
+		socket.emit("ai:credential:set", submission, resolve);
+		setTimeout(() => resolve({ ok: false, error: "no reply from ai:credential:set" }), 15000);
+	});
+
+	console.log(`\nsaving a fake key for ${byok.label}: ${saved?.ok ? "accepted" : `refused — ${saved?.error}`}`);
+	expect(saved?.ok === true, `ai:credential:set refused the panel's own payload: ${saved?.error}`);
+
+	if (saved?.ok) {
+		const after = modelChoices(saved.state, lobby, catalogue.providers ?? catalogue);
+		const now = after.providers.find((p) => p.id === byok.id);
+		expect(now?.keySource === "own", `after saving, ${byok.id} reads as "${now?.keySource}" rather than the host's own key`);
+		expect(now?.selectable === true, `after saving, ${byok.id} is still not selectable`);
+
+		const form = keyFormFor(saved.state, byok.id);
+		expect(form.canReplace, "a host who supplied a key is not offered the chance to change it");
+		expect(form.held.length > 0, "the panel shows nothing about the key it is holding");
+		expect(!form.held.includes("test-token"), "the key itself is being echoed back into the panel");
+		console.log(`  now reads: key ${now?.keySource}, ${now?.selectable ? "selectable" : "unavailable"} — ${form.held}`);
+	}
 }
 
 socket.disconnect();

@@ -114,7 +114,13 @@ export function createAiSetup({ credentials, isHost, emitToLobby, fetchImpl, log
 
 			const provider = offeredProvider(capability, providerId);
 			if (!provider) return refuse(`${providerId} is not offered for that service on this server.`, "providerId");
-			if (typeof apiKey !== "string" || !apiKey.trim()) return refuse("Enter an API key.", "apiKey");
+			// Only providers that are accounts need a key. Ollama and an OpenAI-compatible endpoint are
+			// addresses, and demanding a key for one refused every submission naming it — including
+			// from the narrator panel, which offers exactly that path. What such a provider does
+			// require is a base URL, and `normalizeLLMConfig` below is the one place that decides it.
+			if (provider.requiresApiKey && (typeof apiKey !== "string" || !apiKey.trim())) {
+				return refuse("Enter an API key.", "apiKey");
+			}
 
 			let config;
 			try {

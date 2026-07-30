@@ -796,8 +796,8 @@
 	     it is attached to `window` rather than duplicated. Duplicating it is exactly
 	     the drift that lets the Start button disagree with the server. -->
 	<script type="module">
-		import { startGate, panelRows, modelChoices } from "/aiPanel.js";
-		window.__aiPanel = { startGate, panelRows, modelChoices };
+		import { startGate, panelRows, modelChoices, keyFormFor, credentialSubmission } from "/aiPanel.js";
+		window.__aiPanel = { startGate, panelRows, modelChoices, keyFormFor, credentialSubmission };
 	</script>
 	<!-- Equipment slot detection is a pure module so it can be unit tested; the
 	     inventory renderer below is a classic script. Same bridge as above. -->

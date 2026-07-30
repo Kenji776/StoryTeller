@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { panelRows, startGate, credentialSubmission, heldSummary, modelChoices } from "./aiPanel.js";
+import { panelRows, startGate, credentialSubmission, heldSummary, modelChoices, keyFormFor } from "./aiPanel.js";
 
 /**
  * @description Builds one service as `lobbyReadiness` reports it.
@@ -417,4 +417,100 @@ test("a provider the host holds a key for is reported as theirs", () => {
 	const choices = modelChoices(state, { llmProvider: "google", llmModel: "gemini-1.5-pro" }, CATALOGUE);
 	assert.equal(choices.providers.find((p) => p.id === "google").keySource, "own");
 	assert.equal(choices.providers.find((p) => p.id === "openai").keySource, "server");
+});
+
+// ── Supplying your own key for the narrator ──────────────────────────────────
+
+/**
+ * @description Builds an `ai:state` whose chat options are given verbatim, so each case can state
+ *   exactly the provider shape it is about.
+ * @param {Array<object>} options - Provider options as `capabilities.js` projects them.
+ * @param {object} [extra] - `held` and chat-service overrides.
+ * @returns {object} The payload.
+ */
+function withOptions(options, extra = {}) {
+	return state([service({ capability: "chat", state: extra.state ?? "server", options })], { held: extra.held ?? null });
+}
+
+test("a provider with no key anywhere asks for one, and says where to get it", () => {
+	const form = keyFormFor(withOptions([
+		{ id: "google", label: "Google Gemini", requiresApiKey: true, needsPlayerKey: true, ready: false, keyUrl: "https://aistudio.example/keys" },
+	]), "google");
+
+	assert.equal(form.needed, true);
+	assert.equal(form.providerId, "google");
+	assert.equal(form.label, "Google Gemini");
+	assert.equal(form.requiresKey, true);
+	assert.equal(form.requiresBaseUrl, false);
+	assert.equal(form.keyUrl, "https://aistudio.example/keys");
+	assert.equal(form.canReplace, false);
+});
+
+test("a provider the server already pays for asks for nothing", () => {
+	// Nothing to do is the common case, and rendering an empty form under every working provider
+	// would suggest a key is wanted when none is.
+	const form = keyFormFor(withOptions([
+		{ id: "anthropic", label: "Anthropic", requiresApiKey: true, needsPlayerKey: false, ready: true },
+	]), "anthropic");
+
+	assert.equal(form.needed, false);
+});
+
+test("a provider the host already supplied a key for offers to replace it", () => {
+	const form = keyFormFor(withOptions([
+		{ id: "google", label: "Google Gemini", requiresApiKey: true, needsPlayerKey: true, ready: true },
+	], { state: "own-key", held: { chat: { configured: true, providerId: "google", last4: "aB12", used: 3, maxCalls: 50 } } }), "google");
+
+	assert.equal(form.needed, true, "a host who supplied a key must be able to change it");
+	assert.equal(form.canReplace, true);
+	assert.match(form.held, /aB12/);
+	assert.match(form.held, /3 of 50/);
+});
+
+test("a held key for one provider does not follow the host to another", () => {
+	const form = keyFormFor(withOptions([
+		{ id: "google", label: "Google Gemini", requiresApiKey: true, needsPlayerKey: true, ready: true },
+		{ id: "openai", label: "OpenAI", requiresApiKey: true, needsPlayerKey: true, ready: false },
+	], { state: "own-key", held: { chat: { configured: true, providerId: "google", last4: "aB12" } } }), "openai");
+
+	assert.equal(form.canReplace, false);
+	assert.equal(form.held, "", "OpenAI holds nothing — showing Google's tail here would be a lie");
+	assert.equal(form.needed, true);
+});
+
+test("a local provider that needs an address asks for the address, not a key", () => {
+	// `openai-compatible` and Ollama take no key — they take somewhere to send the request. Asking for
+	// an API key would be unanswerable, and the field a host actually needs would be missing.
+	const form = keyFormFor(withOptions([
+		{ id: "openai-compatible", label: "Custom", requiresApiKey: false, requiresBaseUrl: true, needsPlayerKey: true, ready: false },
+	]), "openai-compatible");
+
+	assert.equal(form.needed, true);
+	assert.equal(form.requiresKey, false);
+	assert.equal(form.requiresBaseUrl, true);
+});
+
+test("a working local provider asks for nothing", () => {
+	const form = keyFormFor(withOptions([
+		{ id: "ollama", label: "Ollama", requiresApiKey: false, requiresBaseUrl: true, needsPlayerKey: false, ready: true },
+	]), "ollama");
+
+	assert.equal(form.needed, false);
+});
+
+test("an unknown provider asks for nothing rather than inventing a form", () => {
+	const form = keyFormFor(withOptions([
+		{ id: "anthropic", label: "Anthropic", requiresApiKey: true, ready: true },
+	]), "nonsense");
+
+	assert.equal(form.needed, false);
+	assert.equal(form.providerId, "nonsense");
+});
+
+test("a missing state or provider yields a form that asks for nothing", () => {
+	for (const [value, id] of [[null, "google"], [undefined, "google"], [{}, "google"], [withOptions([]), null]]) {
+		const form = keyFormFor(value, id);
+		assert.equal(form.needed, false);
+		assert.equal(form.requiresKey, false, "nothing to submit means no fields");
+	}
 });

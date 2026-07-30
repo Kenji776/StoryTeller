@@ -390,6 +390,14 @@ on. It serves `GET /api/capabilities` (public, carries nothing sensitive) and th
 browser's checkbox cannot drift. A host agreeing to wording different from what
 was enforced is the shape of a complaint nobody can answer.
 
+**A key is required only where the provider is an account.** `setCredential`
+checks `provider.requiresApiKey` before demanding one. It used to demand one
+always, which made a host-supplied Ollama or OpenAI-compatible endpoint
+impossible — those take an address, and the refusal asked for a key that does not
+exist. What they do require is a base URL, and `normalizeLLMConfig` is the single
+place that decides it, so the refusal names `baseUrl` rather than being
+second-guessed here.
+
 **Listing models does not spend budget.** `sessionKeys.peek()` reads a credential
 without touching the call counter — browsing models while configuring is not
 playing the game. And where the operator restricts a shared key to an allowlist,

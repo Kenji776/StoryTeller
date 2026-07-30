@@ -51,6 +51,40 @@ A provider with no key anywhere is still listed, flagged and unselectable. Hidin
 it would leave a host unable to discover that supplying their own key is
 possible, which is most of the panel's purpose.
 
+## `keyFormFor` makes that offer payable
+
+Listing a provider the server cannot serve is only honest if the panel can then
+accept a key for it, so `keyFormFor` decides whether to ask and for what:
+
+| Provider | Asks for |
+|---|---|
+| `ready`, not the host's | nothing — this server covers it |
+| not `ready`, `requiresApiKey` | a key, plus its `keyUrl` |
+| not `ready`, `requiresBaseUrl` | an address, and no key |
+| the host's own | the same fields, to replace it, above the key's tail |
+
+**A key is not the only thing a provider can need.** Ollama and an
+OpenAI-compatible endpoint are addresses, not accounts. Asking them for an API
+key is a question with no answer, and the field that would have helped is
+missing. The server agreed in principle and not in practice: `aiSetup.js` refused
+every submission without a key regardless of the provider, so the whole
+address-only path was unreachable until that guard learned to read
+`provider.requiresApiKey`.
+
+**A held key belongs to one provider.** `held.chat.providerId` names it, and the
+tail is only shown against that provider — showing Google's tail under OpenAI
+would be a plain lie about what the lobby is holding.
+
+The form is deliberately smaller than the one in the Game Options window, which
+also carries call caps, expiry and withdrawal. Both build their payload with
+`credentialSubmission`, and that shared function is what keeps two screens from
+drifting into two different ideas of what the server accepts.
+
+The consent wording is fetched from `/api/capabilities` rather than written here,
+because `aiSetup.js` exports the same string it enforces against. Until it
+arrives the form says so and offers no checkbox: agreeing to invented wording is
+worse than waiting.
+
 The model in force is always offered, even when the shipped catalogue has never
 heard of it. Otherwise opening the panel and pressing Apply would silently
 downgrade a host who had set something newer than the list — which is how a

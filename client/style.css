@@ -1915,7 +1915,8 @@ body.observing #gameCharacterSection {
 /* The narrator picker's controls, sized to sit in an `.lgo-row` without pushing the
    label off the line. The row is a flex pair, so an unconstrained select stretches. */
 #aiNarratorPanel select,
-#aiNarratorPanel input[type="text"] {
+#aiNarratorPanel input[type="text"],
+#aiNarratorPanel input[type="password"] {
 	font-size: 0.82em;
 	padding: 0.25em 0.4em;
 	max-width: 62%;
@@ -1927,4 +1928,27 @@ body.observing #gameCharacterSection {
 #aiNarratorPanel .hint {
 	margin: 0.4em 0 0;
 	font-size: 0.78em;
+}
+
+/* Bringing your own key is a separate act from picking a model, so it is set off by a
+   rule rather than reading as one more row of the picker above it. */
+.lgo-keyform {
+	margin-top: 0.7em;
+	padding-top: 0.6em;
+	border-top: 1px solid #333;
+}
+.lgo-consent {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.45em;
+	margin: 0.5em 0;
+	font-size: 0.76em;
+	line-height: 1.35;
+	color: #bbb;
+	cursor: pointer;
+}
+.lgo-consent input {
+	margin-top: 0.2em;
+	accent-color: #7a50c8;
+	cursor: pointer;
 }

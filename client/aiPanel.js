@@ -267,3 +267,55 @@ export function modelChoices(state, lobby, catalogue = []) {
 		freeTextFor: (providerId) => !catalogue.some((p) => p.id === providerId),
 	};
 }
+
+/**
+ * What the narrator panel should ask a host for, so they can use a provider this server cannot.
+ *
+ * @description The picker lists every provider including the ones with no key, because a host who
+ *   cannot see Gemini cannot learn that bringing a Gemini key is an option. That promise has to be
+ *   payable: this decides whether to ask, and for what.
+ *
+ *   Not every provider wants a key. `openai-compatible` and Ollama want an *address* — asking them
+ *   for an API key is unanswerable, and the field that would have helped is missing. So the two are
+ *   reported separately rather than as one "needs setup" flag.
+ *
+ *   The richer controls — call caps, expiry, withdrawing a key — live in the Game Options window and
+ *   are not duplicated here. Both screens build their payload with `credentialSubmission`, which is
+ *   the seam that keeps them from drifting.
+ * @param {object} state - An `ai:state` payload.
+ * @param {string|null} providerId - The provider the host has selected in the picker.
+ * @returns {{needed: boolean, providerId: string|null, label: string, requiresKey: boolean,
+ *   requiresBaseUrl: boolean, keyUrl: string|null, held: string, canReplace: boolean}} What to ask
+ *   for. `needed: false` means render nothing.
+ */
+export function keyFormFor(state, providerId) {
+	const nothing = {
+		needed: false, providerId: providerId ?? null, label: "", requiresKey: false,
+		requiresBaseUrl: false, keyUrl: null, held: "", canReplace: false,
+	};
+	if (!providerId) return nothing;
+
+	const chat = (Array.isArray(state?.services) ? state.services : []).find((s) => s?.capability === "chat");
+	const option = (chat?.options ?? []).find((p) => p?.id === providerId);
+	if (!option) return nothing;
+
+	// A key the host supplied for one provider says nothing about another, so the tail and the usage
+	// are only shown against the provider they belong to.
+	const heldEntry = state?.held?.chat ?? null;
+	const canReplace = Boolean(heldEntry?.configured && heldEntry.providerId === providerId);
+
+	// Ready and not theirs means this server covers it — there is nothing for a host to do, and an
+	// empty form under a working provider suggests otherwise.
+	if (option.ready === true && !canReplace) return nothing;
+
+	return {
+		needed: true,
+		providerId,
+		label: option.label ?? providerId,
+		requiresKey: option.requiresApiKey !== false,
+		requiresBaseUrl: option.requiresBaseUrl === true,
+		keyUrl: option.keyUrl ?? null,
+		held: canReplace ? heldSummary(heldEntry) : "",
+		canReplace,
+	};
+}

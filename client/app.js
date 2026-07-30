@@ -380,6 +380,23 @@ fetch("/config/llm_models.json")
 	.catch((err) => console.warn("Could not load the model catalogue:", err));
 
 /**
+ * The wording a host agrees to when supplying their own key.
+ *
+ * Fetched rather than written here, because `aiSetup.js` exports the same string it enforces against.
+ * A host agreeing to wording different from what was enforced is the shape of a complaint nobody can
+ * answer. Empty until it arrives, and the form will not offer to save without it.
+ */
+let consentTerms = "";
+
+fetch("/api/capabilities")
+	.then((res) => res.json())
+	.then((json) => {
+		consentTerms = typeof json?.consentTerms === "string" ? json.consentTerms : "";
+		if (currentState) renderLobbyOptions(currentState);
+	})
+	.catch((err) => console.warn("Could not load the consent terms:", err));
+
+/**
  * @description Records the server's readiness verdict and refreshes the lobby.
  * @param {object} state - An `ai:state` payload.
  * @returns {void}
@@ -627,6 +644,7 @@ function renderNarratorPanel(s) {
 		<div class="lgo-row">
 			<button id="narratorApply" class="primary" ${provider.selectable ? "" : "disabled"}>Use this</button>
 		</div>
+		${narratorKeyForm(provider.id)}
 	`;
 
 	document.getElementById("narratorProvider").addEventListener("change", (event) => {
@@ -640,6 +658,111 @@ function renderNarratorPanel(s) {
 		if (!model) return showToast("Choose a model first.", "warning");
 		socket.emit("lobby:settings", { lobbyId, llmProvider: provider.id, llmModel: model });
 		narratorDraft = { providerId: null, modelId: null };
+	});
+	wireNarratorKeyForm(provider.id, s);
+}
+
+/**
+ * Builds the markup for supplying your own key, or nothing when none is wanted.
+ *
+ * @description The picker lists providers this server holds no key for, so that a host can discover
+ *   that bringing their own is possible. This is the half that makes the offer payable — without it
+ *   the note reads "add yours below" above nothing at all.
+ *
+ *   Deliberately smaller than the form in the Game Options window: a key, an address where one is
+ *   wanted, and consent. Call caps and expiry belong to the screen that also lets a host withdraw a
+ *   key, and reproducing them here would be two forms to keep in step instead of one.
+ * @param {string} providerId - The provider selected in the picker.
+ * @returns {string} HTML, or the empty string when this provider needs nothing.
+ */
+function narratorKeyForm(providerId) {
+	const form = window.__aiPanel?.keyFormFor?.(lastAiState, providerId);
+	if (!form?.needed) return "";
+
+	// No consent wording means the server's own text has not arrived. Offering a checkbox with
+	// invented wording is worse than waiting for it, because the server enforces against that string.
+	if (!consentTerms) return `<p class="hint">Loading the terms for supplying your own key…</p>`;
+
+	const link = form.keyUrl
+		? ` <a href="${form.keyUrl}" target="_blank" rel="noopener">Get a key</a>.`
+		: "";
+
+	return `
+		<div class="lgo-keyform" id="narratorKeyForm">
+			<div class="lgo-title">${form.canReplace ? `Replace your ${form.label} key` : `Use your own ${form.label} key`}</div>
+			${form.held ? `<p class="hint">${form.held}</p>` : ""}
+			${form.requiresKey ? `<div class="lgo-row"><span class="lgo-key">API key</span>
+				<input id="narratorKey" type="password" autocomplete="off" placeholder="paste your key" /></div>` : ""}
+			${form.requiresBaseUrl ? `<div class="lgo-row"><span class="lgo-key">Address</span>
+				<input id="narratorBaseUrl" type="text" autocomplete="off" placeholder="http://127.0.0.1:11434" /></div>` : ""}
+			<label class="lgo-consent">
+				<input id="narratorConsent" type="checkbox" />
+				<span>${consentTerms}</span>
+			</label>
+			<div class="lgo-row">
+				<button id="narratorSaveKey" class="primary" disabled>Save key</button>
+				<span class="hint" id="narratorKeyMsg">${form.requiresKey ? "Your key is held in memory only." : ""}${link}</span>
+			</div>
+		</div>
+	`;
+}
+
+/**
+ * Attaches the key form's behaviour.
+ *
+ * @description Save stays disabled until there is something the server will accept, so a host's first
+ *   feedback is never a refusal. The payload is built by `credentialSubmission` — the same function
+ *   the Game Options form uses, which is what stops the two screens from drifting apart.
+ * @param {string} providerId - The provider selected in the picker.
+ * @param {object} s - Lobby state, for re-rendering once the key lands.
+ * @returns {void}
+ */
+function wireNarratorKeyForm(providerId, s) {
+	const save = document.getElementById("narratorSaveKey");
+	if (!save) return;
+
+	const keyInput = document.getElementById("narratorKey");
+	const baseUrlInput = document.getElementById("narratorBaseUrl");
+	const consentBox = document.getElementById("narratorConsent");
+	const msg = document.getElementById("narratorKeyMsg");
+
+	/**
+	 * @description Enables Save only once every field the server requires is filled.
+	 * @returns {void}
+	 */
+	const syncSave = () => {
+		const haveKey = !keyInput || keyInput.value.trim().length > 0;
+		const haveUrl = !baseUrlInput || baseUrlInput.value.trim().length > 0;
+		save.disabled = !(haveKey && haveUrl && consentBox?.checked);
+	};
+	keyInput?.addEventListener("input", syncSave);
+	baseUrlInput?.addEventListener("input", syncSave);
+	consentBox?.addEventListener("change", syncSave);
+	syncSave();
+
+	save.addEventListener("click", () => {
+		msg.textContent = "Saving…";
+		const payload = window.__aiPanel.credentialSubmission({
+			lobbyId,
+			capability: "chat",
+			providerId,
+			apiKey: keyInput?.value ?? "",
+			baseUrl: baseUrlInput?.value ?? "",
+			consent: consentBox?.checked === true,
+		});
+		socket.emit("ai:credential:set", payload, (result) => {
+			// Cleared on the way out either way. A key left in a live input is one screenshot or one
+			// shared screen from being somewhere it cannot be taken back from.
+			if (keyInput) keyInput.value = "";
+			if (result?.ok) {
+				msg.textContent = "Saved.";
+				applyAiState(result.state);
+				renderNarratorPanel(s);
+			} else {
+				msg.textContent = result?.error ?? "Could not save that key.";
+				syncSave();
+			}
+		});
 	});
 }
 

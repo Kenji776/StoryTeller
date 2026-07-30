@@ -294,3 +294,28 @@ test("the allowlist is applied without any request to the provider", async () =>
 	await setup.listModels(HOST_SID, { lobbyId: LOBBY, capability: "chat", providerId: "openai" });
 	assert.equal(called, false, "the allowlist is already the answer; asking the provider wastes a call");
 });
+
+test("a provider that needs no key is accepted on its address alone", async () => {
+	// Regression: the key guard was unconditional, so a host bringing an Ollama or
+	// OpenAI-compatible endpoint — which take an address, not an account — was told
+	// "Enter an API key" for a key that does not exist. The narrator panel offers
+	// exactly that path, and every submission through it was refused.
+	const { setup } = makeSetup({ policy: { chat: { ollama: "byok" } } });
+
+	const result = await setup.setCredential(HOST_SID, submission({
+		providerId: "ollama", apiKey: "", baseUrl: "http://127.0.0.1:11434",
+	}));
+
+	assert.equal(result.ok, true, result.error ?? "");
+});
+
+test("a provider that needs no key still needs somewhere to send the request", async () => {
+	const { setup } = makeSetup({ policy: { chat: { ollama: "byok" } } });
+
+	const result = await setup.setCredential(HOST_SID, submission({
+		providerId: "ollama", apiKey: "", baseUrl: "",
+	}));
+
+	assert.equal(result.ok, false);
+	assert.equal(result.field, "baseUrl");
+});
