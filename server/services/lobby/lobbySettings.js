@@ -5,11 +5,54 @@
 
 import { scryptSync, randomBytes, timingSafeEqual } from "crypto";
 import { getDefaultLLMSettings } from "../llm/defaults.js";
+import { listProviders } from "../llm/registry.js";
 import { TTS_PROVIDERS } from "../tts/registry.js";
 import { ILLUSTRATION_MODES } from "../images/illustration.js";
 
 /** The registry is the single source of truth for which provider ids are legal. */
 const TTS_PROVIDER_IDS = TTS_PROVIDERS.map((p) => p.id);
+
+/** Likewise for language models: asked of the registry rather than restated here. */
+const PROVIDER_IDS = new Set(listProviders().map((p) => p.id));
+
+/**
+ * Names an operator may reasonably use for a provider whose real id differs.
+ *
+ * @description `claude` is the one that matters: the model catalogue offers it, the registry only
+ *   knows `anthropic`, and the alias existed solely in `llm/defaults.js` for environment variables —
+ *   never on the path an operator actually uses. Stored verbatim it cannot be resolved, and every
+ *   turn afterwards fails.
+ */
+const PROVIDER_ALIASES = Object.freeze({ claude: "anthropic", gpt: "openai", openrouter: "openai-compatible" });
+
+/**
+ * @description Turns whatever an operator or a UI sent into a provider id.
+ * @param {*} raw - The candidate.
+ * @returns {string|null} The id, or `null` when nothing was supplied.
+ */
+function normaliseProviderId(raw) {
+	if (typeof raw !== "string" || !raw.trim()) return null;
+	const clean = raw.trim().toLowerCase();
+	return PROVIDER_ALIASES[clean] ?? clean;
+}
+
+/**
+ * Which provider a model name evidently belongs to.
+ *
+ * @description Only for names that announce themselves. Anything unrecognised returns `null` and is
+ *   accepted, because local and self-hosted models are named freely — `llama3`, `mixtral`, a path —
+ *   and refusing the merely unfamiliar would lock an operator out of every provider whose naming
+ *   this function does not happen to know.
+ * @param {*} model - The model id.
+ * @returns {string|null} A provider id, or `null` when the name says nothing.
+ */
+function providerOfModel(model) {
+	const name = typeof model === "string" ? model.trim().toLowerCase() : "";
+	if (/^claude[-.]/.test(name)) return "anthropic";
+	if (/^(gpt|o[1-9])[-.]/.test(name) || name.startsWith("chatgpt")) return "openai";
+	if (/^gemini[-.]/.test(name)) return "google";
+	return null;
+}
 
 /**
  * Provider a lobby's current narrator voice belongs to.
@@ -453,10 +496,30 @@ export const settingsMethods = {
 	 */
 	setLLMSettings(lobbyId, provider, model) {
 		const s = this.index[lobbyId];
-		if (!s) return;
-		if (provider) s.llmProvider = provider;
+		if (!s) return { ok: false, reason: "That lobby does not exist." };
+
+		const wanted = normaliseProviderId(provider) ?? s.llmProvider;
+		if (provider && !PROVIDER_IDS.has(wanted)) {
+			return { ok: false, reason: `"${provider}" is not a provider this server knows.` };
+		}
+
+		// The pair has to be coherent, not just individually plausible. This is the failure that
+		// prompted the check: a lobby left holding provider "openai" and model "claude-sonnet-4-6",
+		// so OpenAI was asked for a Claude model and reported never having heard of it — a message
+		// that reads as a broken model rather than as the mismatch it was, and one an operator had
+		// nowhere to correct.
+		const owner = provider ? wanted : s.llmProvider;
+		const belongs = providerOfModel(model);
+		if (model && belongs && belongs !== owner) {
+			// Phrased without an article, so no "a anthropic model" — the provider ids are not words
+			// whose article can be guessed, and this string goes straight to an operator.
+			return { ok: false, reason: `${model} belongs to ${belongs}, but this lobby is set to ${owner}. Change the provider first, or pick a ${owner} model.` };
+		}
+
+		if (provider) s.llmProvider = wanted;
 		if (model)    s.llmModel    = model;
 		this.persist(lobbyId);
+		return { ok: true, provider: s.llmProvider, model: s.llmModel };
 	},
 
 	/**

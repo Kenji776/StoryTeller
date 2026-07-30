@@ -152,3 +152,77 @@ test("setNarratorVoice is a no-op for a lobby that does not exist", () => {
 	assert.deepEqual(store.persisted, []);
 });
 
+
+// ===== setLLMSettings: the pair has to be one the server can honour =====
+
+test("a provider alias is normalised to the id the registry knows", () => {
+	// The model catalogue offers a provider called "claude"; the registry only knows "anthropic".
+	// Stored verbatim, that pair cannot be resolved and the narrator fails mid-game with a message
+	// about a model nobody chose. The alias existed in `llm/defaults.js` for environment variables
+	// and had never been applied on the path an operator actually uses.
+	const store = makeStore({ llmProvider: "openai", llmModel: "gpt-4o" });
+	const result = store.setLLMSettings("lob1", "claude", "claude-sonnet-5");
+	assert.equal(result.ok, true);
+	assert.equal(lobbyOf(store).llmProvider, "anthropic");
+	assert.equal(lobbyOf(store).llmModel, "claude-sonnet-5");
+});
+
+test("an unknown provider is refused and the lobby keeps working", () => {
+	// Refused rather than stored. A provider nobody can resolve breaks every turn from then on, and
+	// the failure surfaces as a confusing model error rather than as the bad selection it was.
+	const store = makeStore({ llmProvider: "anthropic", llmModel: "claude-sonnet-5" });
+	const result = store.setLLMSettings("lob1", "definitely-not-a-provider", "some-model");
+	assert.equal(result.ok, false);
+	assert.match(result.reason, /provider/i);
+	assert.equal(lobbyOf(store).llmProvider, "anthropic", "the working setting stands");
+	assert.equal(lobbyOf(store).llmModel, "claude-sonnet-5");
+});
+
+test("a model belonging to another provider is refused", () => {
+	// The exact failure that started this: a lobby left holding provider "openai" and model
+	// "claude-sonnet-4-6", so OpenAI was asked for a Claude model and said it had never heard of it.
+	const store = makeStore({ llmProvider: "openai", llmModel: "gpt-4o" });
+	const result = store.setLLMSettings("lob1", "openai", "claude-sonnet-4-6");
+	assert.equal(result.ok, false);
+	assert.match(result.reason, /claude-sonnet-4-6/);
+	assert.equal(lobbyOf(store).llmModel, "gpt-4o", "unchanged");
+});
+
+test("a gpt model under anthropic is refused too, not just the reverse", () => {
+	const store = makeStore({ llmProvider: "anthropic", llmModel: "claude-sonnet-5" });
+	assert.equal(store.setLLMSettings("lob1", "anthropic", "gpt-4o").ok, false);
+});
+
+test("a coherent pair is accepted", () => {
+	const store = makeStore({ llmProvider: "openai", llmModel: "gpt-4o" });
+	assert.equal(store.setLLMSettings("lob1", "anthropic", "claude-opus-5").ok, true);
+	assert.equal(store.setLLMSettings("lob1", "openai", "gpt-5-chat-latest").ok, true);
+});
+
+test("a model whose provider cannot be guessed is accepted, because guessing wrong is worse", () => {
+	// Local and self-hosted models are named anything at all — `llama3`, `mixtral`, a path. Refusing
+	// what is merely unfamiliar would lock an operator out of every provider except the two whose
+	// naming this code happens to recognise.
+	const store = makeStore({ llmProvider: "ollama", llmModel: "llama3" });
+	assert.equal(store.setLLMSettings("lob1", "ollama", "some-local-build:latest").ok, true);
+	assert.equal(lobbyOf(store).llmModel, "some-local-build:latest");
+});
+
+test("changing only the model leaves the provider alone", () => {
+	const store = makeStore({ llmProvider: "anthropic", llmModel: "claude-sonnet-5" });
+	assert.equal(store.setLLMSettings("lob1", null, "claude-opus-5").ok, true);
+	assert.equal(lobbyOf(store).llmProvider, "anthropic");
+	assert.equal(lobbyOf(store).llmModel, "claude-opus-5");
+});
+
+test("changing only the model still checks it against the provider in force", () => {
+	// The commonest way to arrive at a broken pair: pick a model, never touch the provider.
+	const store = makeStore({ llmProvider: "openai", llmModel: "gpt-4o" });
+	const result = store.setLLMSettings("lob1", null, "claude-sonnet-5");
+	assert.equal(result.ok, false);
+	assert.equal(lobbyOf(store).llmModel, "gpt-4o");
+});
+
+test("an unknown lobby is refused rather than throwing", () => {
+	assert.equal(makeStore().setLLMSettings("nope", "openai", "gpt-4o").ok, false);
+});

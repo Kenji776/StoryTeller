@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { parseModelCatalogue, modelsFor, describeModel } from "./models.js";
+import { listProviders } from "../../../server/services/llm/registry.js";
 
 /** A well-formed catalogue. */
 const catalogue = () => ({
@@ -85,14 +86,21 @@ test("an unconfigured lobby says so", () => {
 // ── the shipped file ──────────────────────────────────────────────────────────
 
 test("the shipped catalogue is valid and offers only providers the server understands", () => {
-	// `server/services/llmService.js` resolves "openai" and "claude"; a provider id
-	// here that it does not know would offer a switch that silently does nothing.
+	// The registry is asked rather than restated. This assertion used to carry the literal list
+	// `["openai", "claude"]` and cite `server/services/llmService.js`, a module that no longer
+	// exists — so it went on passing after the registry renamed the provider to "anthropic", and
+	// it was defending the very bug it was written to prevent: the catalogue offered "claude",
+	// nothing could resolve it, and a lobby switched to it failed on every subsequent turn.
+	//
+	// A test that restates a fact cannot notice the fact changing. This one imports the authority.
 	const shipped = JSON.parse(readFileSync(new URL("../../config/llm_models.json", import.meta.url), "utf8"));
 	const parsed = parseModelCatalogue(shipped);
+	const known = new Set(listProviders().map((p) => p.id));
 
 	assert.ok(parsed.length > 0, "the shipped catalogue has no usable providers");
 	for (const provider of parsed) {
-		assert.ok(["openai", "claude"].includes(provider.id), `server does not resolve provider "${provider.id}"`);
+		assert.ok(known.has(provider.id),
+			`the registry does not know provider "${provider.id}" — it knows ${[...known].join(", ")}`);
 		assert.ok(provider.models.length > 0, `${provider.id} offers no models`);
 	}
 });

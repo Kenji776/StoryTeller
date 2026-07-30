@@ -441,10 +441,17 @@ export function registerAdminEvents(socket, deps) {
 		if (!isSocketAdmin(code)) return socket.emit("toast", { type: "error", message: "Not authorized" });
 		const lobbyId = store.findLobbyByCode(code);
 		if (!lobbyId) return socket.emit("toast", { type: "error", message: "Lobby not found" });
-		store.setLLMSettings(lobbyId, provider, model);
+		// A refusal is reported rather than swallowed. Stored unchecked, an incoherent pair broke
+		// every subsequent turn with a message about an unrecognised model, which reads as the
+		// model's fault rather than the selection's.
+		const applied = store.setLLMSettings(lobbyId, provider, model);
+		if (!applied.ok) {
+			log(`🤖 ADMIN LLM refused for lobby ${lobbyId}: ${applied.reason}`);
+			return socket.emit("toast", { type: "error", message: applied.reason });
+		}
 		sendState(lobbyId);
-		log(`🤖 ADMIN LLM → lobby ${lobbyId}: ${provider}/${model}`);
-		socket.emit("toast", { type: "success", message: `LLM switched to ${provider} / ${model}` });
+		log(`🤖 ADMIN LLM → lobby ${lobbyId}: ${applied.provider}/${applied.model}`);
+		socket.emit("toast", { type: "success", message: `LLM switched to ${applied.provider} / ${applied.model}` });
 	});
 
 	socket.on("admin:sfx", async ({ code, description }) => {

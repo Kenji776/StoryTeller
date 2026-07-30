@@ -789,7 +789,15 @@ io.on("connection", (socket) => {
 		if (startingLevel  !== undefined) store.setStartingLevel(lobbyId, startingLevel);
 		if (abilitySlotsBase !== undefined) store.setAbilitySlotsBase(lobbyId, abilitySlotsBase);
 		if (illustrationMode !== undefined) store.setIllustrationMode(lobbyId, illustrationMode);
-		if (llmProvider || llmModel) store.setLLMSettings(lobbyId, llmProvider, llmModel);
+		if (llmProvider || llmModel) {
+			// Told, not silently ignored. The pair is checked for coherence now, and a host whose
+			// choice was refused needs to know before the first turn fails on it.
+			const applied = store.setLLMSettings(lobbyId, llmProvider, llmModel);
+			if (!applied.ok) {
+				log(`🤖 LLM selection refused for lobby ${lobbyId}: ${applied.reason}`);
+				socket.emit("toast", { type: "error", message: applied.reason });
+			}
+		}
 		// Written as a strict boolean, because `isTactical` demands a literal true and a browser
 		// will happily send the string "off".
 		if (tacticalCombat !== undefined) {

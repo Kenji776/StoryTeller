@@ -36,6 +36,8 @@ const ENEMY_COUNT = Number(arg("enemies", 3));
 const MAX_ACTIONS = Number(arg("rounds", 12));
 const TURN_MS = Number(arg("turnms", 26000));
 const QUIET = argv.includes("--quiet");
+// Seats held open for people. The agent cast shrinks to make room, so a party stays four strong.
+const HUMANS = Math.max(0, Math.min(3, Number(arg("humans", 0))));
 
 /** The drilled party from `playtest.mjs`, built to the level-1 rules. */
 const CHAIN_MAIL = { name: "Chain Mail", ac: 16, type: "heavy", note: "" };
@@ -54,6 +56,14 @@ const CAST = [
 		stats: { wis: 18, dex: 8, con: 8, int: 8, str: 8, cha: 8 },
 		spells: ["Cure Wounds", "Sacred Flame", "Guiding Bolt"] },
 ];
+
+/**
+ * The characters this process actually plays.
+ *
+ * @description Reserved seats come off the front, so a person joining takes the fighter's place
+ * rather than being handed whatever was left over. The party still totals four.
+ */
+const AGENT_CAST = CAST.slice(HUMANS);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -144,12 +154,48 @@ const created = await waitFor(host, "lobby:created");
 const lobbyId = created.lobbyId;
 
 console.log(`battle-sim — lobby ${created.code} (${lobbyId})`);
-console.log(`tactical ${TACTICAL ? "ON" : "OFF"} | ${CAST.length} characters vs ${ENEMY_COUNT} | difficulty ${DIFFICULTY} | ${MAX_ACTIONS} actions\n`);
+console.log(`tactical ${TACTICAL ? "ON" : "OFF"} | ${AGENT_CAST.length} agent(s)`
+	+ `${HUMANS ? ` + ${HUMANS} human seat(s)` : ""} vs ${ENEMY_COUNT} | ${DIFFICULTY} | ${MAX_ACTIONS} actions`);
+if (HUMANS) {
+	console.log(`\n  ${"─".repeat(56)}`);
+	console.log(`   JOIN AT  ${URL}   WITH CODE  ${created.code}`);
+	console.log(`   Build a character, tick Ready, and the fight starts itself.`);
+	console.log(`  ${"─".repeat(56)}\n`);
+}
+
+/**
+ * @description Waits for real people to join and ready up, so a person can hold one of the seats
+ *   instead of only ever watching agents use the map. Nothing is reserved when `--humans` is 0, which
+ *   leaves the all-agent run exactly as it was.
+ * @param {number} wanted - How many human players to wait for.
+ * @param {string[]} agentNames - The characters this process is playing, so they can be discounted.
+ * @param {number} [ms=600000] - How long to wait before giving up.
+ * @returns {Promise<boolean>} True once that many extra characters are present and ready.
+ */
+async function waitForHumans(wanted, agentNames, ms = 600000) {
+	if (wanted < 1) return true;
+	const deadline = Date.now() + ms;
+	let announced = -1;
+	while (Date.now() < deadline) {
+		const state = seats.find((s) => s.state)?.state;
+		const others = Object.keys(state?.players ?? {}).filter((n) => !agentNames.includes(n));
+		// Readiness is per connection, and a character with no ready socket is still in the builder.
+		const ready = (state?.connected ?? []).filter((c) => c.name && !c.observer && c.ready
+			&& others.includes(c.name)).length;
+		if (ready !== announced) {
+			console.log(`   waiting for ${wanted} human player(s) — ${others.length} joined, ${ready} ready`);
+			announced = ready;
+		}
+		if (ready >= wanted) return true;
+		await sleep(2000);
+	}
+	return false;
+}
 
 // One socket per character, because the server identifies an actor by their connection.
 const seats = [];
-for (const spec of CAST) {
-	const socket = spec === CAST[0] ? host : io(URL, { transports: ["websocket"] });
+for (const spec of AGENT_CAST) {
+	const socket = spec === AGENT_CAST[0] ? host : io(URL, { transports: ["websocket"] });
 	if (socket !== host) {
 		await waitFor(socket, "connect", 15000);
 		socket.emit("lobby:join", { code: created.code });
@@ -186,6 +232,13 @@ for (const seat of seats) {
 	});
 	seat.socket.emit("player:ready", { lobbyId, ready: true });
 	await sleep(150);
+}
+
+// The agents are ready; anybody joining from a browser is not yet. `allReady` gates the start, so
+// this waits rather than racing it.
+if (!await waitForHumans(HUMANS, AGENT_CAST.map((c) => c.name))) {
+	console.log("nobody joined — giving up rather than starting a fight for an empty seat");
+	process.exit(1);
 }
 
 host.emit("game:start", { lobbyId });
@@ -228,11 +281,22 @@ await sleep(TURN_MS);
 let actions = 0;
 let downed = 0;
 let sawEnemies = false;
+let waitingOn = null;
 while (actions < MAX_ACTIONS) {
 	const state = seats.find((s) => s.state)?.state;
 	const current = seats.find((seat) => seat.currentTurn)?.currentTurn ?? null;
 	const seat = seats.find((s) => s.spec.name === current) ?? null;
-	if (!seat) { await sleep(2500); continue; }
+	if (!seat) {
+		// Somebody else's turn — a person in a browser. Wait it out rather than acting for them,
+		// and say whose it is once, so the terminal does not look hung.
+		if (current && current !== waitingOn) {
+			waitingOn = current;
+			console.log(`── ${current}'s turn — over to you`);
+		}
+		await sleep(2500);
+		continue;
+	}
+	waitingOn = null;
 
 	const living = Object.values(state.players ?? {}).filter((p) => !p.dead).length;
 	const enemiesLeft = (state.enemies ?? []).filter((e) => e.condition !== "Dead").length;

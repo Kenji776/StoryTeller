@@ -1,23 +1,41 @@
 {
-	"_comment": "Models offered by the admin console's AI Model section. Served statically like music_moods.json so the browser carries no hardcoded list to drift. Provider ids are the ones server/services/llmService.js understands.",
+	"_comment": "Models offered by the admin console's AI Model section. Served statically like music_moods.json so the browser carries no hardcoded list to drift. Provider ids MUST be the ones server/services/llm/registry.js exposes: this file previously offered 'claude', which the registry does not know, so choosing it stored a provider nothing could resolve and every turn afterwards failed. A provider whose adapter can list its own models (anthropic, google, ollama) is better asked at runtime through the ai:models socket event; this list is the fallback for one that cannot be, and for showing something before a key exists.",
 	"providers": [
 		{
 			"id": "openai",
 			"label": "OpenAI",
 			"models": [
+				{ "id": "gpt-5-chat-latest", "label": "GPT-5 (latest)" },
 				{ "id": "gpt-4o", "label": "GPT-4o" },
 				{ "id": "gpt-4o-mini", "label": "GPT-4o Mini" },
-				{ "id": "gpt-4-turbo", "label": "GPT-4 Turbo" },
-				{ "id": "gpt-5-chat-latest", "label": "GPT-5 (latest)" }
+				{ "id": "gpt-4-turbo", "label": "GPT-4 Turbo" }
 			]
 		},
 		{
-			"id": "claude",
-			"label": "Claude",
+			"id": "anthropic",
+			"label": "Anthropic (Claude)",
 			"models": [
+				{ "id": "claude-opus-5", "label": "Claude Opus 5" },
+				{ "id": "claude-sonnet-5", "label": "Claude Sonnet 5" },
 				{ "id": "claude-opus-4-6", "label": "Claude Opus 4.6" },
 				{ "id": "claude-sonnet-4-6", "label": "Claude Sonnet 4.6" },
-				{ "id": "claude-haiku-4-5-20251001", "label": "Claude Haiku 4.5" }
+				{ "id": "claude-haiku-4-5", "label": "Claude Haiku 4.5" }
+			]
+		},
+		{
+			"id": "google",
+			"label": "Google (Gemini)",
+			"models": [
+				{ "id": "gemini-2.0-flash", "label": "Gemini 2.0 Flash" },
+				{ "id": "gemini-1.5-pro", "label": "Gemini 1.5 Pro" }
+			]
+		},
+		{
+			"id": "ollama",
+			"label": "Ollama (local)",
+			"models": [
+				{ "id": "llama3", "label": "Llama 3" },
+				{ "id": "mistral", "label": "Mistral" }
 			]
 		}
 	]
