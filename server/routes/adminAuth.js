@@ -6,9 +6,12 @@ import { randomBytes, createHash, createVerify } from "crypto";
  * and protection middleware for the /admin/ route prefix.
  *
  * @param {import('express').Application} app - The Express application instance.
- * @param {{ store: object, charPublicKey: string, log: Function }} options - Configuration dependencies.
+ * @param {{ store: object, charPublicKey: Function, log: Function }} options - Configuration dependencies.
  * @param {object} options.store - The lobby/game state store.
- * @param {string} options.charPublicKey - PEM-encoded RSA public key used to verify character file signatures.
+ * @param {Function} options.charPublicKey - Returns the current PEM public key. A function rather
+ *   than the key itself, because the key can be rotated while the server runs: a value captured here
+ *   would keep verifying against the retired key, accepting files that should now be refused and
+ *   refusing freshly exported ones.
  * @param {Function} options.log - Logging function.
  * @returns {{ adminSessions: Map, hostAdminTokens: Map, hostAdminSockets: Map, isAdminAuthenticated: Function, isHostToken: Function, parseCookie: Function, cleanExpired: Function }}
  *   Exported helpers and session maps for use by other modules (e.g. socket handlers).
@@ -177,7 +180,7 @@ export function registerAdminAuth(app, { store, charPublicKey, log }) {
 		const verifier = createVerify("SHA256");
 		verifier.update(data);
 		verifier.end();
-		if (!verifier.verify(charPublicKey, sig, "base64")) {
+		if (!verifier.verify(charPublicKey(), sig, "base64")) {
 			return res.status(401).json({ error: "Invalid character file signature" });
 		}
 

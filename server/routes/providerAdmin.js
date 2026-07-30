@@ -91,7 +91,7 @@ const TESTERS = Object.freeze({
  * @param {Function} [options.log] - Logger.
  * @returns {object} The handlers plus a `register(app)`.
  */
-export function createProviderAdminRoutes({ credentials, isAdminAuthenticated, lookup, fetchImpl, log = () => {} }) {
+export function createProviderAdminRoutes({ credentials, isAdminAuthenticated, lookup, fetchImpl, characterKeys = null, log = () => {} }) {
 	/**
 	 * @description Rejects anything without a password admin session. Deliberately
 	 *   does not consult the host-token check: there is no version of this surface
@@ -287,6 +287,47 @@ export function createProviderAdminRoutes({ credentials, isAdminAuthenticated, l
 		},
 
 		/**
+		 * @description Reports which character signing key is in force, by fingerprint. Enough for an
+		 *   operator to confirm a rotation took effect, and useless to anyone who intercepts it.
+		 * @param {object} req - The request.
+		 * @param {object} res - The response.
+		 * @returns {void}
+		 */
+		characterKey(req, res) {
+			if (!requireAdmin(req, res)) return;
+			if (!characterKeys) return res.status(501).json({ error: "Character signing keys are not configured on this server." });
+			res.status(200).json({ fingerprint: characterKeys.fingerprint() });
+		},
+
+		/**
+		 * Replaces the character signing key.
+		 *
+		 * @description Operator-only, for the same reason as everything else here: a lobby host runs
+		 *   one game, and this invalidates every exported character on the whole instance. Gated by
+		 *   `requireAdmin`, which consults password sessions and never host tokens.
+		 *
+		 *   The response carries fingerprints and nothing else — key material travels in one
+		 *   direction on this surface, and this route has no reason to be the exception.
+		 * @param {object} req - The request.
+		 * @param {object} res - The response.
+		 * @returns {void}
+		 */
+		rotateCharacterKey(req, res) {
+			if (!requireAdmin(req, res)) return;
+			if (!characterKeys) return res.status(501).json({ error: "Character signing keys are not configured on this server." });
+
+			const { previous, current } = characterKeys.rotate();
+			log(`🔑 Character signing key rotated by an operator (${previous} → ${current})`);
+			res.status(200).json({
+				previous,
+				current,
+				// Said here as well as in the UI, so it lands in the operator's logs too.
+				consequence: "Character files exported before now will no longer import, and a host holding one "
+					+ "must export again to reach the DM tools. Games in progress are unaffected.",
+			});
+		},
+
+		/**
 		 * @description Mounts every handler on the Express app.
 		 * @param {object} app - The Express application.
 		 * @returns {void}
@@ -298,6 +339,10 @@ export function createProviderAdminRoutes({ credentials, isAdminAuthenticated, l
 			app.delete(`${base}/:capability/:providerId/key`, (req, res) => this.clearKey(req, res));
 			app.put(`${base}/:capability/:providerId/policy`, (req, res) => this.setPolicy(req, res));
 			app.post(`${base}/:capability/:providerId/test`, (req, res) => this.testProvider(req, res));
+			// Not a provider, but the same audience and the same gate: an instance secret only the
+			// operator may touch.
+			app.get("/api/admin/character-key", (req, res) => this.characterKey(req, res));
+			app.post("/api/admin/character-key/rotate", (req, res) => this.rotateCharacterKey(req, res));
 		},
 	};
 }

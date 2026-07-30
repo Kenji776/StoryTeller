@@ -20,7 +20,7 @@ import { createIllustrationRunner } from "./services/images/illustrationRunner.j
 import { createGallery } from "./services/images/gallery.js";
 import { roll } from "./helpers/dice.js";
 import fetch from "node-fetch";
-import { randomUUID, generateKeyPairSync, createSign, createVerify, createPublicKey } from "crypto";
+import { randomUUID, generateKeyPairSync, createSign, createVerify } from "crypto";
 import { broadcastXPUpdates, broadcastHPUpdates, broadcastInventoryUpdates, broadcastGoldUpdates, broadcastConditionUpdates, broadcastPartyState, broadcastAbilityUpdates, broadcastSpellSlotUpdate } from "./services/gameUpdates.js";
 import { updateMap, registerMapEndpoints, getDefaultPlayerEmoji } from "./services/mapService.js";
 import { getAbilityForLevel } from "./helpers/classProgression.js";
@@ -30,6 +30,7 @@ import { resolveSfx, findMatch as findSfxMatch } from "./services/sfxService.js"
 import { configure as configureAssets, ensureMusic, ensureMenuMusic, ensureSfx, ensureUiSfx } from "./helpers/assetDownloads.js";
 import { parseDMJson } from "./helpers/parseDMJson.js";
 import { registerAdminAuth } from "./routes/adminAuth.js";
+import { createCharacterKeys } from "./services/characterKeys.js";
 import { registerAdminEvents } from "./routes/adminEvents.js";
 import { createProviderAdminRoutes } from "./routes/providerAdmin.js";
 import { createAiSetup } from "./routes/aiSetup.js";
@@ -137,22 +138,15 @@ const adminRoom = (lobbyId) => `admin:${lobbyId}`;
 
 // ── Character signing keys ───────────────────────────────────────────────────
 
-const CHAR_KEY_FILE = path.join(__dirname, "data", "charkey.pem");
-let charPrivateKey, charPublicKey;
-if (fs.existsSync(CHAR_KEY_FILE)) {
-	charPrivateKey = fs.readFileSync(CHAR_KEY_FILE, "utf8");
-	charPublicKey = createPublicKey(charPrivateKey).export({ type: "spki", format: "pem" });
-} else {
-	const kp = generateKeyPairSync("rsa", {
-		modulusLength: 2048,
-		publicKeyEncoding:  { type: "spki",  format: "pem" },
-		privateKeyEncoding: { type: "pkcs8", format: "pem" },
-	});
-	charPrivateKey = kp.privateKey;
-	charPublicKey  = kp.publicKey;
-	fs.writeFileSync(CHAR_KEY_FILE, charPrivateKey, "utf8");
-	console.log("🔑 Generated new character signing key");
-}
+// Loaded from disk, or generated on a first run so nobody has to set one up. Held behind accessors
+// rather than in a pair of `let`s: the key can be rotated at runtime, and every verifier has to see
+// the current one. See `services/characterKeys.js`.
+const characterKeys = createCharacterKeys({
+	fsImpl: fs,
+	keyPath: path.join(__dirname, "data", "charkey.pem"),
+	generateKeyPair: generateKeyPairSync,
+	log: (message) => console.log(message),
+});
 
 // ── Core server + store ──────────────────────────────────────────────────────
 
@@ -295,7 +289,9 @@ const ttsDeps = { resolve: resolveTTS, devMode, REJECTED_REQUEST_STATUS, log, ro
 const ttsActiveFor = (lobbyId) => !devMode && Boolean(resolveTTS(lobbyId, null));
 
 // Admin auth (registers routes on app, returns shared state)
-const adminAuth = registerAdminAuth(app, { store, charPublicKey, log });
+// The key is passed as an accessor, not a value: rotating it must change what host-verify checks
+// against, and a captured copy would keep accepting files signed with the retired key.
+const adminAuth = registerAdminAuth(app, { store, charPublicKey: () => characterKeys.publicKey(), log });
 
 /** Where the per-lobby model-call journal is written. */
 const LOG_DIR = path.join(__dirname, "logs");
@@ -423,6 +419,7 @@ createProviderAdminRoutes({
 	credentials,
 	isAdminAuthenticated: adminAuth.isAdminAuthenticated,
 	fetchImpl: fetch,
+	characterKeys,
 	log,
 }).register(app);
 
@@ -2455,7 +2452,7 @@ app.post("/api/character/export", (req, res) => {
 		const sign = createSign("SHA256");
 		sign.update(data);
 		sign.end();
-		const sig = sign.sign(charPrivateKey, "base64");
+		const sig = sign.sign(characterKeys.privateKey(), "base64");
 		res.json({ v: 1, data, sig });
 	} catch (err) {
 		console.error("Character export error:", err);
@@ -2470,7 +2467,7 @@ app.post("/api/character/import", (req, res) => {
 		const verify = createVerify("SHA256");
 		verify.update(data);
 		verify.end();
-		const valid = verify.verify(charPublicKey, sig, "base64");
+		const valid = verify.verify(characterKeys.publicKey(), sig, "base64");
 		if (!valid) return res.status(400).json({ error: "Character file is invalid or has been tampered with" });
 		const character = JSON.parse(Buffer.from(data, "base64").toString("utf8"));
 		res.json({ ok: true, character });

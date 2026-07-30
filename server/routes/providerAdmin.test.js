@@ -73,7 +73,7 @@ function makeReq({ capability = "chat", providerId = "openai", body = {} } = {})
  * @param {object} [options] - Overrides.
  * @returns {object} The routes, the credential system, and the auth spies.
  */
-function makeRoutes({ admin = true, host = false, fsImpl = makeFs(), fetchImpl } = {}) {
+function makeRoutes({ admin = true, host = false, fsImpl = makeFs(), fetchImpl, characterKeys } = {}) {
 	const credentials = createCredentialSystem({
 		fsImpl, dataDir: DATA_DIR, secret: SECRET, env: {}, log: () => {},
 		now: () => new Date("2026-07-27T12:00:00.000Z"),
@@ -87,6 +87,7 @@ function makeRoutes({ admin = true, host = false, fsImpl = makeFs(), fetchImpl }
 		isHostToken: () => { hostTokenChecks.push(true); return host ? "LOBBY" : null; },
 		lookup,
 		fetchImpl,
+		characterKeys,
 		log: () => {},
 	});
 	return { routes, credentials, fsImpl, hostTokenChecks };
@@ -402,4 +403,89 @@ test("no failure response echoes the key back", async () => {
 
 	await routes.testProvider(makeReq(), res);
 	assert.ok(!JSON.stringify(res.body).includes(OPENAI_KEY), "a test failure echoed the key back to the browser");
+});
+
+// ── The character signing key ────────────────────────────────────────────────
+
+/**
+ * @description A character-keys double, so these tests describe the route rather than re-testing
+ *   `services/characterKeys.js`.
+ * @param {object} [options] - `fingerprint` to report.
+ * @returns {object} A keys-shaped double with a rotation counter.
+ */
+function makeKeys({ fingerprint = "aaaaaaaaaaaaaaaa" } = {}) {
+	let current = fingerprint;
+	const rotations = [];
+	return {
+		rotations,
+		fingerprint: () => current,
+		rotate() {
+			const previous = current;
+			current = "bbbbbbbbbbbbbbbb";
+			rotations.push(previous);
+			return { previous, current };
+		},
+	};
+}
+
+test("the operator can read the current signing key fingerprint", () => {
+	const characterKeys = makeKeys();
+	const { routes } = makeRoutes({ characterKeys });
+	const res = makeRes();
+
+	routes.characterKey(makeReq(), res);
+
+	assert.equal(res.statusCode, 200);
+	assert.equal(res.body.fingerprint, "aaaaaaaaaaaaaaaa");
+});
+
+test("rotating answers with both fingerprints and never any key material", () => {
+	const characterKeys = makeKeys();
+	const { routes } = makeRoutes({ characterKeys });
+	const res = makeRes();
+
+	routes.rotateCharacterKey(makeReq(), res);
+
+	assert.equal(res.statusCode, 200);
+	assert.equal(res.body.previous, "aaaaaaaaaaaaaaaa");
+	assert.equal(res.body.current, "bbbbbbbbbbbbbbbb");
+	assert.equal(characterKeys.rotations.length, 1);
+
+	const serialised = JSON.stringify(res.body);
+	assert.ok(!/PRIVATE KEY|BEGIN /.test(serialised), "a key must never travel in a response");
+});
+
+test("a host token cannot rotate the signing key", () => {
+	// The whole point of gating this on a password session. A host runs one game; rotating would
+	// invalidate every exported character on the instance, for everybody.
+	const characterKeys = makeKeys();
+	const { routes } = makeRoutes({ admin: false, host: true, characterKeys });
+	const res = makeRes();
+
+	routes.rotateCharacterKey(makeReq(), res);
+
+	// 401, matching every other handler on this surface — a caller without a password session is
+	// unauthenticated here, not authenticated-and-forbidden.
+	assert.equal(res.statusCode, 401);
+	assert.equal(characterKeys.rotations.length, 0, "and nothing was rotated");
+});
+
+test("an unauthenticated caller cannot read the fingerprint either", () => {
+	const { routes } = makeRoutes({ admin: false, characterKeys: makeKeys() });
+	const res = makeRes();
+
+	routes.characterKey(makeReq(), res);
+
+	assert.equal(res.statusCode, 401);
+});
+
+test("the routes are absent rather than broken when no key system is supplied", () => {
+	// `createProviderAdminRoutes` predates this and is constructed in tests without it; answering
+	// 501 beats throwing a TypeError at whoever calls it.
+	const { routes } = makeRoutes();
+	const res = makeRes();
+
+	routes.rotateCharacterKey(makeReq(), res);
+
+	assert.equal(res.statusCode, 501);
 });
