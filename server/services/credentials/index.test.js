@@ -290,3 +290,46 @@ test("with no secret the system still assembles, holding keys only in memory", (
 	assert.equal(system.vault.read("openai"), OPENAI_KEY);
 	assert.equal(Object.hasOwn(fsImpl.files, VAULT_PATH), false);
 });
+
+test("the placeholders from .env.example are not imported as if they were keys", () => {
+	// The exact reproduction of a fresh install: copy `.env.example`, boot, and the server announced
+	// "Playable without a player key" while holding `Open_AI_API_KEY_HERE` as OpenAI's credential.
+	// Every DM turn then failed on authentication, after being told the setup was fine.
+	const { system } = makeSystem({
+		env: {
+			OPENAI_API_KEY: "Open_AI_API_KEY_HERE",
+			CLAUDE_API_KEY: "Anthropic_API_KEY_HERE",
+			ELEVEN_API_KEY: "ELEVEN_LABS_API_KEY_HERE",
+		},
+	});
+
+	assert.equal(system.vault.has("openai"), false);
+	assert.equal(system.vault.has("anthropic"), false);
+	assert.equal(system.vault.has("elevenlabs"), false);
+});
+
+test("the other shapes a placeholder takes are refused too", () => {
+	// People edit these by hand, and half-done edits look like this.
+	for (const placeholder of [
+		"your-api-key-here", "YOUR_KEY", "sk-xxxxxxxx", "changeme", "CHANGE_ME",
+		"TODO", "<your key>", "xxx", "none", "replace-me",
+	]) {
+		const { system } = makeSystem({ env: { OPENAI_API_KEY: placeholder } });
+		assert.equal(system.vault.has("openai"), false, `"${placeholder}" should not be treated as a key`);
+	}
+});
+
+test("a real-looking key is still imported, because that is the point of the feature", () => {
+	// The guard must not be so eager that it rejects genuine keys — an upgrade has to keep working.
+	for (const real of [OPENAI_KEY, "sk-proj-aB3dEf7hIjKlMnOpQrStUvWxYz012345", "hf_aBcDeFgHiJkLmNoPqRsTuVwXyZ"]) {
+		const { system } = makeSystem({ env: { OPENAI_API_KEY: real } });
+		assert.equal(system.vault.read("openai"), real, `"${real.slice(0, 8)}…" is a plausible key and must import`);
+	}
+});
+
+test("a refused placeholder leaves the provider on byok rather than shared", () => {
+	// The consequence that matters: `shared` means "this server pays", and a server holding a
+	// placeholder cannot pay for anything. It has to fall back to asking the player.
+	const { system } = makeSystem({ env: { OPENAI_API_KEY: "Open_AI_API_KEY_HERE" } });
+	assert.equal(system.getPolicy().chat.openai.policy, "byok");
+});

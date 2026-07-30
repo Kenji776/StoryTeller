@@ -31,6 +31,43 @@ const VAULT_FILE = "credentials.enc";
 const POLICY_FILE = "provider-policy.json";
 
 /**
+ * Words that mean "nobody filled this in".
+ *
+ * Matched as whole tokens against a lowercased value, so `changeme123` and `<your key>` are caught
+ * while a real key that happens to contain "none" inside a longer word is not.
+ */
+const PLACEHOLDER_WORDS = Object.freeze([
+	"here", "your", "yourkey", "youre", "changeme", "change", "replace", "replaceme",
+	"todo", "fixme", "example", "placeholder", "none", "null", "unset", "xxx", "xxxx",
+]);
+
+/**
+ * Decides whether a value is an unfilled placeholder rather than a credential.
+ *
+ * @description Guards the one path that can make a server claim it is ready when it is not. Copying
+ *   `.env.example` verbatim used to store `Open_AI_API_KEY_HERE` as OpenAI's key, flip the provider to
+ *   `shared`, and print "Playable without a player key" — after which every DM turn failed on
+ *   authentication with nothing in the log connecting cause to effect.
+ *
+ *   Deliberately conservative about the other direction. Refusing a *genuine* key would break an
+ *   upgrade for someone whose install already worked, which is worse than accepting a bad one: the
+ *   test suite names three real key shapes that must still import.
+ * @param {string} value - The environment value.
+ * @returns {boolean} True when it should be ignored.
+ */
+export function looksLikePlaceholder(value) {
+	const trimmed = value.trim();
+	// Real keys are long. Nothing a provider issues is this short, and short values here are almost
+	// always `xxx`, `TODO`, or a half-finished edit.
+	if (trimmed.length < 16) return true;
+	// Angle brackets and whitespace never appear in an issued key, but do appear in `<your key>`.
+	if (/[<>\s]/.test(trimmed)) return true;
+
+	const words = trimmed.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+	return words.some((word) => PLACEHOLDER_WORDS.includes(word));
+}
+
+/**
  * Environment variables an existing install may already carry, and the provider
  * each belongs to.
  *
@@ -128,16 +165,29 @@ export function createCredentialSystem({
 	 */
 	function importFromEnvironment() {
 		const imported = [];
+		const placeholders = [];
 		for (const { providerId, vars } of ENV_KEYS) {
 			if (vault.has(providerId)) continue;
 			const value = vars.map((name) => env?.[name]).find((v) => typeof v === "string" && v.trim());
 			if (!value) continue;
+			if (looksLikePlaceholder(value)) {
+				placeholders.push(providerId);
+				continue;
+			}
 			vault.set(providerId, value);
 			imported.push(providerId);
 		}
 		if (imported.length) {
 			log(`🔑 Imported ${imported.length} API key(s) from the environment into the credential vault: ${imported.join(", ")}. ` +
 				"Those variables can now be removed.");
+		}
+		// Said loudly, because the alternative is what used to happen: the placeholder was stored, the
+		// provider went `shared`, the boot log announced the game as playable, and the first DM turn
+		// failed on authentication with nothing connecting the two.
+		if (placeholders.length) {
+			log(`⚠️  Ignored ${placeholders.length} unfilled API key placeholder(s) in the environment: `
+				+ `${placeholders.join(", ")}. Those still say something like "YOUR_KEY_HERE" — put a real key `
+				+ "in server/.env or add one in the admin panel. Players can also bring their own.");
 		}
 		return imported;
 	}

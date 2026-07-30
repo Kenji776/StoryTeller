@@ -34,7 +34,7 @@ import { createCharacterKeys } from "./services/characterKeys.js";
 import { registerAdminEvents } from "./routes/adminEvents.js";
 import { createProviderAdminRoutes } from "./routes/providerAdmin.js";
 import { createAiSetup } from "./routes/aiSetup.js";
-import { createCredentialSystem } from "./services/credentials/index.js";
+import { createCredentialSystem, looksLikePlaceholder } from "./services/credentials/index.js";
 import { registerTTSRoutes } from "./routes/ttsService.js";
 import { streamNarrationToClients } from "./services/tts/narrate.js";
 import { resolveTTSProvider, normalizeProviderId, probeAvailability } from "./services/tts/registry.js";
@@ -316,18 +316,42 @@ const LOG_DIR = path.join(__dirname, "logs");
  *
  * Nothing in the game loop reads this yet; the routes below are the first caller.
  */
+/**
+ * @description Reads the vault secret, refusing a value nobody filled in. A placeholder would
+ *   "encrypt" the vault under a string published in this repository — worse than no encryption,
+ *   because it looks like some. Rejected to null, which the vault reports as memory-only at boot.
+ * @returns {string|null} The secret, or null when absent or unfilled.
+ */
+function vaultSecret() {
+	const fromFile = process.env.STORYTELLER_SECRET_FILE && fs.existsSync(process.env.STORYTELLER_SECRET_FILE)
+		? fs.readFileSync(process.env.STORYTELLER_SECRET_FILE, "utf8").trim()
+		: null;
+	const value = process.env.STORYTELLER_SECRET || fromFile;
+	if (!value) return null;
+	if (looksLikePlaceholder(value)) {
+		console.warn("⚠️  STORYTELLER_SECRET still looks like a placeholder, so it is being ignored — the "
+			+ "credential vault will run in memory and keys will not survive a restart. Generate one with: "
+			+ `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`);
+		return null;
+	}
+	return value;
+}
+
 const credentials = createCredentialSystem({
-	// Its own directory, not `data/` itself: the deploy mounts this path so an
-	// operator's configuration survives a redeploy, and mounting the whole of
-	// `data/` would shadow charkey.pem and the canned test responses baked into
-	// the image.
+	// Its own directory, not `data/` itself. It holds everything secret — the vault, the provider
+	// policy, and `charkey.pem` — which is what makes it a single thing to lock down; see the README
+	// in that folder.
 	dataDir: path.join(__dirname, "data", "credentials"),
-	secret: process.env.STORYTELLER_SECRET
-		|| (process.env.STORYTELLER_SECRET_FILE && fs.existsSync(process.env.STORYTELLER_SECRET_FILE)
-			? fs.readFileSync(process.env.STORYTELLER_SECRET_FILE, "utf8").trim()
-			: null),
+	secret: vaultSecret(),
 	log,
 });
+
+// A shipped default is a known password on every install that did not change it. `.env.example` no
+// longer carries one, but an install that copied the old file still does.
+if (process.env.ADMIN_PASSWORD && looksLikePlaceholder(process.env.ADMIN_PASSWORD)) {
+	console.warn("⚠️  ADMIN_PASSWORD looks like a default or placeholder. Anyone who can reach this "
+		+ "server can open the admin panel with it. Change it in server/.env.");
+}
 
 /**
  * Every model call in the game goes through here. The signature is unchanged from
