@@ -461,8 +461,23 @@ export const combatMethods = {
 					status: "active",
 				};
 			} else if (!isProtected) {
-				// Existing enemy — update HP and status
-				if (e.hp != null) s.enemies[key].hp = Math.max(0, Number(e.hp));
+				// Existing enemy. Hit points may **fall** from the narration and never rise.
+				//
+				// `serverResolved` protects only this turn's target, so on the next turn the enemy
+				// wounded on this one is unprotected — and the model's `enemies` array lists it at
+				// whatever hit points it imagines, which is usually its maximum. A simulation caught
+				// Skeletal Warrior 1 taking 10 then 15 damage from resolved attacks and finishing the
+				// fight at 13 of 13. That is why fights ground on: a party landing 10-15 a swing could
+				// not clear three skeletons in fourteen actions.
+				//
+				// Monotonic rather than absolute, because the narrator legitimately owns damage the
+				// resolver never saw — a rockfall, a collapsing floor, an ability it declined to
+				// resolve. Those still land. Only healing is refused, and healing is the direction
+				// that erases the server's own arithmetic.
+				const claimed = e.hp != null ? Math.max(0, Number(e.hp)) : null;
+				if (claimed != null && Number.isFinite(claimed)) {
+					s.enemies[key].hp = Math.min(Number(s.enemies[key].hp) || 0, claimed);
+				}
 				if (e.status) s.enemies[key].status = e.status;
 			}
 			// If HP hits 0, force dead status

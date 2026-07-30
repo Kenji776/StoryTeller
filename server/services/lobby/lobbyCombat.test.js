@@ -869,3 +869,54 @@ test("a non-caster attempting arcana still gets a roll rather than nothing", () 
 	assert.ok(payload, "a non-caster should still roll");
 	assert.equal(payload.detail.stat, "int", "book knowledge is intelligence");
 });
+
+// ===== updateEnemies: the narrator may not heal what the server wounded =====
+
+test("the narrator cannot restore an enemy the server has damaged", () => {
+	// Found by simulation. Skeletal Warrior 1 took 10 then 15 damage from resolved attacks and
+	// finished the fight at 13 of 13, because `serverResolved` only ever protects *this* turn's
+	// target — hit somebody else for one turn and the previous enemy is unprotected, and the model's
+	// own `enemies` array lists it at whatever hit points it imagines.
+	//
+	// That made fights grind: three skeletons survived fourteen actions of a party that was landing
+	// 10-15 damage a swing. Surfaced by a scripted combat simulation rather than by any unit test,
+	// because it needs several consecutive turns against more than one enemy to show up at all.
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 2, max_hp: 7, cr: "1/4", status: "active" } });
+
+	store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 7 }]);
+
+	assert.equal(store.index[lobbyId].enemies.Goblin.hp, 2, "the server's number stands");
+});
+
+test("the narrator may still take an enemy down, for damage the resolver never saw", () => {
+	// A rockfall, a collapsing bridge, an ability the resolver declined. The rule is monotonic
+	// rather than absolute: hit points may fall from the narration and never rise.
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 7, max_hp: 7, cr: "1/4", status: "active" } });
+
+	store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 3 }]);
+
+	assert.equal(store.index[lobbyId].enemies.Goblin.hp, 3);
+});
+
+test("a killing blow from the narration is still a kill", () => {
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, { Goblin: { name: "Goblin", hp: 4, max_hp: 7, cr: "1/4", status: "active" } });
+
+	const dead = store.updateEnemies(lobbyId, [{ name: "Goblin", hp: 0 }]);
+
+	assert.equal(dead.length, 1);
+	assert.equal(store.index[lobbyId].enemies.Goblin.status, "dead");
+});
+
+test("a newly introduced enemy still gets the hit points the narrator gave it", () => {
+	// Staging a fight is the one place the model legitimately sets enemy hit points, and it has to
+	// keep working — otherwise nothing can bring a monster into the scene.
+	const { store, lobbyId } = makeStore([{ name: "Ayla" }]);
+	withEnemies(store, {});
+
+	store.updateEnemies(lobbyId, [{ name: "Ogre", hp: 30, max_hp: 30, cr: "2" }]);
+
+	assert.equal(store.index[lobbyId].enemies.Ogre.hp, 30);
+});
