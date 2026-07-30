@@ -106,5 +106,14 @@ server/data/galleries/
 # counterpart is `wiki.conf.example`. Ignored before it could be committed, not
 # after (GIT-5) — it had sat untracked and unignored, so any `git add -A` would
 # have swept it into history.
-tools/*.conf
-!tools/*.conf.example
+# Operator tooling for a private network, in a public repository. `wiki.conf` holds a live
+# WIKI_TOKEN, and `portal.mjs`, `wiki.sh` and even `wiki.conf.example` name internal hosts. The
+# earlier rule ignored only `*.conf` and expected `wiki.conf.example` to be tracked; nothing here
+# ever was, and the example leaks an address too, so the whole directory is ignored instead.
+tools/
+
+# Agent directive modules. `CLAUDE.md` loads these on demand and is itself tracked, but the
+# `homelab-` ones name hosts, subnets and SMB paths on that same private network. Ignored before a
+# commit rather than after (GIT-5): both directories had sat untracked and unignored, so any
+# `git add -A` would have published the network topology to a public repository.
+modules/
