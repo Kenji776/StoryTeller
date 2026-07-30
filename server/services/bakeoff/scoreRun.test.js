@@ -86,9 +86,70 @@ test("a model that ignores the schema is unusable even when its JSON parses", ()
 });
 
 test("a model that could not finish the requested turns is unusable", () => {
-	const r = scoreRun(perfectEvidence({ ops: { requested: 80, completed: 12, stalls: 4, providerErrors: 6 } }));
+	// Plenty of replies to judge on, a large shortfall, and only a handful of provider
+	// errors to explain it — so the model owns the rest. Stated with enough graded replies
+	// that the "provider truncated this" rule cannot also apply, or the case is ambiguous.
+	const inspections = Array.from({ length: 20 }, () => perfect());
+	const r = scoreRun(perfectEvidence({
+		inspections, latencies: Array(20).fill(500),
+		ops: { requested: 80, completed: 12, stalls: 4, providerErrors: 6 },
+	}));
 	assert.equal(r.verdict, "unusable");
-	assert.ok(r.blockers.some((b) => /complet/i.test(b)));
+	assert.ok(r.blockers.some((b) => /complet/i.test(b)), `got ${JSON.stringify(r.blockers)}`);
+});
+
+test("a shortfall fully explained by provider errors is not charged to the model", () => {
+	// This is what an account hitting its usage cap mid-run looks like: the turns did not
+	// happen because the provider stopped answering, not because the model is incapable.
+	const r = scoreRun(perfectEvidence({ ops: { requested: 12, completed: 3, stalls: 0, providerErrors: 9 } }));
+	assert.ok(!r.blockers.some((b) => /complet/i.test(b)),
+		`the model must not be blamed for the provider's refusal: ${JSON.stringify(r.blockers)}`);
+});
+
+test("a run cut short by the provider with too little left to judge is not evaluated", () => {
+	// claude-sonnet-4-6 was graded "67% parsed" from 3 replies after Anthropic's cap hit,
+	// while a longer journal for the same model scored 99. Three replies is not a verdict.
+	const inspections = [
+		{ parsed: true, cleanParse: true, missingKeys: [], typeErrors: [], malformedEvents: [], jsonInText: false, markdownInText: false, activeEnemies: 0, combatOver: true, events: {} },
+		{ parsed: false, cleanParse: false, missingKeys: [], typeErrors: [], malformedEvents: [], jsonInText: false, markdownInText: false, activeEnemies: 0, combatOver: null, events: {} },
+		{ parsed: true, cleanParse: true, missingKeys: [], typeErrors: [], malformedEvents: [], jsonInText: false, markdownInText: false, activeEnemies: 0, combatOver: true, events: {} },
+	];
+	const r = scoreRun(perfectEvidence({
+		inspections, latencies: [500, 500, 500],
+		ops: { requested: 12, completed: 3, stalls: 0, providerErrors: 9 },
+	}));
+	assert.equal(r.verdict, "not evaluated");
+	assert.ok(r.blockers.some((b) => /provider/i.test(b)));
+});
+
+test("a short but clean run with no provider trouble is still judged normally", () => {
+	const r = scoreRun(perfectEvidence());
+	assert.equal(r.verdict, "recommended");
+});
+
+test("a rate-driven blocker on a short run is marked as a thin sample", () => {
+	// claude-opus-5 dropped the JSON envelope on 1 of 16 screen turns. That is a real
+	// defect and worth blocking on, but "94%" from 16 samples is not a rate anyone should
+	// quote — one event flips the verdict. The report has to admit that.
+	const inspections = Array.from({ length: 16 }, (_, i) => perfect({ parsed: i !== 0, cleanParse: i !== 0 }));
+	const r = scoreRun(perfectEvidence({ inspections, latencies: Array(16).fill(500), ops: { requested: 16, completed: 16, stalls: 0, providerErrors: 0 } }));
+	assert.equal(r.verdict, "unusable");
+	assert.equal(r.lowSample, true);
+	assert.ok(r.blockers.some((b) => /1 of 16|thin|small sample/i.test(b)),
+		`the blocker should own its sample size: ${JSON.stringify(r.blockers)}`);
+});
+
+test("a long run with the same failure rate is not marked as a thin sample", () => {
+	const inspections = Array.from({ length: 80 }, (_, i) => perfect({ parsed: i % 16 !== 0, cleanParse: i % 16 !== 0 }));
+	const r = scoreRun(perfectEvidence({ inspections, latencies: Array(80).fill(500), ops: { requested: 80, completed: 80, stalls: 0, providerErrors: 0 } }));
+	assert.equal(r.verdict, "unusable");
+	assert.equal(r.lowSample, false);
+});
+
+test("a clean short run is not flagged, because there is no rate to doubt", () => {
+	const r = scoreRun(perfectEvidence());
+	assert.equal(r.lowSample, false);
+	assert.deepEqual(r.blockers, []);
 });
 
 test("a blocked model still reports its dimension scores, so the failure is diagnosable", () => {

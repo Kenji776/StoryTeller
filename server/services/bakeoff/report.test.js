@@ -91,6 +91,11 @@ test("the document names every model that was evaluated", () => {
 	assert.ok(md.includes("claude-opus-5"));
 });
 
+test("the document carries a generated banner, so nobody hand-edits it", () => {
+	const md = renderReport({ stage: "screen", reports: [report()] });
+	assert.match(md, /GENERATED — DO NOT EDIT/, "DOC-8 requires generated output to say so");
+});
+
 test("a screen-only result is labelled as a screen", () => {
 	const md = renderReport({ stage: "screen", reports: [report()] });
 	assert.match(md, /screen/i);

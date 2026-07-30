@@ -64,6 +64,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/encounters.md](modules/encounters.md) — when a fight happens, and how big it is
 - [modules/spells.md](modules/spells.md) — what a caster knows, and what casting costs
 - [modules/spell-resolution.md](modules/spell-resolution.md) — what a cast spell does
+- [modules/model-bakeoff.md](modules/model-bakeoff.md) — which models can be the brains, and how that is measured
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [runbooks/](runbooks/) — repeatable procedures (start here for restarting the server)
 - [decisions/](decisions/) — architecture decision records

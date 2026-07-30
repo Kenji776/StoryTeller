@@ -68,6 +68,29 @@ const REPAIR_CAP_MARGINAL = 0.25;
 /** A model failing more than this share of parses cannot run the loop at all. */
 const MIN_PARSE_RATE = 0.95;
 
+/**
+ * Below this many graded replies, a rate is not a rate.
+ *
+ * @description On a 16-turn screen a single malformed reply is 6%, which crosses
+ * `MIN_PARSE_RATE` and flips a model from `recommended` to `unusable`. The defect is
+ * real and worth blocking on, but the *percentage* is not something anyone should quote
+ * — so a blocker earned on a short run says how many replies it was based on, and
+ * `lowSample` marks the report for what it is. This is the honesty half of ADR 0028's
+ * "a screen grade is a floor, not a measurement".
+ */
+const MIN_CONFIDENT_TURNS = 30;
+
+/**
+ * Fewest graded replies that can carry a verdict at all when the provider misbehaved.
+ *
+ * @description A run that the provider cut short leaves a handful of replies behind, and
+ * a rate computed from those is noise. `claude-sonnet-4-6` was graded "67% parsed" from
+ * three replies after Anthropic's usage cap hit mid-run, while a longer journal for the
+ * same model scored 99/100 — the three-reply verdict was purely an artifact of when the
+ * cap landed.
+ */
+const MIN_TURNS_FOR_VERDICT = 8;
+
 /** Below this mean schema conformance the appliers get too little to work with. */
 const MIN_SCHEMA_RATE = 0.5;
 
@@ -277,14 +300,47 @@ export function scoreRun(evidence) {
 
 	// ── Blockers: the things a weighted average must not be allowed to absorb ──
 	const blockers = [];
+	const thin = turns < MIN_CONFIDENT_TURNS;
+	// A rate quoted from a handful of turns has to carry its own denominator, or a reader
+	// takes "94%" for a measurement when it was one bad reply out of sixteen.
+	const evidenced = (bad, total) => (thin ? ` (${bad} of ${total} replies — thin sample)` : "");
+
 	if (parseRate < MIN_PARSE_RATE) {
-		blockers.push(`only ${pct(parseRate)} of replies could be parsed as JSON — the game loop cannot run on this`);
+		const bad = turns - parsedTurns.length;
+		blockers.push(`only ${pct(parseRate)} of replies could be parsed as JSON — the game loop cannot run on this`
+			+ evidenced(bad, turns));
 	}
 	if (schemaRate < MIN_SCHEMA_RATE) {
-		blockers.push(`mean schema conformance ${pct(schemaRate)} — the response schema is not being followed`);
+		blockers.push(`mean schema conformance ${pct(schemaRate)} — the response schema is not being followed`
+			+ (thin ? ` (over ${parsedTurns.length} replies — thin sample)` : ""));
 	}
-	if (completionRate < MIN_COMPLETION_RATE) {
-		blockers.push(`completed only ${completed} of ${requested} requested turns`);
+	// Only charge the shortfall to the model to the extent the provider does not explain
+	// it. An account that hits its usage cap mid-run leaves exactly this signature, and
+	// blaming the model for turns the provider refused to serve is the same error as
+	// grading a throttled run at all.
+	const shortfall = Math.max(0, requested - completed);
+	const unexplained = Math.max(0, shortfall - providerErrors);
+	if (completionRate < MIN_COMPLETION_RATE && unexplained > 0) {
+		blockers.push(`completed only ${completed} of ${requested} requested turns`
+			+ (providerErrors ? ` (${unexplained} unexplained by the ${providerErrors} provider error(s))` : ""));
+	}
+
+	// A run the provider truncated to a handful of replies cannot carry a verdict about the
+	// model, however those few replies happened to look.
+	const truncatedByProvider = providerErrors > 0 && turns < MIN_TURNS_FOR_VERDICT;
+	if (truncatedByProvider) {
+		return {
+			...identity,
+			turns,
+			dimensions,
+			score,
+			grade: "—",
+			verdict: "not evaluated",
+			blockers: [`the provider cut the run short after ${turns} reply(ies) `
+				+ `(${providerErrors} provider error(s)) — too little to judge the model on`],
+			lowSample: true,
+			latency: { medianMs: percentile(latencies, 0.5), p90Ms: percentile(latencies, 0.9) },
+		};
 	}
 
 	const grade = GRADE_BANDS.find(([floor]) => score >= floor)[1];
@@ -306,6 +362,9 @@ export function scoreRun(evidence) {
 		grade,
 		verdict,
 		blockers,
+		// True when a blocker rests on too few replies to call it a rate. The verdict still
+		// stands — the defect happened — but it wants confirming over a full game.
+		lowSample: blockers.length > 0 && thin,
 		latency: { medianMs: percentile(latencies, 0.5), p90Ms: percentile(latencies, 0.9) },
 	};
 }

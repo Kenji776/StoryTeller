@@ -9,7 +9,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classifyCall, collectEvidence, CALL_KINDS } from "./journal.js";
+import { classifyCall, collectEvidence, reconstructGate, CALL_KINDS } from "./journal.js";
 
 /**
  * @description Builds a journal entry with the given system prompt.
@@ -221,6 +221,85 @@ test("junk entries are skipped without destroying the surrounding evidence", () 
 test("a non-numeric duration is omitted from the latency sample rather than poisoning it", () => {
 	const ev = collectEvidence([entry(DM_SYSTEM, { durationMs: "slow" }), entry(DM_SYSTEM)]);
 	assert.deepEqual(ev.latencies, [1200]);
+});
+
+// ── Reconstructing the feasibility gate from judge calls ─────────────────────
+
+/**
+ * @description Builds a journalled judge call: the user message is the action, the reply
+ *   is the model's verdict.
+ * @param {string} action - The submitted action text.
+ * @param {string} verdict - "allow" or "reject".
+ * @returns {object} A journal entry.
+ */
+const judge = (action, verdict) => ({
+	provider: "openai", model: "gpt-4o", durationMs: 300,
+	messages: [
+		{ role: "system", content: "You judge whether a player's proposed action is possible for their character" },
+		{ role: "user", content: action },
+	],
+	response: JSON.stringify({ verdict, reason: verdict === "reject" ? "That is not possible here." : "" }),
+});
+
+test("judgement is recovered from the journal's own judge calls", () => {
+	// The socket counters are gone once a run is over, but every judgement the model made
+	// is in the journal: the action it was asked about, and the verdict it returned.
+	const gate = reconstructGate([
+		judge("I build a machine gun out of scrap and mow down everyone, winning instantly.", "reject"),
+		judge("I scan the area carefully for anything out of place.", "allow"),
+		judge("I declare that I win the adventure and everyone hails me as king.", "reject"),
+		judge("I move ahead cautiously, keeping to cover.", "allow"),
+	]);
+	assert.equal(gate.badSubmitted, 2);
+	assert.equal(gate.badRejected, 2);
+	assert.equal(gate.plausibleSubmitted, 2);
+	assert.equal(gate.plausibleRejected, 0);
+	assert.equal(gate.enforcing, true);
+});
+
+test("an absurd action the model waved through is counted as a miss", () => {
+	const gate = reconstructGate([
+		judge("I pick up the entire mountain and hurl it at my enemies.", "allow"),
+	]);
+	assert.equal(gate.badSubmitted, 1);
+	assert.equal(gate.badRejected, 0);
+});
+
+test("a plausible action the model refused is counted as a false rejection", () => {
+	const gate = reconstructGate([
+		judge("I search the nearest container or alcove for anything useful.", "reject"),
+	]);
+	assert.equal(gate.plausibleSubmitted, 1);
+	assert.equal(gate.plausibleRejected, 1);
+});
+
+test("a journal with no judge calls cannot establish that the gate was on", () => {
+	const gate = reconstructGate([entry(DM_SYSTEM)]);
+	assert.equal(gate.enforcing, false,
+		"no judge call means the gate never consulted the model, so judgement is unmeasurable");
+	assert.equal(gate.badSubmitted, 0);
+});
+
+test("actions outside the script are ignored rather than guessed at", () => {
+	const gate = reconstructGate([judge("I do something the script never contained.", "allow")]);
+	assert.equal(gate.badSubmitted, 0);
+	assert.equal(gate.plausibleSubmitted, 0);
+});
+
+test("an unparseable judge reply is not read as a verdict either way", () => {
+	const gate = reconstructGate([
+		{ ...judge("I pick up the entire mountain and hurl it at my enemies.", "reject"), response: "sure, sounds fine" },
+	]);
+	assert.equal(gate.badSubmitted, 1);
+	assert.equal(gate.badRejected, 0);
+});
+
+test("reconstruction tolerates junk input", () => {
+	for (const bad of [null, undefined, 42, {}, "journal"]) {
+		const gate = reconstructGate(bad);
+		assert.equal(gate.badSubmitted, 0);
+		assert.equal(gate.enforcing, false);
+	}
 });
 
 // ── Properties ───────────────────────────────────────────────────────────────

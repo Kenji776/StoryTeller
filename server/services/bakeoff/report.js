@@ -112,6 +112,8 @@ export function renderReport(results) {
 			+ `measurement: it cannot see context decay, history summarisation, or long-run combat drift.`;
 
 	const out = [];
+	// DOC-8: generated output says so, and is regenerated rather than hand-edited.
+	out.push("<!-- GENERATED — DO NOT EDIT. Regenerate with:", "     node server/test-integration/bakeoff/writeReport.mjs --in <results.json> --out <this file> -->", "");
 	out.push(`# Model bake-off — ${stage} stage`, "");
 	out.push(stageNote, "");
 

@@ -19,6 +19,7 @@
  */
 
 import { inspectDMReply, OPENING_KEYS } from "./dmReply.js";
+import { buildActionScript, ACTION_CATEGORIES } from "./actionScript.js";
 
 /** The kinds of model call a lobby makes. */
 export const CALL_KINDS = {
@@ -103,6 +104,64 @@ export function classifyCall(entry) {
 		if (pattern.test(system)) return kind;
 	}
 	return CALL_KINDS.OTHER;
+}
+
+/**
+ * Every action the script can submit, indexed by text, with its category.
+ *
+ * Built once from `buildActionScript`, so the reconstruction below cannot drift from the
+ * script the runs actually used.
+ */
+const SCRIPTED_ACTIONS = new Map(buildActionScript(200).map((step) => [step.text, step.category]));
+
+/**
+ * Recovers the feasibility-gate tallies from a finished run's journal.
+ *
+ * @description The socket counters exist only while a run is in flight, but every
+ *   judgement the model made is written down: `actionFeasibility` journals a `judge` call
+ *   carrying the action it was asked about and the verdict it returned. That is enough to
+ *   score judgement long after the run — which is what lets a completed run be re-graded
+ *   under a corrected rubric without paying for it again.
+ *
+ *   Actions that are not from the script are ignored rather than guessed at: retries,
+ *   rolls and the hard-check probe all reach the judge too, and none of them is evidence
+ *   about the model's judgement.
+ * @param {object[]} entries - Journal lines.
+ * @returns {{enforcing: boolean, badSubmitted: number, badRejected: number,
+ *   plausibleSubmitted: number, plausibleRejected: number}} The tallies. `enforcing` is
+ *   false when no judge call happened at all, because then the gate never consulted the
+ *   model and judgement is unmeasurable rather than zero. Never throws.
+ */
+export function reconstructGate(entries) {
+	const gate = { enforcing: false, badSubmitted: 0, badRejected: 0, plausibleSubmitted: 0, plausibleRejected: 0 };
+	if (!Array.isArray(entries)) return gate;
+
+	for (const entry of entries) {
+		if (classifyCall(entry) !== CALL_KINDS.JUDGE) continue;
+		gate.enforcing = true;
+
+		const asked = (entry.messages ?? [])
+			.filter((m) => m && m.role === "user" && typeof m.content === "string")
+			.map((m) => m.content.trim())
+			.at(-1);
+		const category = SCRIPTED_ACTIONS.get(asked);
+		if (!category) continue;
+
+		let rejected = false;
+		try {
+			const parsed = JSON.parse(String(entry.response ?? "").trim());
+			rejected = parsed?.verdict === "reject";
+		} catch { /* an unreadable verdict is not a rejection */ }
+
+		if (category === ACTION_CATEGORIES.ABSURD) {
+			gate.badSubmitted++;
+			if (rejected) gate.badRejected++;
+		} else {
+			gate.plausibleSubmitted++;
+			if (rejected) gate.plausibleRejected++;
+		}
+	}
+	return gate;
 }
 
 /**
