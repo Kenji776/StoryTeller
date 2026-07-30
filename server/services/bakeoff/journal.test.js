@@ -64,6 +64,31 @@ test("an unrecognised call is classified as other rather than guessed at", () =>
 	assert.equal(classifyCall(entry("You are a helpful assistant.")), CALL_KINDS.OTHER);
 });
 
+test("the opening scene is its own kind, because it is asked for a different schema", () => {
+	const system = "You are a creative, cinematic Dungeon Master introducing a new Dungeons & Dragons one-shot for beginners."
+		+ ' Avoid heavy combat immediately; let the players orient first. Reply ONLY with a SINGLE JSON object. { "text": string, "music": "tension", "sfx": string[], "suggestions": string[] }';
+	assert.equal(classifyCall(entry(system)), CALL_KINDS.OPENING);
+});
+
+test("the opening scene is graded against the four keys its own prompt demands", () => {
+	// It is never asked for combat_over, updates, prompt, roll or spellUsed. Charging it
+	// for their absence marked every model down for following its instructions.
+	const system = "You are a creative, cinematic Dungeon Master introducing a new Dungeons & Dragons one-shot for beginners.";
+	const ev = collectEvidence([entry(system, {
+		response: JSON.stringify({ text: "You wake in a cold hall.", music: "tension", sfx: [], suggestions: ["Look around"] }),
+	})]);
+	assert.equal(ev.inspections.length, 1, "the opening is still a graded reply");
+	assert.deepEqual(ev.inspections[0].missingKeys, []);
+	assert.equal(ev.calls[CALL_KINDS.OPENING], 1);
+});
+
+test("an ordinary turn is still held to the full turn schema", () => {
+	const ev = collectEvidence([entry(DM_SYSTEM, {
+		response: JSON.stringify({ text: "It opens.", music: "tension", sfx: [], suggestions: [] }),
+	})]);
+	assert.ok(ev.inspections[0].missingKeys.includes("combat_over"));
+});
+
 test("the system prompt is found even when it is not the first message", () => {
 	const e = entry("ignored", {
 		messages: [{ role: "user", content: "hi" }, { role: "system", content: DM_SYSTEM }],

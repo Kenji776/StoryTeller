@@ -21,6 +21,8 @@ compliance, and it has a measurable answer.
 | File | Responsibility |
 |---|---|
 | `dmReply.js` | The structural verdict on one raw reply: did it parse, did it parse *cleanly*, does it carry the required keys and types, did markup or JSON leak into the narration. |
+| `runGame.mjs` (integration) | Drives one real game over sockets for one model. Returns counters, not a grade. |
+| `bakeoff.mjs` (integration) | Discovers candidates, plays them through a concurrency pool, grades and ranks. |
 | `combatTrace.js` | Whether a sequence of replies behaved like a fight — the five ways combat breaks while the JSON stays valid. |
 | `journal.js` | Reads `logs/llm-<lobbyId>.jsonl` into evidence, classifying each call so repairs and titles are counted but never graded. |
 | `candidates.js` | Which of a provider's catalogue is worth a game: rejects non-chat endpoints, collapses dated snapshots onto their alias. |
@@ -47,6 +49,23 @@ Hence two outputs, deliberately allowed to disagree:
   better than `usable`; below 25%, nothing beats `marginal`).
 
 A model can therefore grade B and read `marginal`. That is the honest answer.
+
+## Two ways to mark a model down for nothing
+
+Both were found by running the rubric against a real game and reading the evidence,
+and both flattered nothing — they penalised every model equally for behaviour that
+has no consequence:
+
+- **The opening scene is asked for a different schema.** `buildOpeningPrompt` requests
+  four keys (`text`, `music`, `sfx`, `suggestions`); there is no combat, no state to
+  update and nothing to roll before anyone has acted. Judging it against the
+  nine-key turn schema charged every model for obeying its instructions. It is now
+  classified as its own call kind and graded against `OPENING_KEYS`.
+- **An omitted nullable key is not a missing key.** `roll` and `music` are declared
+  `X | null`, and every reader in the game loop does a falsy check, so omitting the
+  key is byte-identical in behaviour to sending `null`. `combat_over` is *not*
+  nullable and its absence is still counted, because the server genuinely cannot tell
+  whether to purge the roster without it.
 
 ## Dimensions
 

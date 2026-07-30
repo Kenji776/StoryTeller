@@ -7,7 +7,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inspectDMReply, REQUIRED_KEYS } from "./dmReply.js";
+import { inspectDMReply, REQUIRED_KEYS, NULLABLE_KEYS, OPENING_KEYS } from "./dmReply.js";
 
 /**
  * @description Builds a reply that satisfies the whole contract, so each test can
@@ -94,16 +94,56 @@ test("truncated JSON does not parse", () => {
 
 // ── Schema conformance ───────────────────────────────────────────────────────
 
-test("every required key is reported when the object is bare", () => {
+test("every non-nullable required key is reported when the object is bare", () => {
 	const r = inspectDMReply('{"text":"hi"}');
 	assert.equal(r.parsed, true);
-	assert.deepEqual(r.missingKeys.sort(), REQUIRED_KEYS.filter((k) => k !== "text").sort());
+	const expected = REQUIRED_KEYS.filter((k) => k !== "text" && !NULLABLE_KEYS.includes(k)).sort();
+	assert.deepEqual(r.missingKeys.sort(), expected);
 });
 
 test("a nullable key present as null is not missing and not a type error", () => {
 	const r = inspectDMReply(goodReply({ roll: null, music: null }));
 	assert.deepEqual(r.missingKeys, []);
 	assert.deepEqual(r.typeErrors, []);
+});
+
+test("an omitted nullable key is not a fault, because the appliers cannot tell it from null", () => {
+	// The schema declares `roll` and `music` as `X | null`, and every reader does a
+	// falsy check. A model that omits the key produces byte-identical behaviour to one
+	// that sends null, so charging it was marking models down for nothing.
+	const reply = JSON.parse(goodReply());
+	delete reply.roll;
+	delete reply.music;
+	const r = inspectDMReply(JSON.stringify(reply));
+	assert.deepEqual(r.missingKeys, [], "omitting a nullable key has no consequence in the game loop");
+	assert.deepEqual(r.typeErrors, []);
+});
+
+test("a non-nullable key is still reported when omitted", () => {
+	const reply = JSON.parse(goodReply());
+	delete reply.combat_over;
+	const r = inspectDMReply(JSON.stringify(reply));
+	assert.deepEqual(r.missingKeys, ["combat_over"],
+		"the server cannot tell whether to purge the roster without this");
+});
+
+test("a caller may supply the key set a different prompt demands", () => {
+	// The opening scene is asked for four keys, not nine. Judging it against the turn
+	// schema charged every model for obeying the instructions it was actually given.
+	const opening = JSON.stringify({ text: "You wake in a cold hall.", music: "tension", sfx: [], suggestions: ["Look around"] });
+	const asOpening = inspectDMReply(opening, { requiredKeys: OPENING_KEYS });
+	assert.deepEqual(asOpening.missingKeys, []);
+	assert.deepEqual(asOpening.typeErrors, []);
+
+	const asTurn = inspectDMReply(opening);
+	assert.ok(asTurn.missingKeys.includes("combat_over"), "the turn schema is stricter and must stay so");
+});
+
+test("an unrecognised requiredKeys option falls back to the turn schema", () => {
+	for (const bad of [null, undefined, 42, "text", {}, []]) {
+		const r = inspectDMReply('{"text":"hi"}', { requiredKeys: bad });
+		assert.ok(r.missingKeys.length > 0, `input ${JSON.stringify(bad)} should not disable checking`);
+	}
 });
 
 test("combat_over sent as a string is a type error, not a missing key", () => {

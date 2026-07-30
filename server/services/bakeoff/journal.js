@@ -18,11 +18,12 @@
  * without a filesystem (`CQ-5`).
  */
 
-import { inspectDMReply } from "./dmReply.js";
+import { inspectDMReply, OPENING_KEYS } from "./dmReply.js";
 
 /** The kinds of model call a lobby makes. */
 export const CALL_KINDS = {
 	DM_TURN: "dm-turn",
+	OPENING: "dm-opening",
 	EPILOGUE: "dm-epilogue",
 	REPAIR: "repair",
 	JUDGE: "judge",
@@ -45,8 +46,15 @@ const SIGNATURES = [
 	[CALL_KINDS.JUDGE, /judge whether a player's proposed action is possible/i],
 	[CALL_KINDS.CHRONICLER, /campaign chronicler/i],
 	[CALL_KINDS.EPILOGUE, /Total Party Kill|narrate the EPILOGUE/i],
+	[CALL_KINDS.OPENING, /introducing a new Dungeons & Dragons one-shot/i],
 	[CALL_KINDS.DM_TURN, /Reply ONLY with a SINGLE JSON object|"combat_over"/],
 ];
+
+/** Which key set each graded call kind was actually asked for. */
+const KEYS_FOR_KIND = { [CALL_KINDS.OPENING]: OPENING_KEYS };
+
+/** Call kinds that are the narrator doing its job, and so are graded. */
+const GRADED_KINDS = new Set([CALL_KINDS.DM_TURN, CALL_KINDS.OPENING]);
 
 /**
  * @description Concatenates every system message in a call, because the DM prompt
@@ -109,7 +117,7 @@ export function collectEvidence(entries) {
 	for (const entry of entries) {
 		const kind = classifyCall(entry);
 		calls[kind]++;
-		if (kind !== CALL_KINDS.DM_TURN) continue;
+		if (!GRADED_KINDS.has(kind)) continue;
 
 		if (!evidence.provider && typeof entry.provider === "string") evidence.provider = entry.provider;
 		if (!evidence.model && typeof entry.model === "string") evidence.model = entry.model;
@@ -122,7 +130,7 @@ export function collectEvidence(entries) {
 			continue;
 		}
 
-		evidence.inspections.push(inspectDMReply(entry.response));
+		evidence.inspections.push(inspectDMReply(entry.response, { requiredKeys: KEYS_FOR_KIND[kind] }));
 		if (Number.isFinite(entry.durationMs)) evidence.latencies.push(entry.durationMs);
 	}
 

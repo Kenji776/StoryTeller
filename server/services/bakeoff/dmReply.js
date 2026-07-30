@@ -20,8 +20,26 @@ export const REQUIRED_KEYS = [
 	"text", "updates", "prompt", "roll", "suggestions", "spellUsed", "music", "combat_over", "sfx",
 ];
 
-/** Keys whose contract explicitly admits `null` as a real value rather than an omission. */
-const NULLABLE_KEYS = new Set(["roll", "music", "illustrate"]);
+/**
+ * Keys whose contract explicitly admits `null` as a real value rather than an omission.
+ *
+ * Absence is therefore not a fault: every reader in the game loop does a falsy check,
+ * so a model that omits one of these produces byte-identical behaviour to a model that
+ * sends `null`. Counting it marked models down for nothing.
+ */
+export const NULLABLE_KEYS = ["roll", "music", "illustrate"];
+
+/** Fast membership for the above. */
+const NULLABLE = new Set(NULLABLE_KEYS);
+
+/**
+ * The keys the *opening scene* prompt asks for — four, not nine.
+ *
+ * `lobbyPrompts.buildOpeningPrompt` sends a deliberately reduced schema: there is no
+ * combat, no state to update and nothing to roll before anyone has acted. Judging the
+ * opening against the turn schema charged every model for obeying its instructions.
+ */
+export const OPENING_KEYS = ["text", "music", "sfx", "suggestions"];
 
 /** Fields an enemy stat block must carry for the server to maintain a roster. */
 const ENEMY_FIELDS = ["name", "hp", "max_hp", "ac", "status"];
@@ -64,7 +82,7 @@ function isPlainObject(v) {
  * @returns {boolean} True when the value is usable by the game loop.
  */
 function keyIsWellTyped(key, value) {
-	if (NULLABLE_KEYS.has(key) && value === null) return true;
+	if (NULLABLE.has(key) && value === null) return true;
 	switch (key) {
 		// An empty narration is structurally a string and practically a blank turn:
 		// the players are shown nothing and the beat is lost, so it fails here.
@@ -130,6 +148,12 @@ function tallyEvents(list, fields) {
  *   that JSON carry the keys and types the appliers read, and did narration-only
  *   content stay out of the fields the server parses (and vice versa).
  * @param {string} raw - The reply exactly as the provider returned it.
+ * @param {object} [options] - Inspection options.
+ * @param {string[]} [options.requiredKeys=REQUIRED_KEYS] - The key set this reply was
+ *   actually asked for. Defaults to the turn schema; pass {@link OPENING_KEYS} for an
+ *   opening scene, whose prompt requests four keys rather than nine. Anything that is
+ *   not a non-empty array of strings falls back to the turn schema, so a bad option
+ *   cannot silently switch checking off.
  * @returns {{parsed: boolean, cleanParse: boolean, usedFence: boolean,
  *   leadingProse: boolean, missingKeys: string[], typeErrors: string[],
  *   malformedEvents: string[], jsonInText: boolean, markdownInText: boolean,
@@ -138,7 +162,11 @@ function tallyEvents(list, fields) {
  *   provider can return anything, including nothing, and an evaluation harness
  *   that dies on bad input cannot grade the models that produce it.
  */
-export function inspectDMReply(raw) {
+export function inspectDMReply(raw, options = {}) {
+	const requested = options?.requiredKeys;
+	const requiredKeys = Array.isArray(requested) && requested.length && requested.every((k) => typeof k === "string")
+		? requested
+		: REQUIRED_KEYS;
 	const verdict = {
 		parsed: false,
 		cleanParse: false,
@@ -185,8 +213,13 @@ export function inspectDMReply(raw) {
 	if (!obj) return verdict;
 	verdict.parsed = true;
 
-	for (const key of REQUIRED_KEYS) {
-		if (!Object.prototype.hasOwnProperty.call(obj, key)) { verdict.missingKeys.push(key); continue; }
+	for (const key of requiredKeys) {
+		if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+			// An omitted nullable key is indistinguishable from an explicit null to every
+			// reader downstream, so it is not a fault.
+			if (!NULLABLE.has(key)) verdict.missingKeys.push(key);
+			continue;
+		}
 		if (!keyIsWellTyped(key, obj[key])) verdict.typeErrors.push(key);
 	}
 
