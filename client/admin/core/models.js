@@ -10,6 +10,8 @@
  * entry should cost one dropdown option rather than the whole section.
  */
 
+import { parseRatings, annotateModels } from "../../modelRatings.js";
+
 /**
  * @description Reads an entry that needs an id and may carry a label.
  * @param {*} entry - The candidate.
@@ -58,6 +60,23 @@ export function parseModelCatalogue(json) {
 export function modelsFor(catalogue, providerId) {
 	if (!Array.isArray(catalogue)) return [];
 	return catalogue.find((provider) => provider.id === providerId)?.models ?? [];
+}
+
+/**
+ * The same models, carrying what the bake-off found out about each.
+ *
+ * @description Shares `client/modelRatings.js` with the lobby's narrator picker rather than
+ *   repeating the mapping, because two pickers wording this differently would leave an
+ *   operator comparing them with no way to tell which to believe.
+ * @param {Array<object>} catalogue - A parsed catalogue.
+ * @param {string} providerId - The provider's id.
+ * @param {object} [ratings] - Raw `model_ratings.json`; absent means every model is
+ *   reported `untested` rather than the list coming back empty.
+ * @returns {Array<{id: string, label: string, rating: object}>} Its models, best first and
+ *   known failures last.
+ */
+export function ratedModelsFor(catalogue, providerId, ratings) {
+	return annotateModels(parseRatings(ratings), providerId, modelsFor(catalogue, providerId), { sort: true });
 }
 
 /**

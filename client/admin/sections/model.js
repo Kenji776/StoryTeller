@@ -9,7 +9,21 @@
 
 import { h, fill } from "../ui/dom.js";
 import { panel, button, select, empty, flash } from "../ui/components.js";
-import { parseModelCatalogue, modelsFor, describeModel } from "../core/models.js";
+import { parseModelCatalogue, ratedModelsFor, describeModel } from "../core/models.js";
+
+/**
+ * Marks appended to a model name in the dropdown.
+ *
+ * Worded identically to the lobby's narrator picker (`client/app.js`): an operator
+ * comparing the two screens should not have to work out which one to believe.
+ * `untested` gets nothing, because no evidence is not a claim.
+ */
+const MODEL_MARK = Object.freeze({
+	recommended: "★ recommended",
+	works: "✓ known to work",
+	caution: "⚠ use with caution",
+	avoid: "✕ known not to work",
+});
 
 /**
  * @description Renders the AI model section.
@@ -21,10 +35,14 @@ export function model(ctx) {
 
 	const pickerHost = h("div");
 	const current = h("p.muted.small");
+	const ratingNote = h("p");
 	const note = flash();
 
 	/** The parsed catalogue, once it has loaded. */
 	let catalogue = [];
+
+	/** Bake-off ratings, once they have loaded. Null renders every model unmarked. */
+	let ratings = null;
 
 	/**
 	 * @description Reports what the lobby is running on now.
@@ -72,14 +90,41 @@ export function model(ctx) {
 		 * @returns {void}
 		 */
 		function refillModels() {
-			const models = modelsFor(catalogue, providerPicker.value);
-			fill(modelPicker, models.map((m) => h("option", { value: m.id }, m.label)));
+			const models = ratedModelsFor(catalogue, providerPicker.value, ratings);
+			// The mark is in the option text rather than a class, because a native <select>
+			// renders its options as plain strings on most platforms — styling alone would be
+			// invisible exactly where the operator is choosing.
+			fill(modelPicker, models.map((m) => h("option", { value: m.id },
+				`${m.label}${MODEL_MARK[m.rating?.flag] ? ` ${MODEL_MARK[m.rating.flag]}` : ""}`)));
 			if (state?.llmProvider === providerPicker.value && state?.llmModel) {
 				modelPicker.value = state.llmModel;
+			} else if (models.length) {
+				// Lead with the best-rated model rather than whatever the catalogue listed
+				// first, which could be one already proven unable to run the game.
+				modelPicker.value = models[0].id;
 			}
+			drawRatingNote(models);
+		}
+
+		/**
+		 * @description Spells out what the selected model is known for, under the dropdown.
+		 * @param {Array<object>} models - The annotated models on offer.
+		 * @returns {void}
+		 */
+		function drawRatingNote(models) {
+			const rating = models.find((m) => m.id === modelPicker.value)?.rating ?? null;
+			ratingNote.textContent = rating && rating.flag !== "untested"
+				? `${rating.label}. ${rating.note}`
+				: "";
+			ratingNote.className = rating && rating.flag !== "untested"
+				? `model-rating model-rating--${rating.flag}`
+				: "";
 		}
 
 		providerPicker.addEventListener("change", refillModels);
+		// Re-read the note when the operator picks a different model, not only a different
+		// provider: the evidence shown has to describe what is actually selected.
+		modelPicker.addEventListener("change", () => drawRatingNote(ratedModelsFor(catalogue, providerPicker.value, ratings)));
 		refillModels();
 
 		fill(pickerHost, h("div.control-row",
@@ -103,9 +148,14 @@ export function model(ctx) {
 	Promise.all([
 		fetch("/config/llm_models.json").then((r) => r.json()),
 		fetch("/api/features").then((r) => r.json()).catch(() => null),
+		// Ratings are a nicety, not a dependency: a failed fetch leaves every model unmarked
+		// rather than taking the section down, which is why this catch returns null instead
+		// of rejecting the whole Promise.all.
+		fetch("/config/model_ratings.json").then((r) => r.json()).catch(() => null),
 	])
-		.then(([json, features]) => {
+		.then(([json, features, ratingsJson]) => {
 			catalogue = parseModelCatalogue(json);
+			ratings = ratingsJson;
 			drawCurrent();
 			drawPicker(features);
 		})
@@ -117,5 +167,6 @@ export function model(ctx) {
 	},
 		current,
 		pickerHost,
+		ratingNote,
 	));
 }

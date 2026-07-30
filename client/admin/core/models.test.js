@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { parseModelCatalogue, modelsFor, describeModel } from "./models.js";
+import { parseModelCatalogue, modelsFor, ratedModelsFor, describeModel } from "./models.js";
 import { listProviders } from "../../../server/services/llm/registry.js";
 
 /** A well-formed catalogue. */
@@ -103,4 +103,55 @@ test("the shipped catalogue is valid and offers only providers the server unders
 			`the registry does not know provider "${provider.id}" — it knows ${[...known].join(", ")}`);
 		assert.ok(provider.models.length > 0, `${provider.id} offers no models`);
 	}
+});
+
+// ── Ratings in the console's picker ──────────────────────────────────────────
+
+/** Ratings shaped as `client/config/model_ratings.json` carries them. */
+const RATINGS = {
+	recommended: "openai/gpt-4o-mini",
+	models: {
+		"openai/gpt-4o-mini": { verdict: "recommended", score: 100, medianMs: 2900, turns: 18 },
+		"openai/gpt-4o": { verdict: "recommended", score: 87, medianMs: 2700, turns: 99 },
+		"openai/gpt-3.5-turbo": { verdict: "unusable", score: 20, turns: 40 },
+	},
+};
+
+const RATED = [{
+	id: "openai", label: "OpenAI",
+	models: [
+		{ id: "gpt-3.5-turbo", label: "GPT-3.5" },
+		{ id: "gpt-4o", label: "GPT-4o" },
+		{ id: "gpt-4o-mini", label: "GPT-4o Mini" },
+	],
+}];
+
+test("the console's models carry ratings and lead with the best", () => {
+	const models = ratedModelsFor(RATED, "openai", RATINGS);
+	assert.deepEqual(models.map((m) => m.id), ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]);
+	assert.equal(models[0].rating.flag, "recommended");
+	assert.equal(models.at(-1).rating.flag, "avoid");
+});
+
+test("an operator sees the same mark the lobby picker shows", () => {
+	// The two pickers must not word this differently — an operator comparing them would
+	// have no way to tell which one to believe.
+	const models = ratedModelsFor(RATED, "openai", RATINGS);
+	assert.equal(models[0].rating.label, "Recommended");
+	assert.equal(models.at(-1).rating.label, "Known not to work");
+});
+
+test("without ratings the console still lists every model, unmarked", () => {
+	const models = ratedModelsFor(RATED, "openai", null);
+	assert.equal(models.length, 3);
+	for (const model of models) assert.equal(model.rating.flag, "untested");
+});
+
+test("a provider the catalogue does not carry yields nothing rather than throwing", () => {
+	assert.deepEqual(ratedModelsFor(RATED, "google", RATINGS), []);
+	assert.deepEqual(ratedModelsFor(null, "openai", RATINGS), []);
+});
+
+test("labels from the catalogue survive annotation", () => {
+	assert.equal(ratedModelsFor(RATED, "openai", RATINGS)[0].label, "GPT-4o Mini");
 });
