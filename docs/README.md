@@ -65,6 +65,10 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [modules/spells.md](modules/spells.md) — what a caster knows, and what casting costs
 - [modules/spell-resolution.md](modules/spell-resolution.md) — what a cast spell does
 - [modules/model-bakeoff.md](modules/model-bakeoff.md) — which models can be the brains, and how that is measured
+- [modules/tactical-map.md](modules/tactical-map.md) — the battle grid, when a lobby asks for one
+- [modules/tactical-ui.md](modules/tactical-ui.md) — that map in the browser, and its switch
+- [modules/tactical-geometry.md](modules/tactical-geometry.md) — distance, sight, cover, generation
+- [modules/tactical-combat.md](modules/tactical-combat.md) — briefings, and how monsters decide
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [runbooks/](runbooks/) — repeatable procedures (start here for restarting the server)
 - [decisions/](decisions/) — architecture decision records

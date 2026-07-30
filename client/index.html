@@ -430,7 +430,14 @@
 		     rather than inside the character panel because the battlefield is shared state, like the
 		     action log — an observer watching a fight should see it too. -->
 		<div id="tacticalMapSection" class="hidden">
-		<h3>Battlefield <span id="tacticalMapHint" class="smalltext"></span></h3>
+		<h3>Battlefield <span id="tacticalMapHint" class="smalltext"></span>
+			<!-- The map opens in its own window when a fight starts, but a browser may refuse a
+			     `window.open` it did not see a click for. This button is that click, so there is
+			     always a way back to the window that does not depend on the popup blocker. -->
+			<button id="popOutMapBtn" class="secondary" onclick="window.popOutBattleMap?.()"
+				data-sound="Parchment Unfurl" data-sound-hover="Magical Shimmer"
+				title="Open the battle map in its own movable window">⤢ Pop out map</button>
+		</h3>
 		<canvas id="tacticalMapCanvas" role="img" aria-label="The battle map"></canvas>
 		</div>
 
@@ -805,11 +812,16 @@
 		import { equipSlotFor, isConsumable } from "/itemSlots.js";
 		import { describeKnownSpells } from "/knownSpells.js";
 		import { createMapView } from "/tacticalMap.js";
+		import { mapWindowIntent, arenaSignature } from "/battleMapWindow.js";
 		window.equipSlotFor = equipSlotFor;
 		window.isConsumable = isConsumable;
 		window.describeKnownSpells = describeKnownSpells;
 		// One view per page. The renderer and the socket handlers both reach for it.
 		window.tacticalMapView = createMapView();
+		// When the map's own window should open or close. Rules in the module, tested; the calling
+		// out to `window.open` is in `sockets.js`.
+		window.mapWindowIntent = mapWindowIntent;
+		window.arenaSignature = arenaSignature;
 	</script>
 	<script src="/sockets.js" defer></script>
 	<script src="/domElements.js" defer></script>

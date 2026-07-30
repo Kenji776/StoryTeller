@@ -532,11 +532,15 @@ function drawEnemyRoster(containerId, enemies = []) {
  *   Which squares those are comes from the server, so the page never works out reach for itself.
  * @param {object} view - A `createMapView()` instance.
  * @param {boolean} canAct - Whether this viewer may click. False for observers and off-turn players.
+ * @param {Document} [doc] - Where to draw. Defaults to this page; the pop-out window passes its own,
+ *   which is what makes the window a second mount point for this renderer rather than a second
+ *   renderer. Two canvases drawing the same arena from two copies of this code is how they end up
+ *   disagreeing about what a player clicked.
  * @returns {void}
  */
-function drawTacticalMap(view, canAct) {
-	const section = document.getElementById("tacticalMapSection");
-	const canvas = document.getElementById("tacticalMapCanvas");
+function drawTacticalMap(view, canAct, doc = document) {
+	const section = doc.getElementById("tacticalMapSection");
+	const canvas = doc.getElementById("tacticalMapCanvas");
 	if (!section || !canvas) return;
 
 	const map = view.current?.();
@@ -548,7 +552,7 @@ function drawTacticalMap(view, canAct) {
 
 	const offered = new Set(view.offered());
 	const pending = view.pendingMove();
-	const hint = document.getElementById("tacticalMapHint");
+	const hint = doc.getElementById("tacticalMapHint");
 	if (hint) {
 		hint.textContent = !canAct ? ""
 			: pending ? `— moving to ${pending}; click it again to cancel`
@@ -559,7 +563,9 @@ function drawTacticalMap(view, canAct) {
 	const pad = 18;
 	const width = map.width * cell + pad * 2;
 	const height = map.height * cell + pad * 2;
-	const ratio = window.devicePixelRatio || 1;
+	// The pop-out may be on a different screen from the page that opened it, so the ratio comes from
+	// whichever window owns this canvas rather than from the one running the code.
+	const ratio = (doc.defaultView ?? window).devicePixelRatio || 1;
 	canvas.width = width * ratio;
 	canvas.height = height * ratio;
 	canvas.style.width = "100%";

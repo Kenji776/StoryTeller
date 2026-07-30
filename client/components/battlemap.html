@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Battlefield — StoryTeller</title>
+	<link rel="stylesheet" href="/style.css" />
+	<style>
+		/* This window is the map and nothing else, so it gets none of the page chrome. */
+		body {
+			margin: 0;
+			padding: 0.6rem;
+			min-height: 100vh;
+			background: radial-gradient(circle at top, #0d0b15, #05030b 60%, #000 100%);
+		}
+		#tacticalMapSection {
+			display: flex;
+			flex-direction: column;
+			gap: 0.35rem;
+			height: 100%;
+		}
+		#tacticalMapSection.hidden { display: none; }
+		#tacticalMapSection h3 {
+			margin: 0;
+			font-size: 0.95em;
+			display: flex;
+			align-items: baseline;
+			gap: 0.5rem;
+			flex-wrap: wrap;
+		}
+		#tacticalMapCanvas { align-self: flex-start; }
+		/* Shown when there is no fight, and when this window has lost the page that opened it.
+		   A blank window with no explanation reads as broken. */
+		#battlemapIdle {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			min-height: 60vh;
+			text-align: center;
+			padding: 1.5rem;
+			opacity: 0.75;
+			font-size: 0.9em;
+			line-height: 1.5;
+		}
+		#battlemapIdle.hidden { display: none; }
+	</style>
+</head>
+<body>
+	<!-- Deliberately almost scriptless. The page that opened this one owns the socket, the map, and
+	     the renderer, and draws straight into this document — see `drawTacticalMap`'s `doc` argument.
+	     A second socket here would mean a second copy of the arena and two ideas about which square
+	     the player clicked, which is exactly the divergence the shared renderer avoids. -->
+	<div id="tacticalMapSection" class="hidden">
+		<h3>Battlefield <span id="tacticalMapHint" class="smalltext"></span></h3>
+		<canvas id="tacticalMapCanvas" role="img" aria-label="The battle map"></canvas>
+	</div>
+
+	<div id="battlemapIdle">Waiting for a fight to begin&hellip;</div>
+
+	<script>
+		/**
+		 * @description Tells the page that opened this window that it was closed, so it stops drawing
+		 *   here and does not reopen the window for this same fight. Guarded because the opener may
+		 *   already be gone — a closed tab, or a navigation — and reaching into it then throws.
+		 * @returns {void}
+		 */
+		function reportClosed() {
+			try {
+				window.opener?.onBattleMapClosed?.();
+			} catch {
+				// Cross-origin or already unloaded. Nothing to tell, and nothing to do about it.
+			}
+		}
+		window.addEventListener("pagehide", reportClosed);
+
+		// Orphaned window: the game it belonged to is gone, so say so rather than showing a stale
+		// arena forever. Checked on a timer because there is no event for "my opener went away".
+		setInterval(() => {
+			let orphaned = false;
+			try {
+				orphaned = !window.opener || window.opener.closed;
+			} catch {
+				orphaned = true;
+			}
+			if (!orphaned) return;
+			document.getElementById("tacticalMapSection")?.classList.add("hidden");
+			const idle = document.getElementById("battlemapIdle");
+			if (idle) {
+				idle.classList.remove("hidden");
+				idle.textContent = "The game window is closed. You can close this one too.";
+			}
+		}, 2000);
+	</script>
+</body>
+</html>

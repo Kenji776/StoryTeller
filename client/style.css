@@ -1930,6 +1930,20 @@ body.observing #gameCharacterSection {
 	font-size: 0.78em;
 }
 
+/* Sits in the Battlefield heading, so it is sized to the heading rather than to a form. */
+#popOutMapBtn {
+	font-size: 0.7em;
+	padding: 0.25em 0.7em;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+#tacticalMapSection h3 {
+	display: flex;
+	align-items: baseline;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
 /* Bringing your own key is a separate act from picking a model, so it is set off by a
    rule rather than reading as one more row of the picker above it. */
 .lgo-keyform {

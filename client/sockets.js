@@ -1337,6 +1337,7 @@ function registerSocketEvents() {
 socket.on("tactical:map", (map) => {
 	if (!window.tacticalMapView) return;
 	window.tacticalMapView.setMap(map);
+	syncBattleMapWindow(map);
 	redrawTacticalMap();
 });
 
@@ -1359,4 +1360,126 @@ function redrawTacticalMap() {
 	const mine = window.currentState?.initiative?.[window.currentState?.turnIndex] ?? null;
 	const canAct = !window.isObserver && !!window.me?.name && mine === window.me.name;
 	drawTacticalMap(window.tacticalMapView, canAct);
+
+	// The same renderer again, pointed at the other document. The pop-out is a second mount point,
+	// not a second implementation — two copies of this drawing code would eventually disagree about
+	// which square is which, and the click handler is installed by whichever copy drew last.
+	const popped = battleMapDoc();
+	if (popped) {
+		drawTacticalMap(window.tacticalMapView, canAct, popped);
+		// The renderer hides its section when there is no arena, which would leave this window
+		// completely blank. The idle notice is the other half of that toggle.
+		const idle = popped.getElementById("battlemapIdle");
+		idle?.classList.toggle("hidden", window.tacticalMapView.hasMap());
+	}
 }
+
+// ── The battle map's own window ─────────────────────────────────────────────
+// Opened on combat start so the fight is not competing with the log for vertical space, and so it can
+// be dragged to a second screen. The in-page section stays: a popup blocker turning this into no map
+// at all would be worse than a cramped one.
+
+/** The pop-out, while it is open. */
+let battleMapWindow = null;
+
+/** The arena a player closed the window on, so it is not reopened at them during that same fight. */
+let battleMapDismissedFor = null;
+
+/**
+ * @description Reaches the pop-out's document, or null if it is closed, orphaned, or not yet parsed.
+ *   Every access is guarded: touching a closed window throws, and so does one still loading.
+ * @returns {Document|null} The pop-out's document.
+ */
+function battleMapDoc() {
+	try {
+		if (!battleMapWindow || battleMapWindow.closed) return null;
+		return battleMapWindow.document?.getElementById("tacticalMapCanvas") ? battleMapWindow.document : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Opens or closes the map window to match the fight.
+ *
+ * @description The rules are in `battleMapWindow.js` and unit tested; this only carries them out. A
+ *   blocked popup is reported rather than retried — browsers refuse `window.open` outside a user
+ *   gesture, and combat starting is the server's doing, not a click. The button in the game view is
+ *   the answer to that, being a real gesture, and the in-page map means a refusal costs nothing.
+ * @param {object|null} map - The arena that just arrived.
+ * @returns {void}
+ */
+function syncBattleMapWindow(map) {
+	if (typeof window.mapWindowIntent !== "function") return;
+
+	const isOpen = !!battleMapDoc() || !!(battleMapWindow && !battleMapWindow.closed);
+	const intent = window.mapWindowIntent({ map, isOpen, dismissedFor: battleMapDismissedFor });
+	battleMapDismissedFor = intent.dismissedFor;
+
+	if (intent.action === "close") {
+		closeBattleMapWindow();
+		return;
+	}
+	if (intent.action === "open") openBattleMapWindow({ announceBlocked: true });
+}
+
+/**
+ * @description Opens the pop-out. Toolbarless and movable: `popup=yes` is what asks a browser for a
+ *   window rather than a tab, and dropping `menubar`/`toolbar`/`location` keeps the chrome off it.
+ * @param {object} [options] - `announceBlocked` warns the player when the browser refuses.
+ * @returns {boolean} True when a window is open afterwards.
+ */
+function openBattleMapWindow({ announceBlocked = false } = {}) {
+	if (battleMapWindow && !battleMapWindow.closed) {
+		battleMapWindow.focus();
+		return true;
+	}
+	const features = "popup=yes,width=760,height=720,resizable=yes,scrollbars=yes";
+	battleMapWindow = window.open(`components/battlemap.html?lobbyId=${lobbyId}`, `battlemap-${lobbyId}`, features);
+
+	if (!battleMapWindow) {
+		// Blocked. Said once, plainly, and only when this was the player's expectation rather than a
+		// background attempt — and the map below still works.
+		if (announceBlocked && typeof showToast === "function") {
+			showToast("Your browser blocked the battle map window. The map below still works — use “Pop out map” to try again.", "warning");
+		}
+		return false;
+	}
+	// The window is empty until it parses, so the first draw waits for it rather than throwing.
+	battleMapWindow.addEventListener?.("load", () => redrawTacticalMap());
+	setTimeout(() => redrawTacticalMap(), 400);
+	return true;
+}
+
+/**
+ * @description Closes the pop-out, if this page opened one.
+ * @returns {void}
+ */
+function closeBattleMapWindow() {
+	try {
+		if (battleMapWindow && !battleMapWindow.closed) battleMapWindow.close();
+	} catch {
+		// Already gone.
+	}
+	battleMapWindow = null;
+}
+
+/**
+ * @description Called by the pop-out as it unloads, so this page stops drawing into a dead document
+ *   and does not reopen the window during the fight the player just dismissed it for.
+ * @returns {void}
+ */
+window.onBattleMapClosed = function onBattleMapClosed() {
+	battleMapWindow = null;
+	battleMapDismissedFor = window.arenaSignature?.(window.tacticalMapView?.current?.() ?? null) ?? null;
+};
+
+/** Opened from the game view, which is a real user gesture and so is never blocked. */
+window.popOutBattleMap = function popOutBattleMap() {
+	// Asking for it again is consent, so the dismissal for this fight is withdrawn.
+	battleMapDismissedFor = null;
+	if (openBattleMapWindow()) redrawTacticalMap();
+};
+
+// A pop-out outliving the game window is a stranded window showing a fight that has ended.
+window.addEventListener("pagehide", closeBattleMapWindow);

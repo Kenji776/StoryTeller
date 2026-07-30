@@ -63,7 +63,9 @@ const SHEET = {
 const socket = io(URL, { transports: ["websocket"] });
 const maps = [];
 const toasts = [];
-socket.on("map:update", (payload) => maps.push(payload));
+// tactical:map, not map:update — the latter belongs to the older map feature, and listening for it
+// here would have this probe reporting success on a characters-and-terrain payload that is not an arena.
+socket.on("tactical:map", (payload) => maps.push(payload));
 socket.on("toast", (payload) => toasts.push(payload));
 
 await waitFor(socket, "connect", 15000);
@@ -151,7 +153,7 @@ const afterStep = await act("I advance on the nearest raider.", step, "a legal s
 console.log(`\n══ result ${"═".repeat(58)}`);
 const checks = [
 	["an arena appeared when the fight started", !!staged],
-	["the arena reached the client over map:update", maps.some(Boolean)],
+	["the arena reached the client over tactical:map", maps.some((m) => m && m.width && m.tokens)],
 	["an impossible move left the token where it was", beforeIllegal !== "null" && beforeIllegal === afterIllegal],
 	["the token ended up somewhere legal", !!afterStep?.tokens?.[SHEET.name]],
 	["nobody shares a square", (() => {
