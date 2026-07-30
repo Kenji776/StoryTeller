@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { panelRows, startGate, credentialSubmission, heldSummary, modelChoices, keyFormFor } from "./aiPanel.js";
+import { panelRows, startGate, credentialSubmission, heldSummary, modelChoices, keyFormFor, escapeHtml } from "./aiPanel.js";
 
 /**
  * @description Builds one service as `lobbyReadiness` reports it.
@@ -512,5 +512,40 @@ test("a missing state or provider yields a form that asks for nothing", () => {
 		const form = keyFormFor(value, id);
 		assert.equal(form.needed, false);
 		assert.equal(form.requiresKey, false, "nothing to submit means no fields");
+	}
+});
+
+// ── Escaping ─────────────────────────────────────────────────────────────────
+
+test("the five characters that change the meaning of markup are escaped", () => {
+	assert.equal(
+		escapeHtml(`<img src=x onerror="alert(1)">&'`),
+		"&lt;img src=x onerror=&quot;alert(1)&quot;&gt;&amp;&#39;",
+	);
+});
+
+test("ampersands are escaped first, so an escape is not double-escaped", () => {
+	// Replacing < before & turns "<" into "&lt;" and then "&amp;lt;", which renders as
+	// literal "&lt;" on the page instead of a less-than sign.
+	assert.equal(escapeHtml("&lt;"), "&amp;lt;");
+});
+
+test("a model name a host may legitimately type survives unchanged", () => {
+	for (const value of ["claude-opus-5", "llama3:8b", "meta-llama/Llama-3-70b", "my_build.v2"]) {
+		assert.equal(escapeHtml(value), value);
+	}
+});
+
+test("a quote cannot close an attribute it is interpolated into", () => {
+	// The picker puts the model in force into `value="…"`. A bare double quote there ends the
+	// attribute and everything after it becomes markup.
+	assert.ok(!escapeHtml(`" onfocus="alert(1)`).includes('"'));
+});
+
+test("values that are not strings become the empty string, never \"undefined\"", () => {
+	for (const value of [null, undefined, 0, false, {}, []]) {
+		const escaped = escapeHtml(value);
+		assert.equal(typeof escaped, "string");
+		assert.ok(!/undefined|null|\[object/.test(escaped), `${String(value)} leaked its type into the page`);
 	}
 });

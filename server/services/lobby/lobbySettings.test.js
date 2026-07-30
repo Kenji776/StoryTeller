@@ -226,3 +226,47 @@ test("changing only the model still checks it against the provider in force", ()
 test("an unknown lobby is refused rather than throwing", () => {
 	assert.equal(makeStore().setLLMSettings("nope", "openai", "gpt-4o").ok, false);
 });
+
+test("a model id carrying markup is refused rather than stored", () => {
+	// Regression. The lobby options panel renders the model in force into every player's screen
+	// through `innerHTML`, and the picker offers a free-text field for local models whose names
+	// cannot be enumerated. A host could therefore store markup here and have it run in the browser
+	// of everyone who joins. A model id has a shape, and `<` is not in it.
+	const store = makeStore({ llmProvider: "ollama", llmModel: "llama3" });
+	const result = store.setLLMSettings("lob1", "ollama", `<img src=x onerror="alert(1)">`);
+
+	assert.equal(result.ok, false);
+	assert.match(result.reason, /model/i);
+	assert.equal(lobbyOf(store).llmModel, "llama3", "the working setting stands");
+});
+
+test("a model id with a space is refused, because no provider names one that way", () => {
+	const store = makeStore({ llmProvider: "ollama", llmModel: "llama3" });
+	assert.equal(store.setLLMSettings("lob1", "ollama", "llama3 and then some").ok, false);
+});
+
+test("an absurdly long model id is refused", () => {
+	const store = makeStore({ llmProvider: "ollama", llmModel: "llama3" });
+	assert.equal(store.setLLMSettings("lob1", "ollama", "a".repeat(500)).ok, false);
+});
+
+test("the shapes real providers actually use are all accepted", () => {
+	// The guard above must not become a second way to lock an operator out of their own models.
+	// Every one of these names a real model on some provider.
+	// Paired with their own provider, so this measures the shape rule and not the coherence rule
+	// two tests above — which correctly refuses gpt-4o on Ollama and would mask what this checks.
+	const store = makeStore({ llmProvider: "ollama", llmModel: "llama3" });
+	for (const [provider, model] of [
+		["openai", "gpt-4o"],
+		["anthropic", "claude-opus-5"],
+		["google", "gemini-2.0-flash-thinking-exp-01-21"],
+		["ollama", "llama3:8b"],
+		["ollama", "qwen2.5-coder:32b"],
+		["ollama", "my_local_build.v2"],
+		["openai-compatible", "meta-llama/Llama-3-70b-instruct"],
+		["openai-compatible", "accounts/fireworks/models/mixtral"],
+	]) {
+		const result = store.setLLMSettings("lob1", provider, model);
+		assert.equal(result.ok, true, `${provider}/${model} should be accepted: ${result.reason ?? ""}`);
+	}
+});

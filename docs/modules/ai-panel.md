@@ -90,6 +90,20 @@ heard of it. Otherwise opening the panel and pressing Apply would silently
 downgrade a host who had set something newer than the list — which is how a
 stale list turns from unhelpful into destructive.
 
+## Everything interpolated is escaped
+
+The panel is built as a template and assigned with `innerHTML`, and not all of
+what it interpolates is the server's own words: the model id is a free-text field
+for providers whose models cannot be listed, and a key's tail is whatever the host
+pasted. This panel renders for *every* player, so a value one host types is markup
+in everyone else's browser.
+
+`escapeHtml` covers all of it — the attribute cases especially, where a bare
+double quote in `value="…"` ends the attribute and everything after it becomes
+markup. It is the second layer: `setLLMSettings` shape-checks the model id before
+storing it, per
+[ADR 0029](../decisions/0029-a-model-id-is-shape-checked-not-allowlisted.md).
+
 ## The bridge is checked by a test, because forgetting it is silent
 
 This is a module and the page scripts are classic, so the functions cross that

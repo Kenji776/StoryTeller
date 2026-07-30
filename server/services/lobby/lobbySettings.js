@@ -55,6 +55,27 @@ function providerOfModel(model) {
 }
 
 /**
+ * The characters a model id may contain, and how many.
+ *
+ * Every model name any provider actually uses fits this: `gpt-4o`, `claude-opus-5`, `llama3:8b`,
+ * `meta-llama/Llama-3-70b-instruct`, `accounts/fireworks/models/mixtral`. Nothing legitimate carries
+ * whitespace, angle brackets or quotes.
+ */
+const MODEL_ID = /^[A-Za-z0-9._:/@+-]{1,120}$/;
+
+/**
+ * @description Whether a model id has the shape of a model id. `providerOfModel` deliberately accepts
+ *   unfamiliar names so a local build is not locked out, which leaves this as the only thing standing
+ *   between a host's text field and the value itself — and the lobby options panel renders that value
+ *   into every player's browser through `innerHTML`.
+ * @param {*} model - The model id.
+ * @returns {boolean} True when it is safe and plausible to store.
+ */
+function isModelIdShaped(model) {
+	return typeof model === "string" && MODEL_ID.test(model.trim());
+}
+
+/**
  * Provider a lobby's current narrator voice belongs to.
  *
  * @description Lobbies persisted before TTS became pluggable carry an ElevenLabs
@@ -501,6 +522,13 @@ export const settingsMethods = {
 		const wanted = normaliseProviderId(provider) ?? s.llmProvider;
 		if (provider && !PROVIDER_IDS.has(wanted)) {
 			return { ok: false, reason: `"${provider}" is not a provider this server knows.` };
+		}
+
+		// Checked before it is stored, because the picker offers a free-text field for providers whose
+		// models cannot be enumerated, and the value is rendered into every player's lobby panel. The
+		// reason deliberately does not echo the rejected text back.
+		if (model && !isModelIdShaped(model)) {
+			return { ok: false, reason: "That is not a model name. Use the id the provider publishes — letters, digits, dots, dashes, colons and slashes." };
 		}
 
 		// The pair has to be coherent, not just individually plausible. This is the failure that

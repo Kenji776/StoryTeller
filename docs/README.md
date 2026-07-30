@@ -67,7 +67,7 @@ See [testing.md](testing.md) for conventions and for what is deliberately untest
 - [testing.md](testing.md) — tiers, conventions, gaps
 - [runbooks/](runbooks/) — repeatable procedures (start here for restarting the server)
 - [decisions/](decisions/) — architecture decision records
-  (newest: [0023 — a quest reward is read from both sides](decisions/0023-a-quest-reward-is-read-from-both-sides.md))
+  (newest: [0029 — a model id is shape-checked, not allowlisted](decisions/0029-a-model-id-is-shape-checked-not-allowlisted.md))
 - [worklog/](worklog/) — append-only session journal
 
 _Last verified: 2026-07-28 against branch `Refactor` (6a2adfb)._

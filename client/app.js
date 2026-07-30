@@ -604,6 +604,10 @@ function renderNarratorPanel(s) {
 	}
 
 	const choices = window.__aiPanel.modelChoices(lastAiState, s, modelCatalogue);
+	// Everything interpolated below goes through this. The model id is a free-text field for providers
+	// whose models cannot be listed, and this panel renders on every player's screen, not just the
+	// host's — so what one host types is markup in everyone's browser unless it is escaped.
+	const esc = window.__aiPanel.escapeHtml;
 	const running = choices.current.providerId
 		? `${choices.current.providerId} · ${choices.current.modelId ?? "no model set"}`
 		: "not configured";
@@ -614,7 +618,7 @@ function renderNarratorPanel(s) {
 	if (!mayEdit || !choices.providers.length) {
 		host.innerHTML = `
 			<div class="lgo-title">Narrator</div>
-			<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${running}</span></div>
+			<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${esc(running)}</span></div>
 		`;
 		return;
 	}
@@ -626,21 +630,21 @@ function renderNarratorPanel(s) {
 		?? (models.some((m) => m.id === choices.current.modelId) ? choices.current.modelId : models[0]?.id ?? "");
 
 	const providerOptions = choices.providers.map((p) =>
-		`<option value="${p.id}"${p.id === provider.id ? " selected" : ""}>${p.label}${p.selectable ? "" : " — needs a key"}</option>`).join("");
+		`<option value="${esc(p.id)}"${p.id === provider.id ? " selected" : ""}>${esc(p.label)}${p.selectable ? "" : " — needs a key"}</option>`).join("");
 
 	// A provider whose models cannot be enumerated gets a text box. A local install names its models
 	// whatever it likes, and a fixed list would be wrong more often than right.
 	const modelField = choices.freeTextFor(provider.id) || !models.length
-		? `<input id="narratorModel" type="text" value="${chosenModel}" placeholder="model name" />`
+		? `<input id="narratorModel" type="text" value="${esc(chosenModel)}" placeholder="model name" />`
 		: `<select id="narratorModel">${models.map((m) =>
-			`<option value="${m.id}"${m.id === chosenModel ? " selected" : ""}>${m.label ?? m.id}</option>`).join("")}</select>`;
+			`<option value="${esc(m.id)}"${m.id === chosenModel ? " selected" : ""}>${esc(m.label ?? m.id)}</option>`).join("")}</select>`;
 
 	host.innerHTML = `
 		<div class="lgo-title">Narrator</div>
-		<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${running}</span></div>
+		<div class="lgo-row"><span class="lgo-key">Running on</span><span class="lgo-val">${esc(running)}</span></div>
 		<div class="lgo-row"><span class="lgo-key">Provider</span><select id="narratorProvider">${providerOptions}</select></div>
 		<div class="lgo-row"><span class="lgo-key">Model</span>${modelField}</div>
-		<p class="hint" id="narratorNote">${provider.note}</p>
+		<p class="hint" id="narratorNote">${esc(provider.note)}</p>
 		<div class="lgo-row">
 			<button id="narratorApply" class="primary" ${provider.selectable ? "" : "disabled"}>Use this</button>
 		</div>
@@ -683,21 +687,25 @@ function narratorKeyForm(providerId) {
 	// invented wording is worse than waiting for it, because the server enforces against that string.
 	if (!consentTerms) return `<p class="hint">Loading the terms for supplying your own key…</p>`;
 
+	const esc = window.__aiPanel.escapeHtml;
+
+	// `keyUrl` is a fixed address from the server's provider registry, never a host's input, so
+	// escaping it is enough — there is no path by which a `javascript:` URL reaches here.
 	const link = form.keyUrl
-		? ` <a href="${form.keyUrl}" target="_blank" rel="noopener">Get a key</a>.`
+		? ` <a href="${esc(form.keyUrl)}" target="_blank" rel="noopener">Get a key</a>.`
 		: "";
 
 	return `
 		<div class="lgo-keyform" id="narratorKeyForm">
-			<div class="lgo-title">${form.canReplace ? `Replace your ${form.label} key` : `Use your own ${form.label} key`}</div>
-			${form.held ? `<p class="hint">${form.held}</p>` : ""}
+			<div class="lgo-title">${form.canReplace ? `Replace your ${esc(form.label)} key` : `Use your own ${esc(form.label)} key`}</div>
+			${form.held ? `<p class="hint">${esc(form.held)}</p>` : ""}
 			${form.requiresKey ? `<div class="lgo-row"><span class="lgo-key">API key</span>
 				<input id="narratorKey" type="password" autocomplete="off" placeholder="paste your key" /></div>` : ""}
 			${form.requiresBaseUrl ? `<div class="lgo-row"><span class="lgo-key">Address</span>
 				<input id="narratorBaseUrl" type="text" autocomplete="off" placeholder="http://127.0.0.1:11434" /></div>` : ""}
 			<label class="lgo-consent">
 				<input id="narratorConsent" type="checkbox" />
-				<span>${consentTerms}</span>
+				<span>${esc(consentTerms)}</span>
 			</label>
 			<div class="lgo-row">
 				<button id="narratorSaveKey" class="primary" disabled>Save key</button>

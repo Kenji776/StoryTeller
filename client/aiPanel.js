@@ -319,3 +319,28 @@ export function keyFormFor(state, providerId) {
 		canReplace,
 	};
 }
+
+/**
+ * Makes a value safe to interpolate into markup, in either element or attribute position.
+ *
+ * @description The panel is built with template literals and `innerHTML`, and some of what it
+ *   interpolates is not the server's own words: the model id is a free-text field for providers whose
+ *   models cannot be enumerated, and a key's tail comes from whatever the host pasted. `setLLMSettings`
+ *   now shape-checks the model id, so this is the second layer rather than the only one — but it is
+ *   the layer that also covers provider labels from config and everything added here later.
+ *
+ *   The ampersand is replaced first. Any other order re-escapes the escapes and the page shows
+ *   `&lt;` as literal text where a less-than sign belongs.
+ * @param {*} value - Anything. Non-strings become the empty string rather than "undefined" or
+ *   "[object Object]", which is what a missing field should look like on a page.
+ * @returns {string} The escaped text.
+ */
+export function escapeHtml(value) {
+	if (typeof value !== "string") return "";
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}

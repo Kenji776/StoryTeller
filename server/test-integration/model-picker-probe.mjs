@@ -188,6 +188,28 @@ if (!byok) {
 	}
 }
 
+// ── What the free-text model field may carry ─────────────────────────────────
+
+// The picker offers a text field for providers whose models cannot be enumerated, and whatever is
+// stored there renders into every player's lobby panel. A model id has a shape; markup is not it.
+const hostile = `<img src=x onerror="alert(1)">`;
+const toasted = new Promise((resolve) => {
+	socket.once("toast", resolve);
+	setTimeout(() => resolve(null), 8000);
+});
+socket.emit("lobby:settings", { lobbyId, llmModel: hostile });
+
+const toast = await toasted;
+const afterState = await new Promise((resolve) => {
+	socket.once("state:update", resolve);
+	setTimeout(() => resolve(null), 8000);
+});
+
+console.log(`\nstoring markup as the model id: ${toast ? `refused — "${toast.message}"` : "no refusal came back"}`);
+expect(toast?.type === "error", "a model id containing markup was accepted without complaint");
+expect((afterState ?? lobby).llmModel !== hostile, "markup was stored as the lobby's model id");
+expect(!(toast?.message ?? "").includes("<img"), "the refusal echoes the rejected markup back into the page");
+
 socket.disconnect();
 
 if (failures.length) {
