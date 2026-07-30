@@ -111,7 +111,7 @@
 			"lowSample": false,
 			"note": ""
 		},
-		"claude/claude-sonnet-4-6": {
+		"anthropic/claude-sonnet-4-6": {
 			"verdict": "recommended",
 			"score": 99,
 			"medianMs": 14957,

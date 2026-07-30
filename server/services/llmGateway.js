@@ -24,6 +24,10 @@ import { PORTRAIT_SCENE } from "../../client/portraitPrompt.js";
 import fsDefault from "fs";
 
 import { redactLLMConfig } from "./llm/config.js";
+// The alias table used to be duplicated here. It belongs with the registry, which is the
+// one place that knows which providers exist — three copies of it is how the same model
+// ends up recorded under two different provider names.
+import { canonicalProviderId } from "./llm/registry.js";
 import { CredentialRequiredError } from "./credentials/resolve.js";
 import { characterPlan, sceneFor } from "./images/characterRecords.js";
 
@@ -43,20 +47,10 @@ export const AI_UNAVAILABLE_PREFIX = "[AI unavailable]";
  * is reversible, it cannot corrupt anything, and a lobby that has not been opened
  * in months still works the first time someone does.
  */
-const PROVIDER_ALIASES = Object.freeze({ claude: "anthropic" });
 
 /** Image providers are tried in this order when a lobby names none. */
 const IMAGE_FALLBACK_ORDER = Object.freeze(["local-image", "openai"]);
 
-/**
- * @description Resolves a stored provider id to the one the registry uses.
- * @param {*} id - The provider id from lobby settings.
- * @returns {string} The canonical id.
- */
-function canonicalProviderId(id) {
-	const raw = typeof id === "string" ? id.trim().toLowerCase() : "";
-	return PROVIDER_ALIASES[raw] ?? raw;
-}
 
 /**
  * @description Reports whether the prompt is asking for JSON, which some adapters

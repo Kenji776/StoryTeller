@@ -34,6 +34,30 @@ const PROVIDERS = new Map([
 const HIDDEN_BY_DEFAULT = new Set([testProvider.id]);
 
 /**
+ * Provider ids that have changed name.
+ *
+ * `DEFAULT_LLM_PROVIDER=claude` is still set in existing deployments, and call journals
+ * written by older builds record `claude` as the provider. Anything keyed on a provider id
+ * has to agree about the name or the same model reads as two different things — the
+ * bake-off's ratings looked up `anthropic/claude-sonnet-4-6` while its own journal had
+ * recorded `claude/claude-sonnet-4-6`, so a model measured at 99/100 displayed as untested.
+ */
+const PROVIDER_ALIASES = Object.freeze({ claude: "anthropic" });
+
+/**
+ * @description Normalises a provider id to the name the registry uses. This is a naming
+ *   function rather than a validator: an unknown id comes back trimmed and lower-cased,
+ *   and {@link getProvider} is what refuses it.
+ * @param {*} id - A provider id from any source: environment, journal, or browser.
+ * @returns {string} The canonical id, or the empty string for unusable input.
+ */
+export function canonicalProviderId(id) {
+	if (typeof id !== "string") return "";
+	const raw = id.trim().toLowerCase();
+	return PROVIDER_ALIASES[raw] ?? raw;
+}
+
+/**
  * @description Looks up a provider adapter by id. Ids are matched
  *   case-insensitively and after trimming, because they can arrive from
  *   hand-edited browser storage.

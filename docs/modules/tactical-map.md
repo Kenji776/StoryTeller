@@ -121,7 +121,7 @@ The section sits beside the action log rather than in the character panel, becau
 shared state — an observer sees the map, and gets no tint because `tactical:menu` only reaches the
 character on the clock.
 
-Two things worth knowing about the plumbing. `state:update` carries the map as well as `map:update`
+Two things worth knowing about the plumbing. `state:update` carries the map as well as `tactical:map`
 does, so reloading mid-fight or joining one in progress draws immediately rather than after the next
 move. And a redundant map push must **not** discard a pending click: `state:update` fires several
 times a turn, and treating each as a new arena silently wiped the square the player had just chosen,

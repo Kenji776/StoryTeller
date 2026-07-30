@@ -17,6 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chooseBestValue } from "../../services/bakeoff/value.js";
+import { canonicalProviderId } from "../../services/llm/registry.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 
@@ -43,11 +44,18 @@ if (!Array.isArray(results?.reports)) throw new Error(`${IN} is not a bake-off r
 const priceDoc = fs.existsSync(PRICES) ? JSON.parse(fs.readFileSync(PRICES, "utf8")) : {};
 const prices = priceDoc.prices ?? {};
 
-const winner = chooseBestValue(results.reports, prices);
+// Canonicalise before anything is keyed on the provider id. Journals written by older
+// builds record `claude` rather than `anthropic`, so without this a model measured at
+// 99/100 shows in the picker as untested — which is exactly what happened to
+// claude-sonnet-4-6 on the first run of this generator.
+const reports = results.reports
+	.filter((r) => r?.provider && r?.model)
+	.map((r) => ({ ...r, provider: canonicalProviderId(r.provider) }));
+
+const winner = chooseBestValue(reports, prices);
 
 const models = {};
-for (const r of results.reports) {
-	if (!r?.provider || !r?.model) continue;
+for (const r of reports) {
 	const key = `${r.provider}/${r.model}`;
 	models[key] = {
 		verdict: r.verdict,

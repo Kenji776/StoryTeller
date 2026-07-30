@@ -10,7 +10,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { getProvider, listProviders, resolveLLMConfig } from "./registry.js";
+import { getProvider, listProviders, resolveLLMConfig, canonicalProviderId } from "./registry.js";
 import { LLMConfigError } from "./config.js";
 
 const FAKE_KEY = "test-key-DO-NOT-USE";
@@ -161,4 +161,42 @@ test("resolveLLMConfig normalises the provider id it was given", () => {
 	const { config } = resolveLLMConfig({ providerId: "  OpenAI ", apiKey: FAKE_KEY });
 
 	assert.equal(config.providerId, "openai");
+});
+
+// ── Canonical provider ids ───────────────────────────────────────────────────
+
+test("a legacy provider id canonicalises to the one the registry knows", () => {
+	// `DEFAULT_LLM_PROVIDER=claude` is still in deployments, and journals written by older
+	// builds record "claude" as the provider. Anything keyed on the provider id has to
+	// agree about the name or a measured model looks untested.
+	assert.equal(canonicalProviderId("claude"), "anthropic");
+});
+
+test("a current provider id passes through unchanged", () => {
+	for (const id of ["openai", "anthropic", "google", "ollama", "openai-compatible"]) {
+		assert.equal(canonicalProviderId(id), id);
+	}
+});
+
+test("casing and surrounding space are normalised", () => {
+	assert.equal(canonicalProviderId("  Claude "), "anthropic");
+	assert.equal(canonicalProviderId("OpenAI"), "openai");
+});
+
+test("an unknown id is returned normalised rather than rejected", () => {
+	// This is a naming function, not a validator; `getProvider` is what refuses.
+	assert.equal(canonicalProviderId("some-gateway"), "some-gateway");
+});
+
+test("junk input yields the empty string rather than throwing", () => {
+	for (const bad of [null, undefined, 42, {}, []]) {
+		assert.equal(canonicalProviderId(bad), "");
+	}
+});
+
+test("every canonical id it can emit is one the registry resolves", () => {
+	// The alias table must not point at a provider that does not exist, which is the
+	// failure llm_models.json once shipped: it offered "claude", nothing could resolve it,
+	// and every turn afterwards failed.
+	assert.doesNotThrow(() => getProvider(canonicalProviderId("claude")));
 });

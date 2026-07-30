@@ -116,6 +116,49 @@ A blocker forces `unusable` no matter what the score says:
 - mean schema conformance below 50% — the appliers get too little to work with;
 - fewer than 80% of requested turns completed.
 
+## What the results drive
+
+The verdicts are not just a report. `writeRatings.mjs` turns them into
+`client/config/model_ratings.json`, which two places read:
+
+| Reader | Effect |
+|---|---|
+| `client/modelRatings.js` | Badges every option in both model pickers — the host's narrator panel (`client/app.js`) and the admin console (`client/admin/sections/model.js`) — and orders good models first. |
+| `server/services/llm/defaults.js` | Supplies the model a brand-new lobby starts on, when the environment does not name one. |
+
+Two rules in the badge mapping, both about not overclaiming:
+
+- **A thin sample is a caution, not a condemnation.** `claude-opus-5` failed on 1 of 16
+  turns, which is a real defect and not an established frequency, so the badge quotes
+  the evidence rather than telling a host the flagship does not work.
+- **Untested is not broken.** A model the provider throttled, or one released since the
+  last sweep, carries no claim at all and gets no mark.
+
+The marks are text (`★ recommended`, `✓ known to work`, `⚠ use with caution`,
+`✕ known not to work`) rather than colour, because a native `<select>` renders its
+options as plain strings on most platforms — a CSS class would be invisible at exactly
+the moment someone is choosing.
+
+### The default, and the one figure that is not measured
+
+`chooseBestValue` (`value.js`) picks it, ordering lexicographically rather than blending
+a single figure, because the inputs are not commensurable and a formula would hide its
+assumptions: **correctness is a gate**, then banded score, then price, then latency. A
+model that cannot run the game is never the default however cheap, and neither is one
+whose evidence is a thin sample.
+
+**Price is hand-maintained and cannot be generated.** Nothing in any provider API
+reports it, so it lives in `server/data/model-prices.json`. An absent price counts as
+*unknown*, never as free — otherwise every unpriced model would be the cheapest thing on
+offer and win by default. As of the July 2026 sweep only two OpenAI figures are filled
+in, both from general knowledge rather than a pricing page, which is why
+`pricesVerifiedOn` is null and the current pick is `gpt-4o-mini`: the cheapest model
+whose price is actually known *and* which scored 100/100. Filling in `gpt-5.4-nano` or
+`gpt-5.6-luna` may well change the answer.
+
+An explicit `DEFAULT_LLM_PROVIDER` / `DEFAULT_LLM_MODEL` always wins. Silently
+overriding an operator's stated choice would be worse than a stale default.
+
 ## Testing
 
 Unit tests are colocated and need no network or key — `npm test`. The integration
